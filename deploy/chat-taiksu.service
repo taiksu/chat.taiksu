@@ -1,0 +1,17 @@
+[Unit]
+Description=Chat Taiksu
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/var/www/chat.taiksu
+EnvironmentFile=/var/www/chat.taiksu/.env.production
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=5
+# Opcional: ajustar limites
+# LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

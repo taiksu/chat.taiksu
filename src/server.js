@@ -16,7 +16,13 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, '../../public')));
+
+// Servir arquivos enviados a partir de um diretório fora do repositório (configurável)
+const uploadsPath = process.env.FILES_DIR
+  ? path.resolve(process.cwd(), process.env.FILES_DIR)
+  : path.join(__dirname, '../public/uploads');
+app.use('/uploads', express.static(uploadsPath));
 
 // Configurar EJS
 app.set('view engine', 'ejs');

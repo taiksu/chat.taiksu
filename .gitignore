@@ -10,7 +10,7 @@ build/
 *.sqlite3
 .DS_Store
 src/config/database.db
-public/uploads/
+# uploads moved outside repository; serve from parent-level 'uploads' directory
 logs/
 *.log
 .idea/
@@ -27,5 +27,4 @@ yarn-error.log
 .cache/
 coverage/
 .nyc_output/
-public/uploads/*
-!public/uploads/.gitkeep
+# public/uploads is no longer used; external uploads directory should not be tracked

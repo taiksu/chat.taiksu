@@ -198,6 +198,43 @@ Criar arquivo em `src/models/` com classe estática usando promises.
 
 MIT
 
+## 🗂️ Armazenamento de Uploads (`FILES_DIR`)
+
+Por padrão os arquivos enviados podem ser gravados fora do repositório para evitar que o versionamento apague ou substitua os uploads durante deploys.
+
+- Variável de ambiente: `FILES_DIR`
+- Valor padrão (desenvolvimento): `C:\apps\uploads` (definido em `.env` neste projeto)
+- Valor sugerido (produção): `/var/www/uploads` (definido em `.env.production`)
+
+Exemplos de uso:
+
+Windows (PowerShell):
+```powershell
+# criar diretório absoluto (rodar no servidor)
+New-Item -ItemType Directory -Path C:\apps\uploads -Force
+```
+
+Linux (bash):
+```bash
+# criar diretório absoluto e ajustar permissões
+sudo mkdir -p /var/www/uploads
+sudo chown -R www-data:www-data /var/www/uploads
+sudo chmod -R 750 /var/www/uploads
+```
+
+Notas importantes:
+- Garanta que o usuário que executa o Node (ex.: `www-data`, `node`, `ubuntu`) tenha permissão de leitura e escrita no diretório `FILES_DIR`.
+- O servidor Express expõe esse diretório em runtime na rota `/uploads` (ex.: `https://seu-servidor.com/uploads/arquivo.jpg`).
+- Não adicione o diretório absoluto ao Git — ele deve ficar fora do repositório. Use backups regulares para preservar arquivos.
+- Se você já tem uploads antigos no `public/uploads/`, mova-os para o novo local antes do deploy:
+
+Linux example:
+```bash
+sudo mv /path/to/repo/public/uploads/* /var/www/uploads/
+```
+
+Teste rápido (após reiniciar o app): acesse `http://localhost:3000/uploads/` e verifique um arquivo conhecido ou envie um novo arquivo via interface do chat.
+
 ## 👥 Contribuindo
 
 Faça um fork, crie uma branch, faça suas mudanças e envie um pull request!

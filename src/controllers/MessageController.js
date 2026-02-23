@@ -6,9 +6,17 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
 // Configurar multer
+const uploadsDir = process.env.FILES_DIR
+  ? path.resolve(process.cwd(), process.env.FILES_DIR)
+  : path.join(process.cwd(), 'public', 'uploads');
+
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../public/uploads'));
+    cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
@@ -17,7 +25,7 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ storage, limits: { fileSize: 52428800 } });
+const upload = multer({ storage, limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE || '52428800') } });
 
 class MessageController {
   sendMessage(req, res) {
