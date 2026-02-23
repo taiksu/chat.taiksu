@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Taiksu - Integração SSO</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .content {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .section p {
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .code-block {
+            background: #f5f5f5;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+
+        .code-block code {
+            font-family: 'Courier New', monospace;
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .token-input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+
+        .user-info {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .user-info strong {
+            color: #667eea;
+        }
+
+        .step {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+
+        .step h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .step p {
+            margin: 5px 0;
+        }
+
+        ul {
+            margin-left: 20px;
+            color: #666;
+        }
+
+        ul li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Chat Taiksu SSO</h1>
+            <p>Exemplo de Integração com Autenticação Centralizada</p>
+        </div>
+
+        <div class="content">
+            <!-- Seção 1: Explicação -->
+            <div class="section">
+                <h2>📖 O que é SSO?</h2>
+                <p>
+                    SSO (Single Sign-On) permite que sua aplicação use o sistema de autenticação centralizado do Taiksu.
+                    Não é necessário manter sessões locais - o Chat Taiksu valida tudo com o servidor central.
+                </p>
+                <p>
+                    <strong>Benefícios:</strong>
+                </p>
+                <ul>
+                    <li>Uma única autenticação para múltiplas aplicações</li>
+                    <li>Dados do usuário sincronizados automaticamente</li>
+                    <li>Sem necessidade de gerenciar senhas localmente</li>
+                    <li>Suporte a múltiplos microsserviços</li>
+                </ul>
+            </div>
+
+            <!-- Seção 2: Fluxo -->
+            <div class="section">
+                <h2>🔄 Fluxo de Autenticação</h2>
+                
+                <div class="step">
+                    <h3>1️⃣ Sua aplicação obtém um token</h3>
+                    <p>Seu servidor faz login no SSO centralizado e recebe um token JWT</p>
+                    <div class="code-block">
+                        <code>POST https://login.taiksu.com.br/api/login<br>
+Body: { email, password }<br>
+Response: { token: "eyJhbGc..." }</code>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3>2️⃣ Token é enviado ao Chat Taiksu</h3>
+                    <p>Sua aplicação passa o token para validação</p>
+                    <div class="code-block">
+                        <code>POST http://chat.taiksu.local:3000/api/auth/sso/validate<br>
+Body: { token: "eyJhbGc..." }<br>
+Response: { success: true, user: {...} }</code>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3>3️⃣ Chat Taiksu valida com o SSO</h3>
+                    <p>Chat consulta o servidor SSO para confirmar autenticidade do token</p>
+                    <div class="code-block">
+                        <code>GET https://login.taiksu.com.br/api/user/me<br>
+Headers: { Authorization: "Bearer eyJhbGc..." }<br>
+Response: { id, name, email, foto, ... }</code>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <h3>4️⃣ Usuário sincronizado e sessão criada</h3>
+                    <p>Chat Taiksu cria/atualiza usuário localmente e estabelece sessão</p>
+                    <div class="code-block">
+                        <code>Sessão criada com dados do usuário<br>
+Pode acessar: /chat/rooms, /dashboard, etc<br>
+Cookie: connect.sid={session_id}</code>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Seção 3: Teste -->
+            <div class="section">
+                <h2>🧪 Teste a Integração</h2>
+                
+                <p>Cole um token JWT abaixo para testar a validação:</p>
+                <textarea class="token-input" id="tokenInput" placeholder="Cole seu token JWT aqui..." rows="4"></textarea>
+                
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="validateToken()">
+                        ✅ Validar Token
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearAll()">
+                        🗑️ Limpar
+                    </button>
+                </div>
+
+                <div id="statusDiv"></div>
+                <div id="userDiv"></div>
+            </div>
+
+            <!-- Seção 4: Implementação -->
+            <div class="section">
+                <h2>💻 Como Implementar</h2>
+                
+                <h3 style="color: #333; margin-top: 20px; margin-bottom: 10px;">Frontend (JavaScript)</h3>
+                <div class="code-block">
+                    <code>// 1. Obter token (da sua aplicação SSO)<br>
+const token = localStorage.getItem('sso_token');<br><br>
+// 2. Validar no Chat Taiksu<br>
+fetch('http://chat.taiksu.local:3000/api/auth/sso/validate', {<br>
+&nbsp;&nbsp;method: 'POST',<br>
+&nbsp;&nbsp;headers: { 'Content-Type': 'application/json' },<br>
+&nbsp;&nbsp;body: JSON.stringify({ token })<br>
+})<br>
+.then(r => r.json())<br>
+.then(data => {<br>
+&nbsp;&nbsp;if (data.success) {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;console.log('Autenticado:', data.user);<br>
+&nbsp;&nbsp;&nbsp;&nbsp;// Redirecionar para chat<br>
+&nbsp;&nbsp;&nbsp;&nbsp;window.location.href = 'http://chat.taiksu.local:3000/chat/rooms';<br>
+&nbsp;&nbsp;}<br>
+});</code>
+                </div>
+
+                <h3 style="color: #333; margin-top: 20px; margin-bottom: 10px;">Backend (Node.js)</h3>
+                <div class="code-block">
+                    <code>// 1. Receber token do cliente<br>
+app.post('/auth/sso/validate', async (req, res) => {<br>
+&nbsp;&nbsp;const { token } = req.body;<br><br>
+&nbsp;&nbsp;// 2. Enviar para Chat Taiksu<br>
+&nbsp;&nbsp;const response = await fetch('http://chat.taiksu.local:3000/api/auth/sso/validate', {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;method: 'POST',<br>
+&nbsp;&nbsp;&nbsp;&nbsp;headers: { 'Content-Type': 'application/json' },<br>
+&nbsp;&nbsp;&nbsp;&nbsp;body: JSON.stringify({ token })<br>
+&nbsp;&nbsp;});<br><br>
+&nbsp;&nbsp;const data = await response.json();<br>
+&nbsp;&nbsp;res.json(data);<br>
+});</code>
+                </div>
+
+                <h3 style="color: #333; margin-top: 20px; margin-bottom: 10px;">Variáveis de Ambiente</h3>
+                <div class="code-block">
+                    <code># .env<br>
+SSO_URL=https://login.taiksu.com.br<br>
+SSO_VALIDATE_ENDPOINT=/api/user/me<br>
+SSO_TIMEOUT=5000<br>
+ENABLE_SSO=true</code>
+                </div>
+            </div>
+
+            <!-- Seção 5: Documentação -->
+            <div class="section">
+                <h2>📚 Endpoints Disponíveis</h2>
+                
+                <h3 style="color: #333; margin-bottom: 10px;">Validar Token</h3>
+                <div class="code-block">
+                    <code>POST /api/auth/sso/validate<br>
+Content-Type: application/json<br><br>
+{<br>
+&nbsp;&nbsp;"token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."<br>
+}</code>
+                </div>
+
+                <h3 style="color: #333; margin-top: 20px; margin-bottom: 10px;">Obter Usuário Autenticado</h3>
+                <div class="code-block">
+                    <code>GET /api/auth/sso/me<br>
+Authorization: Bearer {token}<br>
+Accept: application/json</code>
+                </div>
+
+                <h3 style="color: #333; margin-top: 20px; margin-bottom: 10px;">Fazer Logout</h3>
+                <div class="code-block">
+                    <code>POST /api/auth/sso/logout<br>
+Authorization: Bearer {token}</code>
+                </div>
+            </div>
+
+            <!-- Seção 6: Suporte -->
+            <div class="section">
+                <h2>❓ Dúvidas?</h2>
+                <p>
+                    Consulte a documentação completa em:
+                    <strong>SSO_AUTHENTICATION.md</strong> no repositório do projeto.
+                </p>
+                <p style="margin-top: 15px; color: #999; font-size: 0.9rem;">
+                    ℹ️ Este exemplo é apenas para fins de demonstração. Em produção, tokens devem ser transmitidos via HTTPS.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Exemplo de validação de token
+        async function validateToken() {
+            const token = document.getElementById('tokenInput').value.trim();
+            const statusDiv = document.getElementById('statusDiv');
+            const userDiv = document.getElementById('userDiv');
+
+            if (!token) {
+                showStatus('Por favor, cole um token válido', 'error');
+                return;
+            }
+
+            showStatus('Validando token...', 'info');
+
+            try {
+                const response = await fetch('http://localhost:3000/api/auth/sso/validate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showStatus('✅ Token validado com sucesso!', 'success');
+                    showUserInfo(data.user);
+                } else {
+                    showStatus('❌ ' + data.message, 'error');
+                    userDiv.innerHTML = '';
+                }
+            } catch (error) {
+                showStatus('❌ Erro ao conectar: ' + error.message, 'error');
+                userDiv.innerHTML = '';
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('statusDiv');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function showUserInfo(user) {
+            const userDiv = document.getElementById('userDiv');
+            userDiv.innerHTML = `
+                <div class="user-info">
+                    <h3>👤 Dados do Usuário</h3>
+                    <p><strong>ID:</strong> ${user.id}</p>
+                    <p><strong>Nome:</strong> ${user.name}</p>
+                    <p><strong>Email:</strong> ${user.email}</p>
+                    <p><strong>Role:</strong> ${user.role}</p>
+                    ${user.avatar ? `<p><strong>Avatar:</strong> <a href="${user.avatar}" target="_blank">Ver</a></p>` : ''}
+                </div>
+            `;
+        }
+
+        function clearAll() {
+            document.getElementById('tokenInput').value = '';
+            document.getElementById('statusDiv').innerHTML = '';
+            document.getElementById('userDiv').innerHTML = '';
+        }
+    </script>
+</body>
+</html>

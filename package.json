@@ -1,0 +1,36 @@
+{
+  "name": "chat-taiksu",
+  "version": "1.0.0",
+  "description": "Chat de Suporte com Dashboard e SSE - Chat Taiksu",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "seed": "node src/seed.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "chat",
+    "support",
+    "sse",
+    "real-time"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ejs": "^3.1.9",
+    "dotenv": "^16.3.1",
+    "multer": "1.4.5-lts.1",
+    "uuid": "^9.0.1",
+    "sqlite3": "^5.1.6",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "express-session": "^1.17.3",
+    "bcryptjs": "^2.4.3",
+    "moment": "^2.29.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

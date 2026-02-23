@@ -1,0 +1,101 @@
+const User = require('../models/User');
+const ChatRoom = require('../models/ChatRoom');
+const Message = require('../models/Message');
+const { v4: uuidv4 } = require('uuid');
+
+class ChatController {
+  async listRooms(req, res) {
+    try {
+      const rooms = await ChatRoom.findAll();
+      
+      // Enriquecer salas com informações
+      const enrichedRooms = await Promise.all(rooms.map(async (room) => {
+        const participants = await ChatRoom.getParticipants(room.id);
+        const unreadCount = await Message.countUnread(room.id);
+        return {
+          ...room,
+          participantsCount: participants.length,
+          unreadCount
+        };
+      }));
+
+      res.render('chat/rooms', {
+        title: 'Salas de Chat - Chat Taiksu',
+        rooms: enrichedRooms,
+        user: req.session.user
+      });
+    } catch (error) {
+      console.error('Error listing rooms:', error);
+      res.status(500).render('error', { 
+        title: 'Erro',
+        message: 'Erro ao listar salas',
+        user: req.session.user 
+      });
+    }
+  }
+
+  async openRoom(req, res) {
+    try {
+      const { roomId } = req.params;
+      const room = await ChatRoom.findById(roomId);
+      
+      if (!room) {
+        return res.status(404).render('error', { 
+          title: 'Erro',
+          message: 'Sala não encontrada',
+          user: req.session.user 
+        });
+      }
+
+      const participants = await ChatRoom.getParticipants(roomId);
+      const messages = await Message.findByRoomId(roomId, 100);
+
+      // Adicionar usuário como participante
+      if (req.session.user) {
+        await ChatRoom.addParticipant(roomId, req.session.user.id);
+      }
+
+      res.render('chat/room', {
+        title: `${room.name} - Chat Taiksu`,
+        room,
+        participants,
+        messages,
+        user: req.session.user
+      });
+    } catch (error) {
+      console.error('Error opening room:', error);
+      res.status(500).render('error', { 
+        title: 'Erro',
+        message: 'Erro ao abrir sala',
+        user: req.session.user 
+      });
+    }
+  }
+
+  async createRoom(req, res) {
+    try {
+      const { name, description } = req.body;
+      
+      if (!req.session.user) {
+        return res.status(401).json({ error: 'Não autenticado' });
+      }
+
+      const room = await ChatRoom.create({
+        name,
+        description,
+        type: 'support',
+        ownerId: req.session.user.id
+      });
+
+      // Adicionar criador como participante
+      await ChatRoom.addParticipant(room.id, req.session.user.id);
+
+      res.json({ success: true, room });
+    } catch (error) {
+      console.error('Error creating room:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+}
+
+module.exports = new ChatController();
