@@ -126,9 +126,9 @@ async function createTables() {
         status TEXT DEFAULT 'offline',
         role TEXT DEFAULT 'user',
         sso_id INTEGER,
-        sso_data LONGTEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        sso_data TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `,
     // Tabela de salas de chat
@@ -139,8 +139,8 @@ async function createTables() {
         type TEXT DEFAULT 'support',
         description TEXT,
         owner_id TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (owner_id) REFERENCES users(id)
       )
     `,
@@ -167,7 +167,7 @@ async function createTables() {
         id TEXT PRIMARY KEY,
         room_id TEXT NOT NULL,
         user_id TEXT NOT NULL,
-        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         left_at DATETIME,
         FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
         FOREIGN KEY (user_id) REFERENCES users(id)
@@ -183,7 +183,7 @@ async function createTables() {
         active_users INTEGER DEFAULT 0,
         avg_response_time INTEGER DEFAULT 0,
         satisfaction_rating REAL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (room_id) REFERENCES chat_rooms(id)
       )
     `,
@@ -194,7 +194,7 @@ async function createTables() {
         room_id TEXT NOT NULL,
         user_id TEXT NOT NULL,
         status INTEGER DEFAULT 0,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
