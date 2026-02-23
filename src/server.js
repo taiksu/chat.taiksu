@@ -7,6 +7,7 @@ require('dotenv').config();
 
 // Importar banco de dados
 const db = require('./config/database');
+const { runMigrations } = require('./config/migrations');
 
 // Criar app
 const app = express();
@@ -67,8 +68,21 @@ app.use((req, res) => {
 
 // Inicializar servidor
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Chat Taiksu rodando em http://localhost:${PORT}`);
-});
+
+(async () => {
+  try {
+    // Executar migrations automáticas na primeira inicialização
+    console.log('⏳ Verificando migrações do banco de dados...');
+    await runMigrations();
+    
+    // Iniciar servidor após migrações
+    app.listen(PORT, () => {
+      console.log(`🚀 Chat Taiksu rodando em http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error('❌ Erro ao inicializar servidor:', error);
+    process.exit(1);
+  }
+})();
 
 module.exports = app;
