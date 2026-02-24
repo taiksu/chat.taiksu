@@ -5,17 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
   <link rel="stylesheet" href="/css/tailwind.css">
+  <link rel="stylesheet" href="/css/theme.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 </head>
-<body class="min-h-dvh bg-slate-100 text-slate-800">
-  <nav class="bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-3 text-white shadow-sm sm:px-5">
+<body class="min-h-dvh bg-green-50 text-green-700">
+  <nav class="bg-gradient-to-r from-green-400 to-green-500 px-3 py-3 text-white shadow-sm sm:px-5">
     <div class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2">
       <h1 class="text-base font-bold sm:text-lg">Chat Taiksu</h1>
       <div class="flex flex-wrap items-center justify-end gap-2 text-sm">
         <% if (user) { %>
-          <span class="hidden text-indigo-100 sm:inline"><%= user.name %></span>
-          <div class="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-bold text-indigo-700"><%= user.name.charAt(0).toUpperCase() %></div>
-          <a href="/dashboard" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Dashboard</a>
+          <span class="hidden text-green-50 sm:inline"><%= user.name %></span>
+          <div class="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-bold text-green-700"><%= user.name.charAt(0).toUpperCase() %></div>
+          <a href="/dashboard" class="rounded-lg bg-white/35 px-3 py-2 text-xs font-semibold sm:text-sm">Dashboard</a>
           <a href="/chat/rooms" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Chat</a>
           <a href="/auth/logout" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Sair</a>
         <% } %>
@@ -24,33 +25,33 @@
   </nav>
 
   <main class="mx-auto w-full max-w-7xl space-y-5 px-3 py-4 sm:px-5 sm:py-6">
-    <h2 class="text-xl font-bold text-indigo-700 sm:text-2xl">Dashboard</h2>
+    <h2 class="text-xl font-bold text-green-700 sm:text-2xl">Dashboard</h2>
 
     <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-indigo-600/80">Usuarios ativos</h3>
-        <p class="mt-2 text-3xl font-bold text-slate-800"><%= activeUsers %></p>
+      <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Usuarios ativos</h3>
+        <p class="mt-2 text-3xl font-bold text-green-700"><%= activeUsers %></p>
       </article>
-      <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-indigo-600/80">Total de usuarios</h3>
-        <p class="mt-2 text-3xl font-bold text-slate-800"><%= totalUsers %></p>
+      <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Total de usuarios</h3>
+        <p class="mt-2 text-3xl font-bold text-green-700"><%= totalUsers %></p>
       </article>
-      <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-indigo-600/80">Salas de chat</h3>
-        <p class="mt-2 text-3xl font-bold text-slate-800"><%= totalRooms %></p>
+      <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Salas de chat</h3>
+        <p class="mt-2 text-3xl font-bold text-green-700"><%= totalRooms %></p>
       </article>
-      <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-indigo-600/80">Total de mensagens</h3>
-        <p class="mt-2 text-3xl font-bold text-slate-800"><%= totalMessages %></p>
+      <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Total de mensagens</h3>
+        <p class="mt-2 text-3xl font-bold text-green-700"><%= totalMessages %></p>
       </article>
-      <article class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:col-span-2 xl:col-span-1">
-        <h3 class="text-xs font-semibold uppercase tracking-wide text-indigo-600/80">Mensagens nao lidas</h3>
-        <p class="mt-2 text-3xl font-bold text-slate-800"><%= unreadMessages %></p>
+      <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm sm:col-span-2 xl:col-span-1">
+        <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Mensagens nao lidas</h3>
+        <p class="mt-2 text-3xl font-bold text-green-700"><%= unreadMessages %></p>
       </article>
     </section>
 
-    <section class="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-5">
-      <h2 class="mb-3 text-lg font-bold text-indigo-700 sm:text-xl">Metricas dos ultimos 30 dias</h2>
+    <section class="rounded-2xl border border-green-100 bg-white p-3 shadow-sm sm:p-5">
+      <h2 class="mb-3 text-lg font-bold text-green-700 sm:text-xl">Metricas dos ultimos 30 dias</h2>
       <div class="relative h-64 sm:h-80">
         <canvas id="metricsChart"></canvas>
       </div>
@@ -70,15 +71,15 @@
               {
                 label: 'Mensagens',
                 data: metrics.map(m => m.messages_count),
-                borderColor: '#4f46e5',
-                backgroundColor: 'rgba(79, 70, 229, 0.15)',
+                borderColor: '#22c55e',
+                backgroundColor: 'rgba(34, 197, 94, 0.12)',
                 tension: 0.35
               },
               {
                 label: 'Usuarios Ativos',
                 data: metrics.map(m => m.active_users),
-                borderColor: '#7c3aed',
-                backgroundColor: 'rgba(124, 58, 237, 0.12)',
+                borderColor: '#15803d',
+                backgroundColor: 'rgba(21, 128, 61, 0.1)',
                 tension: 0.35
               }
             ]

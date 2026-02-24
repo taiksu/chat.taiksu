@@ -12,13 +12,13 @@ const authMiddleware = (req, res, next) => {
 };
 
 // Rotas de mensagens
-router.post('/send', authMiddleware, MessageController.sendMessage);
-router.post('/mark-read', authMiddleware, MessageController.markAsRead);
-router.delete('/:messageId', authMiddleware, MessageController.deleteMessage);
-router.get('/:roomId', authMiddleware, MessageController.getMessages);
+router.post('/send', authMiddleware, MessageController.sendMessage.bind(MessageController));
+router.post('/mark-read', authMiddleware, MessageController.markAsRead.bind(MessageController));
+router.delete('/:messageId', authMiddleware, MessageController.deleteMessage.bind(MessageController));
+router.get('/:roomId', authMiddleware, MessageController.getMessages.bind(MessageController));
 
 // SSE e status de digitação
-router.get('/stream/:roomId', authMiddleware, MessageController.sendSSE);
-router.post('/typing/:roomId', authMiddleware, MessageController.setTypingStatus);
+router.get('/stream/:roomId', authMiddleware, MessageController.sendSSE.bind(MessageController));
+router.post('/typing/:roomId', authMiddleware, MessageController.setTypingStatus.bind(MessageController));
 
 module.exports = router;

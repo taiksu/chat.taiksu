@@ -5,43 +5,44 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
   <link rel="stylesheet" href="/css/tailwind.css">
+  <link rel="stylesheet" href="/css/theme.css">
 </head>
-<body class="min-h-dvh bg-[radial-gradient(circle_at_top,#7c3aed_0%,#4f46e5_45%,#111827_100%)] text-white">
+<body class="min-h-dvh bg-green-50 text-green-700">
   <main class="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-8 sm:px-6 lg:px-10 lg:py-14">
     <section class="text-center">
-      <p class="mb-4 inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-1 text-xs font-semibold tracking-[0.2em] uppercase">Chat de ajuda</p>
-      <h1 class="text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">Chat Taiksu</h1>
-      <p class="mx-auto mt-4 max-w-2xl text-sm text-white/85 sm:text-lg">Plataforma de atendimento em tempo real para suporte ao cliente com mensagens, mídia e métricas.</p>
+      <p class="mb-4 inline-flex rounded-full border border-green-200 bg-white px-4 py-1 text-xs font-semibold tracking-[0.2em] uppercase text-gray-500">Chat de ajuda</p>
+      <h1 class="text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl text-green-700">Chat Taiksu</h1>
+      <p class="mx-auto mt-4 max-w-2xl text-sm text-gray-500 sm:text-lg">Plataforma de atendimento em tempo real para suporte ao cliente com mensagens, midia e metricas.</p>
       <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-        <a href="/auth/login" class="rounded-xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-950/25 transition hover:-translate-y-0.5 hover:bg-emerald-300">Fazer login</a>
-        <a href="/auth/register" class="rounded-xl border border-white/35 bg-white/10 px-6 py-3 text-sm font-semibold backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white/20">Criar conta</a>
+        <a href="/auth/login" class="rounded-xl bg-green-400 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-green-500">Fazer login</a>
+        <a href="/auth/register" class="rounded-xl border border-green-300 bg-white px-6 py-3 text-sm font-semibold text-green-700 transition hover:-translate-y-0.5 hover:bg-green-50">Criar conta</a>
       </div>
     </section>
 
     <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-        <h2 class="text-lg font-bold">Tempo real</h2>
-        <p class="mt-2 text-sm text-white/80">Mensagens instantâneas via SSE com atualização contínua.</p>
+      <article class="rounded-2xl border border-green-100 bg-white p-5">
+        <h2 class="text-lg font-bold text-green-700">Tempo real</h2>
+        <p class="mt-2 text-sm text-gray-500">Mensagens instantaneas via SSE com atualizacao continua.</p>
       </article>
-      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-        <h2 class="text-lg font-bold">Dashboard</h2>
-        <p class="mt-2 text-sm text-white/80">Métricas para acompanhar uso, salas e mensagens.</p>
+      <article class="rounded-2xl border border-green-100 bg-white p-5">
+        <h2 class="text-lg font-bold text-green-700">Dashboard</h2>
+        <p class="mt-2 text-sm text-gray-500">Metricas para acompanhar uso, salas e mensagens.</p>
       </article>
-      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-        <h2 class="text-lg font-bold">Mídia</h2>
-        <p class="mt-2 text-sm text-white/80">Envio de áudio, vídeo, imagens e documentos no chat.</p>
+      <article class="rounded-2xl border border-green-100 bg-white p-5">
+        <h2 class="text-lg font-bold text-green-700">Midia</h2>
+        <p class="mt-2 text-sm text-gray-500">Envio de audio, video, imagens e documentos no chat.</p>
       </article>
-      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-        <h2 class="text-lg font-bold">Status de digitação</h2>
-        <p class="mt-2 text-sm text-white/80">Sinaliza quando alguém está digitando em tempo real.</p>
+      <article class="rounded-2xl border border-green-100 bg-white p-5">
+        <h2 class="text-lg font-bold text-green-700">Status de digitacao</h2>
+        <p class="mt-2 text-sm text-gray-500">Sinaliza quando alguem esta digitando em tempo real.</p>
       </article>
-      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-        <h2 class="text-lg font-bold">Leitura</h2>
-        <p class="mt-2 text-sm text-white/80">Confirmação de leitura para melhorar o fluxo de suporte.</p>
+      <article class="rounded-2xl border border-green-100 bg-white p-5">
+        <h2 class="text-lg font-bold text-green-700">Leitura</h2>
+        <p class="mt-2 text-sm text-gray-500">Confirmacao de leitura para melhorar o fluxo de suporte.</p>
       </article>
-      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
-        <h2 class="text-lg font-bold">Widget</h2>
-        <p class="mt-2 text-sm text-white/80">Integração com sites e apps via widget JavaScript.</p>
+      <article class="rounded-2xl border border-green-100 bg-white p-5">
+        <h2 class="text-lg font-bold text-green-700">Widget</h2>
+        <p class="mt-2 text-sm text-gray-500">Integracao com sites e apps via widget JavaScript.</p>
       </article>
     </section>
   </main>
