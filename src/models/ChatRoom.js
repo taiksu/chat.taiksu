@@ -30,10 +30,18 @@ class ChatRoom {
 
   static findAll() {
     return new Promise((resolve, reject) => {
-      db.all(`SELECT * FROM chat_rooms ORDER BY created_at DESC`, (err, rows) => {
+      db.all(
+        `SELECT cr.*
+         FROM chat_rooms cr
+         LEFT JOIN support_chamados_rooms scr ON scr.room_id = cr.id
+         WHERE scr.room_id IS NULL
+         ORDER BY cr.created_at DESC`,
+        [],
+        (err, rows) => {
         if (err) reject(err);
         else resolve(rows || []);
-      });
+        }
+      );
     });
   }
 
@@ -103,6 +111,67 @@ class ChatRoom {
         }
       );
     });
+  }
+
+  static findByChamadoId(chamadoId) {
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT cr.*, scr.chamado_id
+         FROM support_chamados_rooms scr
+         JOIN chat_rooms cr ON cr.id = scr.room_id
+         WHERE scr.chamado_id = ?`,
+        [String(chamadoId)],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row || null);
+        }
+      );
+    });
+  }
+
+  static findChamadoRooms() {
+    return new Promise((resolve, reject) => {
+      db.all(
+        `SELECT cr.*, scr.chamado_id
+         FROM support_chamados_rooms scr
+         JOIN chat_rooms cr ON cr.id = scr.room_id
+         ORDER BY cr.created_at DESC`,
+        [],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  static async createOrGetChamadoRoom({ chamadoId, ownerId, name, description }) {
+    const existing = await this.findByChamadoId(chamadoId);
+    if (existing) {
+      return { room: existing, created: false };
+    }
+
+    const room = await this.create({
+      name: name || `Chamado #${chamadoId}`,
+      type: 'support_ticket',
+      description: description || `Conversa do chamado ${chamadoId}`,
+      ownerId
+    });
+
+    const mappingId = uuidv4();
+    await new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO support_chamados_rooms (id, chamado_id, room_id, created_by)
+         VALUES (?, ?, ?, ?)`,
+        [mappingId, String(chamadoId), room.id, ownerId],
+        function(err) {
+          if (err) reject(err);
+          else resolve(this);
+        }
+      );
+    });
+
+    return { room: { ...room, chamado_id: String(chamadoId) }, created: true };
   }
 }
 

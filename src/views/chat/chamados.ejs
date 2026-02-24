@@ -15,8 +15,8 @@
           <span class="hidden text-indigo-100 sm:inline"><%= user.name %></span>
           <div class="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-bold text-indigo-700"><%= user.name.charAt(0).toUpperCase() %></div>
           <a href="/dashboard" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Dashboard</a>
-          <a href="/chat/rooms" class="rounded-lg bg-white/35 px-3 py-2 text-xs font-semibold sm:text-sm">Salas</a>
-          <a href="/chat/chamados" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Chamados</a>
+          <a href="/chat/rooms" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Salas</a>
+          <a href="/chat/chamados" class="rounded-lg bg-white/35 px-3 py-2 text-xs font-semibold sm:text-sm">Chamados</a>
           <a href="/auth/logout" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Sair</a>
         <% } %>
       </div>
@@ -25,28 +25,36 @@
 
   <main class="mx-auto w-full max-w-7xl px-3 py-4 sm:px-5 sm:py-6">
     <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <h2 class="text-xl font-bold text-indigo-700 sm:text-2xl">Salas de Chat</h2>
-      <button class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-700" onclick="createNewRoom()" type="button">+ Criar Nova Sala</button>
+      <h2 class="text-xl font-bold text-indigo-700 sm:text-2xl">Chats Criados por Chamado</h2>
+      <button class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-700" onclick="createChamadoRoom()" type="button">
+        + Criar Chat por Chamado
+      </button>
     </div>
 
+    <% if (!rooms || rooms.length === 0) { %>
+      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-6 text-slate-600 shadow-sm">
+        Nenhum chat de chamado criado ainda.
+      </div>
+    <% } %>
+
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      <% rooms.forEach(room => { %>
+      <% (rooms || []).forEach(room => { %>
         <article class="cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md" onclick="window.location.href='/chat/room/<%= room.id %>'">
           <div class="bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-4 text-white">
+            <div class="mb-1 text-xs font-semibold uppercase tracking-wide text-indigo-100">Chamado #<%= room.chamado_id %></div>
             <h3 class="truncate text-lg font-semibold"><%= room.name %></h3>
-            <p class="mt-1 truncate text-sm text-indigo-100"><%= room.description || 'Sem descricao' %></p>
+            <p class="mt-1 truncate text-sm text-indigo-100"><%= room.description || 'Sem descrição' %></p>
           </div>
 
           <div class="space-y-4 px-4 py-4">
             <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
               <span class="text-slate-600"><%= room.participantsCount %> participantes</span>
               <% if (room.unreadCount > 0) { %>
-                <span class="rounded-full bg-rose-500 px-3 py-1 text-xs font-semibold text-white"><%= room.unreadCount %> nao lidas</span>
+                <span class="rounded-full bg-rose-500 px-3 py-1 text-xs font-semibold text-white"><%= room.unreadCount %> não lidas</span>
               <% } else { %>
                 <span class="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white">Tudo lido</span>
               <% } %>
             </div>
-
             <button class="w-full rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700" type="button">Abrir Chat</button>
           </div>
         </article>
@@ -55,26 +63,29 @@
   </main>
 
   <script>
-    function createNewRoom() {
-      const name = prompt('Nome da sala:');
-      if (!name) return;
+    async function createChamadoRoom() {
+      const chamadoId = prompt('Informe o ID do chamado:');
+      if (!chamadoId) return;
 
-      const description = prompt('Descricao (opcional):');
+      const chamadoTitle = prompt('Título do chamado (opcional):') || '';
+      const description = prompt('Descrição do chat (opcional):') || '';
 
-      fetch('/chat/create-room', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ name, description })
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          window.location.reload();
+      try {
+        const response = await fetch(`/api/chat/chamados/${encodeURIComponent(chamadoId)}/room`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chamadoTitle, description })
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || 'Falha ao criar sala do chamado');
         }
-      })
-      .catch(err => alert('Erro ao criar sala: ' + err.message));
+
+        window.location.href = `/chat/room/${data.room.id}`;
+      } catch (err) {
+        alert('Erro: ' + err.message);
+      }
     }
   </script>
 </body>

@@ -1,6 +1,6 @@
 /**
- * Configuração de banco de dados adaptável
- * Suporta SQLite (desenvolvimento) e MySQL (produção)
+ * ConfiguraÃ§Ã£o de banco de dados adaptÃ¡vel
+ * Suporta SQLite (desenvolvimento) e MySQL (produÃ§Ã£o)
  */
 
 const path = require('path');
@@ -9,7 +9,7 @@ require('dotenv').config();
 const dbType = process.env.DB_TYPE || 'sqlite';
 const nodeEnv = process.env.NODE_ENV || 'development';
 
-console.log(`📦 Banco de Dados: ${dbType.toUpperCase()} (${nodeEnv})`);
+console.log(`ðŸ“¦ Banco de Dados: ${dbType.toUpperCase()} (${nodeEnv})`);
 
 let db;
 
@@ -28,7 +28,7 @@ if (dbType === 'mysql') {
     queueLimit: 0
   });
 
-  console.log(`✅ MySQL conectado em ${process.env.DB_HOST}:${process.env.DB_PORT}`);
+  console.log(`âœ… MySQL conectado em ${process.env.DB_HOST}:${process.env.DB_PORT}`);
 
   db = {
     run: async (sql, params = []) => {
@@ -74,7 +74,7 @@ if (dbType === 'mysql') {
     exec: async (sql) => {
       try {
         const conn = await pool.getConnection();
-        // Executar múltiplas declarações
+        // Executar mÃºltiplas declaraÃ§Ãµes
         const statements = sql.split(';').filter(s => s.trim());
         for (const statement of statements) {
           if (statement.trim()) {
@@ -95,9 +95,9 @@ if (dbType === 'mysql') {
 
   db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
-      console.error('❌ Erro ao conectar ao SQLite:', err);
+      console.error('âŒ Erro ao conectar ao SQLite:', err);
     } else {
-      console.log(`✅ SQLite conectado em ${dbPath}`);
+      console.log(`âœ… SQLite conectado em ${dbPath}`);
       initializeDatabase();
     }
   });
@@ -115,7 +115,7 @@ function initializeDatabase() {
 
 async function createTables() {
   const tables = [
-    // Tabela de usuários
+    // Tabela de usuÃ¡rios
     `
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -173,7 +173,7 @@ async function createTables() {
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
     `,
-    // Tabela de métricas
+    // Tabela de mÃ©tricas
     `
       CREATE TABLE IF NOT EXISTS metrics (
         id TEXT PRIMARY KEY,
@@ -185,6 +185,18 @@ async function createTables() {
         satisfaction_rating REAL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (room_id) REFERENCES chat_rooms(id)
+      )
+    `,
+    // Tabela de vínculo entre chamado e sala (1:1)
+    `
+      CREATE TABLE IF NOT EXISTS support_chamados_rooms (
+        id TEXT PRIMARY KEY,
+        chamado_id TEXT NOT NULL UNIQUE,
+        room_id TEXT NOT NULL UNIQUE,
+        created_by TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
+        FOREIGN KEY (created_by) REFERENCES users(id)
       )
     `,
     // Tabela de status de digitação
@@ -220,7 +232,8 @@ async function createTables() {
     }
   }
 
-  console.log('✅ Tabelas criadas/verificadas com sucesso');
+  console.log('âœ… Tabelas criadas/verificadas com sucesso');
 }
 
 module.exports = db;
+

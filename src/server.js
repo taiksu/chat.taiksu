@@ -49,6 +49,7 @@ app.use((req, res, next) => {
 const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const chatRoutes = require('./routes/chat');
+const chatApiRoutes = require('./routes/chat-api');
 const messageRoutes = require('./routes/messages');
 const ssoRoutes = require('./routes/sso');
 
@@ -56,6 +57,7 @@ app.use('/auth', authRoutes);
 app.use('/api/auth/sso', ssoRoutes);
 app.use('/dashboard', dashboardRoutes);
 app.use('/chat', chatRoutes);
+app.use('/api/chat', chatApiRoutes);
 app.use('/api/messages', messageRoutes);
 
 // Rota inicial

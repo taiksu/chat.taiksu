@@ -70,6 +70,15 @@
     .audio-player.is-playing .audio-bar:nth-child(3n) {
       animation-duration: 0.8s;
     }
+
+    @keyframes recordPulse {
+      0%, 100% { transform: scale(1); opacity: 0.85; }
+      50% { transform: scale(1.2); opacity: 1; }
+    }
+
+    .record-pulse {
+      animation: recordPulse 1s ease-in-out infinite;
+    }
   </style>
 </head>
 <body class="flex h-dvh min-h-dvh flex-col overflow-hidden bg-slate-100 text-slate-800">
@@ -107,7 +116,7 @@
         </div>
       </div>
 
-      <div class="messages-area flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-3 sm:px-4 md:px-6" id="messagesArea">
+      <div class="messages-area flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto bg-slate-200 bg-[url('/images/chat-soft-bg.svg')] bg-[length:420px_420px] bg-repeat px-3 py-3 sm:px-4 md:px-6" id="messagesArea">
         <% messages.forEach(msg => { const isOwn = String(msg.user_id) === String(user.id); %>
           <div class="message message-enter <%= isOwn ? 'own justify-end' : '' %> mb-1 flex items-end gap-2 sm:gap-3" data-id="<%= msg.id %>" data-user-id="<%= msg.user_id %>">
             <div class="message-avatar <%= isOwn ? 'order-2 bg-emerald-700' : 'bg-emerald-600' %> flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white" title="<%= msg.name %>">
@@ -117,7 +126,7 @@
               <div class="message-sender mb-0.5 text-xs font-semibold text-slate-600">
                 <%= isOwn ? 'Voce' : msg.name %>
               </div>
-              <div class="message-bubble <%= isOwn ? 'bg-emerald-700 text-white border border-emerald-800' : 'bg-emerald-100 text-emerald-900 border border-emerald-200' %> rounded-2xl px-3 py-2 text-sm leading-relaxed break-words">
+              <div class="message-bubble <%= isOwn ? 'bg-emerald-700 text-white border border-emerald-800' : 'bg-slate-200 text-slate-800 border border-slate-300' %> rounded-2xl px-3 py-2 text-sm leading-relaxed break-words">
                 <% if (msg.type === 'text') { %>
                   <%= msg.content %>
                 <% } else if (msg.type === 'image') { %>
@@ -125,9 +134,19 @@
                 <% } else if (msg.type === 'video') { %>
                   <video controls class="message-attachment max-w-full rounded-lg sm:max-w-[300px]" src="<%= msg.file_url %>"></video>
                 <% } else if (msg.type === 'audio') { %>
-                  <audio controls preload="metadata" class="message-attachment block w-[240px] max-w-full sm:w-[300px]" src="<%= msg.file_url %>">
-                    Seu navegador não suporta áudio embutido.
-                  </audio>
+                  <div class="audio-player flex w-[240px] max-w-full items-center gap-2 rounded-xl bg-black/15 px-2 py-2 sm:w-[300px]" data-audio-url="<%= msg.file_url %>">
+                    <button type="button" class="audio-toggle flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/90 text-emerald-800" aria-label="Reproduzir audio">
+                      <svg class="audio-icon-play h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.55.83l10-6.86a1 1 0 0 0 0-1.66l-10-6.86A1 1 0 0 0 8 5.14z"/></svg>
+                      <svg class="audio-icon-pause hidden h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>
+                    </button>
+                    <div class="audio-bars flex h-8 flex-1 items-end gap-0.5">
+                      <% for (let i = 0; i < 16; i++) { %>
+                        <span class="audio-bar inline-block w-1 rounded-full bg-white/90" style="height: <%= 20 + ((i * 11) % 55) %>%"></span>
+                      <% } %>
+                    </div>
+                    <span class="audio-time w-10 text-right text-[11px] font-semibold text-white/95">00:00</span>
+                    <audio preload="metadata" class="native-audio hidden" src="<%= msg.file_url %>"></audio>
+                  </div>
                 <% } else { %>
                   <a href="<%= msg.file_url %>" download class="text-emerald-700 underline">Arquivo: <%= msg.file_type %></a>
                 <% } %>
@@ -147,13 +166,27 @@
         <div class="flex min-w-0 items-end gap-2">
           <div class="relative">
             <button class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-lg text-white transition hover:bg-emerald-700" id="fileBtn" onclick="toggleFileTypeDropdown()" title="Selecionar tipo de arquivo" type="button">
-              +
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
             </button>
             <div class="absolute bottom-12 left-0 z-20 hidden min-w-40 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg" id="fileTypeDropdown">
-              <button class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('image'); document.getElementById('fileInput').click();" type="button">Foto</button>
-              <button class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('video'); document.getElementById('fileInput').click();" type="button">Video</button>
-              <button class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('audio'); document.getElementById('fileInput').click();" type="button">Audio</button>
-              <button class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('document'); document.getElementById('fileInput').click();" type="button">Documento</button>
+              <button class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('image'); document.getElementById('fileInput').click();" type="button">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 20"/></svg>
+                <span>Foto</span>
+              </button>
+              <button class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('video'); document.getElementById('fileInput').click();" type="button">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>
+                <span>Video</span>
+              </button>
+              <button class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('audio'); document.getElementById('fileInput').click();" type="button">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                <span>Audio</span>
+              </button>
+              <button class="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('document'); document.getElementById('fileInput').click();" type="button">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span>Documento</span>
+              </button>
             </div>
             <input type="file" id="fileInput" class="hidden" onchange="sendFile(this)">
           </div>
@@ -161,10 +194,17 @@
           <textarea class="message-input min-h-11 max-h-28 w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-0 placeholder:text-slate-400 focus:border-emerald-500 focus:shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" id="messageInput" placeholder="Digite sua mensagem..." onkeypress="handleKeyPress(event)" onkeyup="updateActionButton()" onkeydown="setTypingStatus(true)"></textarea>
 
           <button class="hidden h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-white transition hover:bg-emerald-700" id="sendBtn" onclick="sendMessage()" title="Enviar mensagem" type="button">
-            >
+            <svg class="h-4 w-4 translate-x-[1px]" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M3 11.5L21 3l-5.8 18-3.4-6.5L3 11.5zM10.8 13.8l2.2 4.3 3.3-10.1-8.6 4.1 3.1 1.7z"/>
+            </svg>
           </button>
           <button class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-white transition hover:bg-emerald-700" id="micBtn" title="Mensagem de voz" type="button">
-            Mic
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+              <rect x="9" y="3.5" width="6" height="11" rx="3"></rect>
+              <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0"></path>
+              <path d="M12 17v3"></path>
+              <path d="M9 20h6"></path>
+            </svg>
           </button>
         </div>
       </div>
@@ -184,11 +224,13 @@
     let chatEventSource = null;
     let reconnectTimeout = null;
     const renderedMessageIds = new Set();
+    let currentAudioElement = null;
 
     document.addEventListener('DOMContentLoaded', () => {
       initRenderedMessageIds();
       updateActionButton();
       setupMicrophoneButton();
+      initAudioPlayers();
     });
 
     function initRenderedMessageIds() {
@@ -237,9 +279,18 @@
     function showRecordingIndicator() {
       const input = document.getElementById('messageInput');
       const indicator = document.createElement('div');
-      indicator.className = 'recording-indicator flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800';
+      indicator.className = 'recording-indicator flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-rose-200 bg-rose-50/90 px-3 py-2 text-sm text-rose-700';
       indicator.id = 'recordingIndicator';
-      indicator.innerHTML = '<span class="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500"></span> Gravando audio...';
+      indicator.innerHTML = `
+        <span class="record-pulse inline-flex h-2.5 w-2.5 rounded-full bg-rose-500"></span>
+        <svg class="h-4 w-4 text-rose-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+          <rect x="9" y="3.5" width="6" height="11" rx="3"></rect>
+          <path d="M6.5 11.5a5.5 5.5 0 0 0 11 0"></path>
+          <path d="M12 17v3"></path>
+          <path d="M9 20h6"></path>
+        </svg>
+        <span class="font-semibold">Gravando audio...</span>
+      `;
       input.parentElement.insertBefore(indicator, input);
       input.classList.add('hidden');
     }
@@ -437,7 +488,7 @@
     }
 
     function getMessageBubbleClass(isOwn) {
-      return `message-bubble rounded-2xl px-3 py-2 text-sm leading-relaxed break-words ${isOwn ? 'border border-emerald-800 bg-emerald-700 text-white' : 'border border-emerald-200 bg-emerald-100 text-emerald-900'}`;
+      return `message-bubble rounded-2xl px-3 py-2 text-sm leading-relaxed break-words ${isOwn ? 'border border-emerald-800 bg-emerald-700 text-white' : 'border border-slate-300 bg-slate-200 text-slate-800'}`;
     }
 
     function getMessageContentClass(isOwn) {
@@ -446,6 +497,96 @@
 
     function getMessageAvatarClass(isOwn) {
       return `message-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${isOwn ? 'order-2 bg-emerald-700' : 'bg-emerald-600'}`;
+    }
+
+    function formatAudioTime(seconds) {
+      if (!Number.isFinite(seconds)) return '00:00';
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function getAudioLabel(audio) {
+      const hasDuration = Number.isFinite(audio.duration) && audio.duration > 0;
+      if (!hasDuration) return '00:00';
+      if (audio.paused && audio.currentTime <= 0) return formatAudioTime(audio.duration);
+      return formatAudioTime(audio.currentTime || 0);
+    }
+
+    function buildAudioPlayerHtml(url) {
+      const safeUrl = escapeHtml(url || '');
+      let bars = '';
+      for (let i = 0; i < 16; i += 1) {
+        const height = 20 + ((i * 11) % 55);
+        bars += `<span class="audio-bar inline-block w-1 rounded-full bg-white/90" style="height:${height}%"></span>`;
+      }
+      return `
+        <div class="audio-player flex w-[240px] max-w-full items-center gap-2 rounded-xl bg-black/15 px-2 py-2 sm:w-[300px]" data-audio-url="${safeUrl}">
+          <button type="button" class="audio-toggle flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/90 text-emerald-800" aria-label="Reproduzir audio">
+            <svg class="audio-icon-play h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.14v13.72a1 1 0 0 0 1.55.83l10-6.86a1 1 0 0 0 0-1.66l-10-6.86A1 1 0 0 0 8 5.14z"/></svg>
+            <svg class="audio-icon-pause hidden h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>
+          </button>
+          <div class="audio-bars flex h-8 flex-1 items-end gap-0.5">${bars}</div>
+          <span class="audio-time w-10 text-right text-[11px] font-semibold text-white/95">00:00</span>
+          <audio preload="metadata" class="native-audio hidden" src="${safeUrl}"></audio>
+        </div>
+      `;
+    }
+
+    function syncAudioVisualState(player, audio, isPlaying) {
+      const playIcon = player.querySelector('.audio-icon-play');
+      const pauseIcon = player.querySelector('.audio-icon-pause');
+      if (isPlaying) {
+        player.classList.add('is-playing');
+        playIcon?.classList.add('hidden');
+        pauseIcon?.classList.remove('hidden');
+      } else {
+        player.classList.remove('is-playing');
+        pauseIcon?.classList.add('hidden');
+        playIcon?.classList.remove('hidden');
+      }
+      const timeEl = player.querySelector('.audio-time');
+      if (timeEl) {
+        timeEl.textContent = getAudioLabel(audio);
+      }
+    }
+
+    function initAudioPlayers(root = document) {
+      const players = root.querySelectorAll('.audio-player:not([data-audio-init="1"])');
+      players.forEach((player) => {
+        player.dataset.audioInit = '1';
+        const audio = player.querySelector('.native-audio');
+        const toggleBtn = player.querySelector('.audio-toggle');
+        if (!audio || !toggleBtn) return;
+
+        toggleBtn.addEventListener('click', async () => {
+          if (currentAudioElement && currentAudioElement !== audio) {
+            currentAudioElement.pause();
+          }
+          try {
+            if (audio.paused) {
+              await audio.play();
+              currentAudioElement = audio;
+            } else {
+              audio.pause();
+            }
+          } catch (err) {
+            console.error('Nao foi possivel reproduzir audio:', err);
+          }
+        });
+
+        audio.addEventListener('play', () => syncAudioVisualState(player, audio, true));
+        audio.addEventListener('pause', () => syncAudioVisualState(player, audio, false));
+        audio.addEventListener('ended', () => syncAudioVisualState(player, audio, false));
+        audio.addEventListener('loadedmetadata', () => {
+          const timeEl = player.querySelector('.audio-time');
+          if (timeEl) timeEl.textContent = getAudioLabel(audio);
+        });
+        audio.addEventListener('timeupdate', () => {
+          const timeEl = player.querySelector('.audio-time');
+          if (timeEl) timeEl.textContent = getAudioLabel(audio);
+        });
+      });
     }
 
     function addMessageToDOM(message) {
@@ -467,7 +608,7 @@
       } else if (message.type === 'video') {
         contentHTML = `<video controls class="max-w-full rounded-lg sm:max-w-[300px]" src="${message.file_url}"></video>`;
       } else if (message.type === 'audio') {
-        contentHTML = `<audio controls preload="metadata" class="block w-[240px] max-w-full sm:w-[300px]" src="${message.file_url}">Seu navegador não suporta áudio embutido.</audio>`;
+        contentHTML = buildAudioPlayerHtml(message.file_url);
       } else {
         contentHTML = `<a href="${message.file_url}" download class="text-emerald-700 underline">Arquivo: ${message.file_type || 'Documento'}</a>`;
       }
@@ -494,6 +635,7 @@
         renderedMessageIds.add(String(message.id));
       }
 
+      initAudioPlayers(area);
       area.scrollTop = area.scrollHeight;
     }
 
