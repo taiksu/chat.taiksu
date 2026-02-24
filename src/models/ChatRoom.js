@@ -175,7 +175,18 @@ class ChatRoom {
 
   static async getRoomStatus(roomId) {
     try {
-      const room = await ChatRoomModel.findByPk(roomId, { raw: true });
+      // First try to find by primary key (room id)
+      let room = await ChatRoomModel.findByPk(roomId, { raw: true });
+
+      // If not found, try to resolve by chamado_id (numeric ticket id)
+      if (!room) {
+        // support_chamados_rooms links chamados to rooms
+        const byChamado = await this.findByChamadoId(roomId);
+        if (byChamado) {
+          room = byChamado;
+        }
+      }
+
       if (!room) {
         return {
           roomId,
@@ -193,13 +204,13 @@ class ChatRoom {
         message: isClosed ? 'Este chamado foi fechado. Você pode visualizar o histórico, mas não pode enviar novas mensagens.' : null
       };
     } catch (error) {
-      console.error('Erro ao obter status da room:', error);
-      return {
-        roomId,
-        status: 'error',
-        isReadOnly: true,
-        message: 'Erro ao verificar status da sala'
-      };
+        console.error('Erro ao obter status da room:', error && error.message ? error.message : error);
+        return {
+          roomId,
+          status: 'error',
+          isReadOnly: true,
+          message: error && error.message ? String(error.message) : 'Erro ao verificar status da sala'
+        };
     }
   }
 

@@ -358,6 +358,18 @@ class MessageController {
 
       const statusInfo = await ChatRoom.getRoomStatus(roomId);
 
+      // If the model reported an internal error or not found, return success:false
+      if (!statusInfo || String(statusInfo.status) === 'error' || String(statusInfo.status) === 'not_found') {
+        return res.status(200).json({
+          code: 'room_status',
+          success: false,
+          roomId: statusInfo ? statusInfo.roomId : roomId,
+          status: statusInfo ? statusInfo.status : 'error',
+          isReadOnly: statusInfo ? Boolean(statusInfo.isReadOnly) : true,
+          message: statusInfo && statusInfo.message ? statusInfo.message : 'Erro ao verificar status da sala'
+        });
+      }
+
       res.json({
         code: 'room_status',
         success: true,
