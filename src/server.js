@@ -11,9 +11,22 @@ const { runMigrations } = require('./config/migrations');
 
 // Criar app
 const app = express();
+const isProd = process.env.NODE_ENV === 'production';
+
+if (process.env.PROXY_TRUST === '1' || process.env.PROXY_TRUST === 'true') {
+  app.set('trust proxy', 1);
+}
+
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
 
 // Middleware global
-app.use(cors());
+app.use(cors({
+  origin: allowedOrigins.length ? allowedOrigins : true,
+  credentials: true
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
@@ -33,8 +46,14 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'chat_taiksu_secret',
   resave: false,
   saveUninitialized: true,
+  name: process.env.SESSION_COOKIE_NAME || 'taiksu.sid',
   cookie: { 
-    secure: false,
+    secure: process.env.SESSION_COOKIE_SECURE
+      ? process.env.SESSION_COOKIE_SECURE === 'true'
+      : isProd,
+    sameSite: process.env.SESSION_COOKIE_SAMESITE || 'lax',
+    domain: process.env.SESSION_COOKIE_DOMAIN || undefined,
+    httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
@@ -69,6 +88,11 @@ app.get('/', (req, res) => {
   }
 });
 
+// Healthcheck para monitoramento em produção
+app.get('/health', (_req, res) => {
+  res.json({ ok: true, service: 'chat-taiksu', env: process.env.NODE_ENV || 'development' });
+});
+
 // Rota 404
 app.use((req, res) => {
   res.status(404).render('error', { message: 'Página não encontrada' });
@@ -76,6 +100,7 @@ app.use((req, res) => {
 
 // Inicializar servidor
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
 
 (async () => {
   try {
@@ -84,8 +109,9 @@ const PORT = process.env.PORT || 3000;
     await runMigrations();
     
     // Iniciar servidor após migrações
-    app.listen(PORT, () => {
-      console.log(`🚀 Chat Taiksu rodando em http://localhost:${PORT}`);
+    app.listen(PORT, HOST, () => {
+      const appUrl = process.env.APP_URL || `http://${HOST}:${PORT}`;
+      console.log(`🚀 Chat Taiksu rodando em ${appUrl}`);
     });
   } catch (error) {
     console.error('❌ Erro ao inicializar servidor:', error);
