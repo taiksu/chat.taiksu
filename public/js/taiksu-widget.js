@@ -280,6 +280,7 @@
     config = { ...DEFAULTS, ...(options || {}) };
     config.position = normalizePosition(config.position);
     config.mode = normalizeMode(config.mode);
+    localUserName = String(config.userName || "").trim();
     if (!config.userId && config.authToken) {
       config.userId = parseJwtSub(config.authToken);
     }
@@ -428,7 +429,13 @@
     const container = shadow.getElementById("tw-messages");
     if (!container) return;
 
-    const own = String(message.user_id) === String(config.userId);
+    let own = config.userId ? String(message.user_id) === String(config.userId) : false;
+    if (!own && !config.userId && localUserName && String(message.name || "") === localUserName) {
+      own = true;
+    }
+    if (own && !config.userId && message.user_id) {
+      config.userId = String(message.user_id);
+    }
     const sender = own ? "Voce" : message.name;
     const time = new Date(message.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
@@ -541,6 +548,9 @@
         if (!config.userId && data.message && (data.message.user_id || data.message.userId)) {
           config.userId = String(data.message.user_id || data.message.userId);
         }
+        if (!localUserName && data.message && data.message.name) {
+          localUserName = String(data.message.name);
+        }
         const sendBtn = shadow.getElementById("tw-send-btn");
         if (sendBtn) sendBtn.disabled = true;
         showSystemMessage("");
@@ -569,6 +579,9 @@
         }
         if (!config.userId && data.message && (data.message.user_id || data.message.userId)) {
           config.userId = String(data.message.user_id || data.message.userId);
+        }
+        if (!localUserName && data.message && data.message.name) {
+          localUserName = String(data.message.name);
         }
         showSystemMessage("");
       })
@@ -607,6 +620,7 @@
   function onInputTyping() {
     if (chatClosed) return;
     const input = shadow.getElementById("tw-input");
+    if (!input) return;
     const sendBtn = shadow.getElementById("tw-send-btn");
     const micBtn = shadow.getElementById("tw-mic-btn");
     const hasText = input && input.value.trim().length > 0;
@@ -652,6 +666,7 @@
     const typingEl = shadow.getElementById("tw-typing");
     if (!typingEl) return;
     if (config.userId && String(data.userId) === String(config.userId)) return;
+    if (!config.userId && localUserName && String(data.userName || "") === localUserName) return;
     if (!data.isTyping) {
       typingEl.innerHTML = "";
       return;
@@ -803,6 +818,9 @@
         }
         if (!config.userId && data.message && (data.message.user_id || data.message.userId)) {
           config.userId = String(data.message.user_id || data.message.userId);
+        }
+        if (!localUserName && data.message && data.message.name) {
+          localUserName = String(data.message.name);
         }
         showSystemMessage("");
       })
