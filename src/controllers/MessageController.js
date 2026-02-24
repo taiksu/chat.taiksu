@@ -51,6 +51,19 @@ const storage = multer.diskStorage({
 const upload = multer({ storage, limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE || '52428800') } });
 
 class MessageController {
+  isClosedStatus(value) {
+    const status = String(value || '').trim().toLowerCase();
+    return ['concluido', 'concluído', 'closed', 'fechado', 'finalizado', 'resolved', 'resolvido'].includes(status);
+  }
+
+  isRoomOrChamadoClosed(room, req) {
+    if (this.isClosedStatus(room?.status)) return true;
+    if (this.isClosedStatus(room?.chamado_status)) return true;
+    if (this.isClosedStatus(req?.body?.chamadoStatus)) return true;
+    if (this.isClosedStatus(req?.body?.chamado_status)) return true;
+    return false;
+  }
+
   ensureSSEStore() {
     if (!global.sseClients) {
       global.sseClients = {};
@@ -65,11 +78,56 @@ class MessageController {
   sendMessage(req, res) {
     return upload.single('file')(req, res, async () => {
       try {
-        const { roomId, content, type } = req.body;
+        let { roomId, content, type } = req.body;
+        const chamadoId = req.body.chamadoId || req.body.chamado_id || null;
         const userId = req.session.user?.id;
 
         if (!userId) {
-          return res.status(401).json({ error: 'Não autenticado' });
+          return res.status(401).json({ error: 'Nao autenticado' });
+        }
+
+        // Suporte a fluxo de chamado: cria/resolve sala automaticamente.
+        if (chamadoId) {
+          const result = await ChatRoom.createOrGetChamadoRoom({
+            chamadoId: String(chamadoId),
+            ownerId: userId,
+            name: `Chamado #${chamadoId}`,
+            description: `Conversa de suporte para o chamado ${chamadoId}`
+          });
+          roomId = result.room.id;
+          await ChatRoom.addParticipant(roomId, userId);
+        }
+
+        // Compatibilidade: quando enviam chamadoId no campo roomId (numerico).
+        if (roomId) {
+          const existingRoom = await ChatRoom.findById(roomId);
+          if (!existingRoom && /^\d+$/.test(String(roomId))) {
+            const result = await ChatRoom.createOrGetChamadoRoom({
+              chamadoId: String(roomId),
+              ownerId: userId,
+              name: `Chamado #${roomId}`,
+              description: `Conversa de suporte para o chamado ${roomId}`
+            });
+            roomId = result.room.id;
+            await ChatRoom.addParticipant(roomId, userId);
+          }
+        }
+
+        if (!roomId) {
+          return res.status(400).json({ error: 'roomId/chamadoId nao informado' });
+        }
+
+        const finalRoom = await ChatRoom.findById(roomId);
+        if (!finalRoom) {
+          return res.status(404).json({ error: 'Sala nao encontrada para envio da mensagem' });
+        }
+
+        if (this.isRoomOrChamadoClosed(finalRoom, req)) {
+          return res.status(409).json({
+            error: 'Chat fechado para novas mensagens',
+            code: 'chat_closed',
+            roomId
+          });
         }
 
         let fileUrl = null;
@@ -89,7 +147,6 @@ class MessageController {
           fileType
         });
 
-        // Enviar SSE para todos os clientes
         const clients = this.getRoomClients(roomId);
         const sseMessage = {
           id: message.id,
@@ -112,7 +169,7 @@ class MessageController {
           })}\n\n`);
         });
 
-        res.json({ success: true, message });
+        res.json({ success: true, message, roomId });
       } catch (error) {
         console.error('Error sending message:', error);
         res.status(500).json({ error: error.message });
