@@ -3,8 +3,37 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
 class AuthController {
+  mapAuthErrorMessage(errorCode) {
+    const map = {
+      missing_token: 'Token SSO ausente no callback.',
+      invalid_token: 'Token SSO invalido ou expirado.',
+      session_save_failed: 'Falha ao criar sessao de login.',
+      sso_callback_failed: 'Erro ao processar callback SSO.'
+    };
+    return map[errorCode] || null;
+  }
+
+  persistSessionAndRedirect(req, res, statusCode = null) {
+    return req.session.save((err) => {
+      if (err) {
+        console.error('Session save error:', err);
+        return res.status(500).render('auth/login', {
+          title: 'Login - Chat Taiksu',
+          message: 'Erro ao iniciar sessao',
+          user: null
+        });
+      }
+
+      if (statusCode) {
+        return res.status(statusCode).redirect('/dashboard');
+      }
+      return res.redirect('/dashboard');
+    });
+  }
+
   async showLogin(req, res) {
-    res.render('auth/login', { title: 'Login - Chat Taiksu', message: null });
+    const message = this.mapAuthErrorMessage(req.query?.error) || null;
+    res.render('auth/login', { title: 'Login - Chat Taiksu', message });
   }
 
   async showRegister(req, res) {
@@ -57,7 +86,7 @@ class AuthController {
       // Salvar na sessão
       req.session.user = user;
 
-      res.status(201).redirect('/dashboard');
+      return this.persistSessionAndRedirect(req, res, 201);
     } catch (error) {
       console.error('Registration error:', error);
       res.status(500).render('auth/register', {
@@ -96,7 +125,7 @@ class AuthController {
       // Salvar na sessão
       req.session.user = user;
 
-      res.redirect('/dashboard');
+      return this.persistSessionAndRedirect(req, res);
     } catch (error) {
       console.error('Login error:', error);
       res.status(500).render('auth/login', {

@@ -1,14 +1,52 @@
 /**
- * Controller para autenticação via SSO
- * Gerencia validação de tokens e integração com servidor centralizado
+ * Controller para autenticacao via SSO
+ * Gerencia validacao de tokens e integracao com servidor centralizado
  */
 
 const { validateSSOToken } = require('../middleware/ssoValidation');
 const User = require('../models/User');
 
 class SSOController {
+  persistSessionAndRedirect(req, res, url) {
+    return req.session.save((err) => {
+      if (err) {
+        console.error('SSO session save error:', err);
+        return res.redirect('/auth/login?error=session_save_failed');
+      }
+      return res.redirect(url);
+    });
+  }
+
   /**
-   * Valida um token SSO e retorna dados do usuário
+   * Callback SSO via querystring
+   * GET /callback?token=JWT
+   */
+  async callback(req, res) {
+    try {
+      const token = req.query && req.query.token;
+
+      if (!token) {
+        return res.redirect('/auth/login?error=missing_token');
+      }
+
+      const ssoUserData = await validateSSOToken(token);
+      if (!ssoUserData) {
+        return res.redirect('/auth/login?error=invalid_token');
+      }
+
+      const user = await this.syncSSOUser(ssoUserData);
+      req.session.user = user;
+      req.session.ssoUser = ssoUserData;
+
+      return this.persistSessionAndRedirect(req, res, '/dashboard');
+    } catch (error) {
+      console.error('SSO callback error:', error);
+      return res.redirect('/auth/login?error=sso_callback_failed');
+    }
+  }
+
+  /**
+   * Valida um token SSO e retorna dados do usuario
    * POST /api/auth/sso/validate
    * Body: { token: 'token_jwt' }
    */
@@ -16,53 +54,50 @@ class SSOController {
     try {
       const { token } = req.body;
 
-      console.log('🔵 SSOController.validateToken() chamado');
-
       if (!token) {
-        console.warn('⚠️ Token não fornecido no request body');
         return res.status(400).json({
           success: false,
-          message: 'Token não fornecido'
+          message: 'Token nao fornecido'
         });
       }
 
-      console.log('🔑 Iniciando validação do token...');
-      // Validar token contra SSO
       const ssoUserData = await validateSSOToken(token);
 
       if (!ssoUserData) {
-        console.error('❌ Validação retornou null/falso');
         return res.status(401).json({
           success: false,
-          message: 'Token inválido ou expirado'
+          message: 'Token invalido ou expirado'
         });
       }
 
-      console.log('👤 Sincronizando usuário no banco local...');
-      // Sincronizar usuário no banco local
       const user = await this.syncSSOUser(ssoUserData);
 
-      // Salvar na sessão
       req.session.user = user;
       req.session.ssoUser = ssoUserData;
 
-      console.log(`✅ Usuário ${user.email} autenticado com sucesso`);
-
-      return res.status(200).json({
-        success: true,
-        message: 'Autenticação bem-sucedida',
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          avatar: user.avatar,
-          role: user.role
+      return req.session.save((err) => {
+        if (err) {
+          console.error('SSO session save error:', err);
+          return res.status(500).json({
+            success: false,
+            message: 'Erro ao salvar sessao'
+          });
         }
+
+        return res.status(200).json({
+          success: true,
+          message: 'Autenticacao bem-sucedida',
+          user: {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            avatar: user.avatar,
+            role: user.role
+          }
+        });
       });
     } catch (error) {
-      console.error('❌ Erro em SSOController.validateToken():');
-      console.error(`   ${error.message}`);
-      console.error(`   Stack: ${error.stack}`);
+      console.error('Erro em SSOController.validateToken():', error);
       return res.status(500).json({
         success: false,
         message: 'Erro ao validar token',
@@ -72,29 +107,26 @@ class SSOController {
   }
 
   /**
-   * Sincroniza usuário do SSO com o banco local
-   * Cria ou atualiza usuário se já existe
+   * Sincroniza usuario do SSO com o banco local
+   * Cria ou atualiza usuario se ja existe
    */
   async syncSSOUser(ssoUserData) {
     try {
-      const { id, name, email, foto, grupo_nome, unidade } = ssoUserData;
+      const { id, name, email, foto, grupo_nome } = ssoUserData;
 
-      // Procurar usuário por email
       let user = await User.findByEmail(email);
 
       if (!user) {
-        // Criar novo usuário
         user = await User.create({
           name,
           email,
-          password: null, // SSO não usa senha local
+          password: null,
           avatar: foto || null,
           role: grupo_nome === 'Administrador' ? 'admin' : 'user',
           ssoId: id,
           ssoData: JSON.stringify(ssoUserData)
         });
       } else {
-        // Atualizar dados do usuário existente
         await User.update(user.id, {
           name,
           avatar: foto || user.avatar,
@@ -107,13 +139,13 @@ class SSOController {
 
       return user;
     } catch (error) {
-      console.error('Erro ao sincronizar usuário SSO:', error);
+      console.error('Erro ao sincronizar usuario SSO:', error);
       throw error;
     }
   }
 
   /**
-   * Retorna dados do usuário SSO autenticado
+   * Retorna dados do usuario SSO autenticado
    * GET /api/auth/sso/me
    */
   async getCurrentUser(req, res) {
@@ -121,7 +153,7 @@ class SSOController {
       if (!req.session.user) {
         return res.status(401).json({
           success: false,
-          message: 'Usuário não autenticado'
+          message: 'Usuario nao autenticado'
         });
       }
 
@@ -134,13 +166,13 @@ class SSOController {
       console.error('Get current user error:', error);
       return res.status(500).json({
         success: false,
-        message: 'Erro ao obter dados do usuário'
+        message: 'Erro ao obter dados do usuario'
       });
     }
   }
 
   /**
-   * Logout de usuário SSO
+   * Logout de usuario SSO
    * POST /api/auth/sso/logout
    */
   async logout(req, res) {

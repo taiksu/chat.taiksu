@@ -66,9 +66,11 @@ const chatRoutes = require('./routes/chat');
 const chatApiRoutes = require('./routes/chat-api');
 const messageRoutes = require('./routes/messages');
 const ssoRoutes = require('./routes/sso');
+const SSOController = require('./controllers/SSOController');
 
 app.use('/auth', authRoutes);
 app.use('/api/auth/sso', ssoRoutes);
+app.get('/callback', SSOController.callback.bind(SSOController));
 app.use('/dashboard', dashboardRoutes);
 app.use('/chat', chatRoutes);
 app.use('/api/chat', chatApiRoutes);
