@@ -137,7 +137,14 @@
       .tw-read.read { color: #0ea5e9; }
       .tw-read.read .tw-check-sent { display: none; }
       .tw-read.read .tw-check-read { display: inline-block; }
-      .tw-media.image { max-width:220px; width:100%; border-radius:10px; border:1px solid rgba(148,163,184,.4); display:block; }
+      .tw-media.image { max-width:220px; width:100%; border-radius:10px; border:1px solid rgba(148,163,184,.4); display:block; cursor:pointer; transition:transform 0.2s; }
+      .tw-media.image:hover { transform: scale(1.02); }
+      .tw-lightbox { position: fixed; inset: 0; z-index: 10000; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; padding: 20px; cursor: zoom-out; opacity: 0; transition: opacity 0.3s ease; }
+      .tw-lightbox.show { display: flex; opacity: 1; }
+      .tw-lightbox img { max-width: 95%; max-height: 95%; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      .tw-lightbox.show img { transform: scale(1); }
+      .tw-lightbox-close { position: absolute; top: 20px; right: 20px; width: 44px; height: 44px; background: rgba(255,255,255,0.1); border: 0; border-radius: 50%; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 24px; transition: background 0.2s; }
+      .tw-lightbox-close:hover { background: rgba(255,255,255,0.2); }
       .tw-media.audio { width:230px; max-width:100%; }
       .tw-audio-player { display:flex; align-items:center; gap:8px; width:260px; max-width:100%; background:rgba(255,255,255,.18); border-radius:999px; padding:7px 10px; }
       .tw-audio-toggle { width:30px; height:30px; border:0; border-radius:9999px; background:#fff; color:#065f46; display:flex; align-items:center; justify-content:center; cursor:pointer; }
@@ -440,7 +447,7 @@
           </div>
           <span class="tw-audio-time">00:00</span>
         </div>
-        <audio preload="metadata" class="tw-native-audio" style="display:none" src="${escapeAttr(mediaUrl)}"></audio>
+        <audio preload="auto" class="tw-native-audio" style="display:none" src="${escapeAttr(mediaUrl)}"></audio>
       </div>
     `;
   }
@@ -515,7 +522,8 @@
     `;
     container.appendChild(row);
     syncEmptyState();
-    initAudioPlayers(container);
+    // Pequeno delay para garantir que o DOM e os recursos iniciais estao prontos
+    setTimeout(() => initAudioPlayers(container), 50);
   }
 
   function applyReadReceipts(messageIds) {
@@ -751,12 +759,14 @@
     const typingEl = shadow.getElementById("tw-typing");
     if (!typingEl) return;
     
-    // Nao mostrar para si mesmo
-    if (config.userId && String(data.userId) === String(config.userId)) {
-      typingEl.classList.remove("show");
-      return;
-    }
-    if (!config.userId && localUserName && String(data.userName || "") === localUserName) {
+    const msgUserId = String(data.userId || "").trim().toLowerCase();
+    const cfgUserId = String(config.userId || "").trim().toLowerCase();
+    const msgUserName = String(data.userName || "").trim().toLowerCase();
+    const cfgUserName = localUserName.trim().toLowerCase();
+
+    // Nao mostrar para si mesmo (com mais robustez)
+    if ((cfgUserId && msgUserId && cfgUserId === msgUserId) || 
+        (cfgUserName && msgUserName && cfgUserName === msgUserName)) {
       typingEl.classList.remove("show");
       return;
     }
