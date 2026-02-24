@@ -13,7 +13,9 @@
     zIndex: 2147483000,
     autoOpen: false,
     authToken: "",
-    placeholder: "Digite sua mensagem..."
+    placeholder: "Digite sua mensagem...",
+    mode: "floating",
+    mountSelector: ""
   };
 
   let config = { ...DEFAULTS };
@@ -25,10 +27,19 @@
   let typingTimer = null;
   let typingActive = false;
   let selectedUploadType = "";
+  let mediaRecorder = null;
+  let mediaStream = null;
+  let audioChunks = [];
+  let recording = false;
+  let currentAudio = null;
   const renderedIds = new Set();
 
   function normalizePosition(position) {
     return position === "bottom-left" ? "bottom-left" : "bottom-right";
+  }
+
+  function normalizeMode(mode) {
+    return mode === "inline" ? "inline" : "floating";
   }
 
   function buildApiUrl(path) {
@@ -41,13 +52,28 @@
     if (host) return;
     host = document.createElement("div");
     host.id = "taiksu-widget-host";
-    host.style.position = "fixed";
-    host.style.bottom = "16px";
-    host.style[config.position === "bottom-left" ? "left" : "right"] = "16px";
-    host.style.zIndex = String(config.zIndex);
-    host.style.all = "initial";
+    if (config.mode === "inline" && config.mountSelector) {
+      const mountEl = document.querySelector(config.mountSelector);
+      if (mountEl) {
+        host.style.position = "relative";
+        host.style.zIndex = "1";
+        mountEl.appendChild(host);
+      } else {
+        console.warn(`TaiksuChat: mountSelector nao encontrado: ${config.mountSelector}`);
+        host.style.position = "fixed";
+        host.style.bottom = "16px";
+        host.style[config.position === "bottom-left" ? "left" : "right"] = "16px";
+        host.style.zIndex = String(config.zIndex);
+        document.body.appendChild(host);
+      }
+    } else {
+      host.style.position = "fixed";
+      host.style.bottom = "16px";
+      host.style[config.position === "bottom-left" ? "left" : "right"] = "16px";
+      host.style.zIndex = String(config.zIndex);
+      document.body.appendChild(host);
+    }
     shadow = host.attachShadow({ mode: "open" });
-    document.body.appendChild(host);
   }
 
   function styles() {
@@ -74,14 +100,24 @@
       .tw-time { margin-top:4px; font-size:11px; color:#64748b; }
       .tw-media.image { max-width:220px; width:100%; border-radius:10px; border:1px solid rgba(148,163,184,.4); display:block; }
       .tw-media.audio { width:230px; max-width:100%; }
+      .tw-audio-player { display:flex; align-items:center; gap:8px; width:230px; max-width:100%; background:rgba(15,23,42,.12); border-radius:12px; padding:8px; }
+      .tw-audio-toggle { width:30px; height:30px; border:0; border-radius:9999px; background:#fff; color:#065f46; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+      .tw-audio-bars { display:flex; flex:1; align-items:flex-end; gap:2px; height:22px; }
+      .tw-audio-bar { width:3px; border-radius:999px; background:rgba(255,255,255,.95); transform-origin:center bottom; }
+      .tw-audio-time { width:38px; text-align:right; font-size:11px; font-weight:700; color:#fff; }
+      .tw-audio-player.playing .tw-audio-bar { animation: twEq 0.9s ease-in-out infinite; }
+      .tw-audio-player.playing .tw-audio-bar:nth-child(2n) { animation-duration: 1.1s; }
+      .tw-audio-player.playing .tw-audio-bar:nth-child(3n) { animation-duration: 0.8s; }
+      @keyframes twEq { 0%,100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
       .tw-file-link { color:inherit; font-weight:600; text-decoration:underline; word-break:break-all; }
       .tw-typing { min-height:22px; padding:0 12px 8px; font-size:12px; color:#64748b; font-style:italic; }
       .tw-input-area { border-top:1px solid #e2e8f0; background:#fff; padding:10px; display:flex; gap:8px; align-items:flex-end; position:relative; }
-      .tw-attach, .tw-send { width:40px; height:40px; border:0; border-radius:10px; background:#059669; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+      .tw-attach, .tw-send, .tw-mic { width:40px; height:40px; border:0; border-radius:10px; background:#059669; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+      .tw-mic.recording { background:#dc2626; }
       .tw-send[disabled] { opacity:.45; cursor:default; }
       .tw-attach-menu { position:absolute; left:10px; bottom:58px; min-width:156px; background:#fff; border:1px solid #dbe3ef; border-radius:10px; box-shadow:0 10px 24px rgba(15,23,42,.18); overflow:hidden; display:none; }
       .tw-attach-menu.show { display:block; }
-      .tw-attach-opt { width:100%; border:0; background:transparent; text-align:left; padding:9px 11px; font:inherit; font-size:13px; color:#334155; cursor:pointer; }
+      .tw-attach-opt { width:100%; border:0; background:transparent; text-align:left; padding:9px 11px; font:inherit; font-size:13px; color:#334155; cursor:pointer; display:flex; align-items:center; gap:8px; }
       .tw-attach-opt:hover { background:#f1f5f9; }
       .tw-input { flex:1; min-height:40px; max-height:110px; resize:none; border:1px solid #cbd5e1; border-radius:12px; padding:9px 10px; font:inherit; font-size:14px; outline:none; }
       .tw-input:focus { border-color:#10b981; box-shadow:0 0 0 3px rgba(16,185,129,.15); }
@@ -117,14 +153,26 @@
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
             </button>
             <div class="tw-attach-menu" id="tw-attach-menu">
-              <button class="tw-attach-opt" data-type="image">Foto</button>
-              <button class="tw-attach-opt" data-type="audio">Audio</button>
-              <button class="tw-attach-opt" data-type="document">Documento</button>
+              <button class="tw-attach-opt" data-type="image">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 20"/></svg>
+                <span>Foto</span>
+              </button>
+              <button class="tw-attach-opt" data-type="audio">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                <span>Audio</span>
+              </button>
+              <button class="tw-attach-opt" data-type="document">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                <span>Documento</span>
+              </button>
             </div>
             <input type="file" id="tw-file-input" hidden />
             <textarea class="tw-input" id="tw-input" placeholder="${escapeHtml(config.placeholder)}"></textarea>
             <button class="tw-send" id="tw-send-btn" aria-label="Enviar mensagem" disabled>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M3 11.5L21 3l-5.8 18-3.4-6.5L3 11.5zM10.8 13.8l2.2 4.3 3.3-10.1-8.6 4.1 3.1 1.7z"/></svg>
+            </button>
+            <button class="tw-mic" id="tw-mic-btn" aria-label="Gravar audio" title="Gravar audio">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3.5" width="6" height="11" rx="3"></rect><path d="M6.5 11.5a5.5 5.5 0 0 0 11 0"></path><path d="M12 17v3"></path><path d="M9 20h6"></path></svg>
             </button>
           </div>
         </div>
@@ -133,6 +181,7 @@
 
     shadow.getElementById("tw-close-btn").addEventListener("click", closeWidget);
     shadow.getElementById("tw-send-btn").addEventListener("click", sendMessage);
+    shadow.getElementById("tw-mic-btn").addEventListener("click", toggleRecording);
     shadow.getElementById("tw-attach-btn").addEventListener("click", toggleAttachMenu);
     shadow.getElementById("tw-file-input").addEventListener("change", onFileSelected);
     shadow.querySelectorAll(".tw-attach-opt").forEach((btn) => btn.addEventListener("click", onAttachOptionClick));
@@ -153,11 +202,13 @@
       }
     });
     input.addEventListener("input", onInputTyping);
+    onInputTyping();
   }
 
   function init(options) {
     config = { ...DEFAULTS, ...(options || {}) };
     config.position = normalizePosition(config.position);
+    config.mode = normalizeMode(config.mode);
     if (!config.roomId) {
       console.error("TaiksuChat: roomId é obrigatório.");
       return;
@@ -176,6 +227,7 @@
 
   function closeWidget() {
     widgetOpen = false;
+    stopRecording();
     closeSSE();
     renderClosed();
   }
@@ -224,6 +276,7 @@
         if (!container) return;
         container.innerHTML = "";
         (messages || []).forEach(addMessage);
+        initAudioPlayers(container);
         scrollToBottom();
       })
       .catch((err) => console.error("TaiksuChat: erro ao carregar mensagens:", err));
@@ -264,8 +317,26 @@
     const mediaUrl = resolveMediaUrl(message.file_url);
     if (!mediaUrl) return `<div class="tw-bubble">Arquivo sem URL</div>`;
     if (message.type === "image") return `<div class="tw-bubble"><img class="tw-media image" src="${escapeAttr(mediaUrl)}" alt="Imagem"></div>`;
-    if (message.type === "audio") return `<div class="tw-bubble"><audio class="tw-media audio" controls preload="metadata" src="${escapeAttr(mediaUrl)}"></audio></div>`;
+    if (message.type === "audio") return `<div class="tw-bubble">${buildAudioPlayerHtml(mediaUrl)}</div>`;
     return `<div class="tw-bubble"><a class="tw-file-link" href="${escapeAttr(mediaUrl)}" download>Documento</a></div>`;
+  }
+
+  function buildAudioPlayerHtml(mediaUrl) {
+    let bars = "";
+    for (let i = 0; i < 14; i += 1) {
+      bars += `<span class="tw-audio-bar" style="height:${20 + ((i * 9) % 60)}%"></span>`;
+    }
+    return `
+      <div class="tw-audio-player" data-audio-url="${escapeAttr(mediaUrl)}">
+        <button type="button" class="tw-audio-toggle" aria-label="Reproduzir audio">
+          <svg class="tw-audio-icon-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.55.83l10-6.86a1 1 0 0 0 0-1.66l-10-6.86A1 1 0 0 0 8 5.14z"/></svg>
+          <svg class="tw-audio-icon-pause" style="display:none" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>
+        </button>
+        <div class="tw-audio-bars">${bars}</div>
+        <span class="tw-audio-time">00:00</span>
+        <audio preload="metadata" class="tw-native-audio" style="display:none" src="${escapeAttr(mediaUrl)}"></audio>
+      </div>
+    `;
   }
 
   function addMessage(rawMessage) {
@@ -292,6 +363,7 @@
       </div>
     `;
     container.appendChild(row);
+    initAudioPlayers(container);
   }
 
   function sendMessage() {
@@ -361,8 +433,13 @@
   function onInputTyping() {
     const input = shadow.getElementById("tw-input");
     const sendBtn = shadow.getElementById("tw-send-btn");
+    const micBtn = shadow.getElementById("tw-mic-btn");
     const hasText = input && input.value.trim().length > 0;
     if (sendBtn) sendBtn.disabled = !hasText;
+    if (sendBtn && micBtn) {
+      sendBtn.style.display = hasText ? "flex" : "none";
+      micBtn.style.display = hasText ? "none" : "flex";
+    }
     if (!typingActive) {
       typingActive = true;
       postTyping(true);
@@ -395,6 +472,127 @@
     if (container) container.scrollTop = container.scrollHeight;
   }
 
+  function formatAudioTime(seconds) {
+    if (!Number.isFinite(seconds)) return "00:00";
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+
+  function initAudioPlayers(root) {
+    const container = root || shadow;
+    if (!container) return;
+    const players = container.querySelectorAll(".tw-audio-player:not([data-init='1'])");
+    players.forEach((player) => {
+      player.setAttribute("data-init", "1");
+      const audio = player.querySelector(".tw-native-audio");
+      const toggle = player.querySelector(".tw-audio-toggle");
+      const playIcon = player.querySelector(".tw-audio-icon-play");
+      const pauseIcon = player.querySelector(".tw-audio-icon-pause");
+      const timeEl = player.querySelector(".tw-audio-time");
+      if (!audio || !toggle) return;
+
+      const sync = () => {
+        if (timeEl) {
+          if (!audio.paused && audio.currentTime > 0) timeEl.textContent = formatAudioTime(audio.currentTime);
+          else if (Number.isFinite(audio.duration) && audio.duration > 0) timeEl.textContent = formatAudioTime(audio.duration);
+          else timeEl.textContent = "00:00";
+        }
+        if (audio.paused) {
+          player.classList.remove("playing");
+          if (pauseIcon) pauseIcon.style.display = "none";
+          if (playIcon) playIcon.style.display = "block";
+        } else {
+          player.classList.add("playing");
+          if (playIcon) playIcon.style.display = "none";
+          if (pauseIcon) pauseIcon.style.display = "block";
+        }
+      };
+
+      toggle.addEventListener("click", async () => {
+        if (currentAudio && currentAudio !== audio) currentAudio.pause();
+        try {
+          if (audio.paused) {
+            await audio.play();
+            currentAudio = audio;
+          } else {
+            audio.pause();
+          }
+        } catch (_) {}
+      });
+
+      audio.addEventListener("loadedmetadata", sync);
+      audio.addEventListener("timeupdate", sync);
+      audio.addEventListener("play", sync);
+      audio.addEventListener("pause", sync);
+      audio.addEventListener("ended", sync);
+      sync();
+    });
+  }
+
+  async function toggleRecording() {
+    const micBtn = shadow.getElementById("tw-mic-btn");
+    if (!micBtn) return;
+
+    if (!recording) {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(mediaStream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) audioChunks.push(event.data);
+        };
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(audioChunks, { type: "audio/webm" });
+          sendAudioBlob(blob);
+          if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+          mediaStream = null;
+          mediaRecorder = null;
+          audioChunks = [];
+        };
+        mediaRecorder.start();
+        recording = true;
+        micBtn.classList.add("recording");
+      } catch (err) {
+        console.error("TaiksuChat: erro ao iniciar gravacao:", err);
+      }
+      return;
+    }
+
+    recording = false;
+    micBtn.classList.remove("recording");
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
+    }
+  }
+
+  function sendAudioBlob(blob) {
+    if (!blob || !blob.size) return;
+    const form = new FormData();
+    form.append("roomId", config.roomId);
+    form.append("file", blob, "audio.webm");
+    form.append("type", "audio");
+    fetch(buildApiUrl("/api/messages/send"), { method: "POST", credentials: "include", body: form })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data || !data.success) {
+          console.error("TaiksuChat: falha ao enviar audio", data);
+        }
+      })
+      .catch((err) => console.error("TaiksuChat: erro ao enviar audio:", err));
+  }
+
+  function stopRecording() {
+    recording = false;
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
+    }
+    if (mediaStream) {
+      mediaStream.getTracks().forEach((t) => t.stop());
+      mediaStream = null;
+    }
+  }
+
   function renderAvatar(avatarUrl, name) {
     if (avatarUrl) {
       return `<img src="${escapeAttr(resolveMediaUrl(avatarUrl))}" alt="Avatar de ${escapeAttr(name || "Usuario")}">`;
@@ -418,6 +616,7 @@
   }
 
   function destroy() {
+    stopRecording();
     closeSSE();
     if (host && host.parentNode) host.parentNode.removeChild(host);
     host = null;
