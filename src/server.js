@@ -12,6 +12,7 @@ const app = express();
 const isProd = process.env.NODE_ENV === 'production';
 const isDev = !isProd;
 let startupError = null;
+const strictStartup = process.env.STRICT_STARTUP === 'true';
 
 if (process.env.PROXY_TRUST === '1' || process.env.PROXY_TRUST === 'true') {
   app.set('trust proxy', 1);
@@ -105,6 +106,32 @@ app.get('/', (req, res) => {
     `);
   }
 
+  if (isProd && startupError) {
+    return res.status(503).send(`
+      <!doctype html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Servico temporariamente indisponivel</title>
+        <style>
+          body { font-family: Arial, sans-serif; background:#f8fafc; color:#0f172a; margin:0; padding:24px; }
+          .box { max-width:820px; margin:40px auto; background:#fff; border:1px solid #e2e8f0; border-radius:12px; padding:18px; }
+          h1 { margin:0 0 8px 0; font-size:22px; color:#b91c1c; }
+          p { margin:0 0 8px 0; color:#334155; }
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <h1>Servico temporariamente indisponivel</h1>
+          <p>O sistema iniciou com falha de bootstrap.</p>
+          <p>Tente novamente em alguns instantes.</p>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+
   if (req.session.user) {
     res.redirect('/dashboard');
   } else {
@@ -125,13 +152,8 @@ app.use((req, res) => {
   res.status(404).render('error', { message: 'Pagina nao encontrada' });
 });
 
-const PORT = process.env.PORT || (isProd ? null : 3000);
+const PORT = Number(process.env.PORT || process.env.APP_PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
-
-if (!PORT) {
-  console.error('PORT nao definido em producao. Configure process.env.PORT.');
-  process.exit(1);
-}
 
 (async () => {
   try {
@@ -142,11 +164,11 @@ if (!PORT) {
     console.error('Erro ao inicializar servidor:', error);
     startupError = error;
 
-    if (isProd) {
+    if (strictStartup) {
       process.exit(1);
     }
 
-    console.warn('Servidor iniciado em modo development com falha de bootstrap. Acesse "/" para ver o erro.');
+    console.warn('Servidor iniciado com falha de bootstrap. /health mostra detalhes.');
   }
 
   app.listen(PORT, HOST, () => {
