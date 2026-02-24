@@ -3,7 +3,11 @@ const path = require('path');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const cors = require('cors');
-require('dotenv').config();
+const dotenv = require('dotenv');
+
+const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env';
+dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+dotenv.config();
 
 const { runMigrations } = require('./config/migrations');
 const { syncDatabase } = require('./models/sequelize-models');
