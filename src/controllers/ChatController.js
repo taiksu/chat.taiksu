@@ -1,7 +1,40 @@
 const ChatRoom = require('../models/ChatRoom');
 const Message = require('../models/Message');
+const path = require('path');
+const fs = require('fs');
 
 class ChatController {
+  isRoomAdmin(user, room) {
+    if (!user || !room) return false;
+    return String(room.owner_id) === String(user.id) || user.role === 'admin';
+  }
+
+  removePhysicalFiles(fileUrls) {
+    const uploadsDir = process.env.FILES_DIR
+      ? path.resolve(process.cwd(), process.env.FILES_DIR)
+      : path.join(process.cwd(), 'public', 'uploads');
+
+    for (const fileUrl of fileUrls || []) {
+      if (!fileUrl) continue;
+      try {
+        const filename = path.basename(fileUrl);
+        const fullPath = path.join(uploadsDir, filename);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+        }
+      } catch (error) {
+        console.warn('Falha ao remover arquivo fisico:', error.message);
+      }
+    }
+  }
+
+  broadcastRoomEvent(roomId, payload) {
+    const clients = global.sseClients?.[roomId] || [];
+    clients.forEach((client) => {
+      client.write(`data: ${JSON.stringify(payload)}\n\n`);
+    });
+  }
+
   async enrichRooms(rooms) {
     return Promise.all((rooms || []).map(async (room) => {
       const participants = await ChatRoom.getParticipants(room.id);
@@ -79,7 +112,20 @@ class ChatController {
       }
 
       if (req.session.user) {
-        await ChatRoom.addParticipant(roomId, req.session.user.id);
+        const isAdmin = this.isRoomAdmin(req.session.user, room);
+        const isParticipant = await ChatRoom.hasActiveParticipant(roomId, req.session.user.id);
+
+        if (!isAdmin && !isParticipant) {
+          return res.status(403).render('error', {
+            title: 'Acesso negado',
+            message: 'Voce nao participa desta sala',
+            user: req.session.user
+          });
+        }
+
+        if (isAdmin && !isParticipant) {
+          await ChatRoom.addParticipant(roomId, req.session.user.id);
+        }
       }
 
       const participants = await ChatRoom.getParticipants(roomId);
@@ -90,7 +136,8 @@ class ChatController {
         room,
         participants,
         messages,
-        user: req.session.user
+        user: req.session.user,
+        canManageRoom: this.isRoomAdmin(req.session.user, room)
       });
     } catch (error) {
       console.error('Error opening room:', error);
@@ -167,6 +214,114 @@ class ChatController {
     } catch (error) {
       console.error('Error creating/getting chamado room:', error);
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  async clearRoomMessages(req, res) {
+    try {
+      if (!req.session.user) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const { roomId } = req.params;
+      const room = await ChatRoom.findById(roomId);
+      if (!room) {
+        return res.status(404).json({ error: 'Sala nao encontrada' });
+      }
+
+      if (!this.isRoomAdmin(req.session.user, room)) {
+        return res.status(403).json({ error: 'Sem permissao para limpar esta sala' });
+      }
+
+      const attachments = await Message.findAttachmentsByRoomId(roomId);
+      const removedCount = await Message.deleteByRoomId(roomId);
+      this.removePhysicalFiles(attachments.map((item) => item.file_url));
+
+      this.broadcastRoomEvent(roomId, {
+        type: 'room_cleared',
+        roomId,
+        removedCount
+      });
+
+      return res.json({ success: true, removedCount });
+    } catch (error) {
+      console.error('Error clearing room messages:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  async deleteRoom(req, res) {
+    try {
+      if (!req.session.user) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const { roomId } = req.params;
+      const room = await ChatRoom.findById(roomId);
+      if (!room) {
+        return res.status(404).json({ error: 'Sala nao encontrada' });
+      }
+
+      if (!this.isRoomAdmin(req.session.user, room)) {
+        return res.status(403).json({ error: 'Sem permissao para excluir esta sala' });
+      }
+
+      const attachments = await Message.findAttachmentsByRoomId(roomId);
+      const deletedRooms = await ChatRoom.deleteById(roomId);
+      this.removePhysicalFiles(attachments.map((item) => item.file_url));
+
+      this.broadcastRoomEvent(roomId, {
+        type: 'room_deleted',
+        roomId
+      });
+
+      if (global.sseClients?.[roomId]) {
+        global.sseClients[roomId].forEach((client) => client.end());
+        delete global.sseClients[roomId];
+      }
+
+      return res.json({ success: true, deletedRooms });
+    } catch (error) {
+      console.error('Error deleting room:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  async removeParticipant(req, res) {
+    try {
+      if (!req.session.user) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const { roomId, userId } = req.params;
+      const room = await ChatRoom.findById(roomId);
+      if (!room) {
+        return res.status(404).json({ error: 'Sala nao encontrada' });
+      }
+
+      if (!this.isRoomAdmin(req.session.user, room)) {
+        return res.status(403).json({ error: 'Sem permissao para remover participantes' });
+      }
+
+      if (String(userId) === String(room.owner_id)) {
+        return res.status(400).json({ error: 'Nao e permitido remover o dono da sala' });
+      }
+
+      const removedCount = await ChatRoom.removeParticipant(roomId, userId);
+      if (!removedCount) {
+        return res.status(404).json({ error: 'Participante nao encontrado na sala' });
+      }
+
+      this.broadcastRoomEvent(roomId, {
+        type: 'participant_removed',
+        roomId,
+        userId: String(userId)
+      });
+
+      return res.json({ success: true, removedCount });
+    } catch (error) {
+      console.error('Error removing participant:', error);
+      return res.status(500).json({ error: error.message });
     }
   }
 }

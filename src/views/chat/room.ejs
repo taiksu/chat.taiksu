@@ -104,13 +104,33 @@
           <a href="/chat/rooms" class="inline-block rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-200">Voltar</a>
           <h2 class="mt-2 truncate text-base font-bold text-emerald-700 sm:text-lg"><%= room.name %></h2>
           <p class="truncate text-xs text-slate-500 sm:text-sm"><%= room.description %></p>
+          <% if (canManageRoom) { %>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <button type="button" onclick="clearRoomMessages()" class="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700 transition hover:bg-amber-100">
+                Limpar chat
+              </button>
+              <button type="button" onclick="deleteRoom()" class="rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-100">
+                Excluir sala
+              </button>
+            </div>
+          <% } %>
         </div>
 
         <div class="hidden items-center gap-2 sm:flex">
           <% participants.forEach(p => { %>
-            <div class="relative flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white <%= p.status === 'online' ? 'bg-emerald-600' : 'bg-slate-400' %>">
+            <div class="relative flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white <%= p.status === 'online' ? 'bg-emerald-600' : 'bg-slate-400' %>" data-participant-id="<%= p.id %>" title="<%= p.name %>">
               <%= p.name.charAt(0).toUpperCase() %>
               <span class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-white <%= p.status === 'online' ? 'bg-emerald-400' : 'bg-slate-300' %>"></span>
+              <% if (canManageRoom && String(p.id) !== String(user.id) && String(p.id) !== String(room.owner_id)) { %>
+                <button
+                  type="button"
+                  onclick="removeParticipant('<%= p.id %>')"
+                  class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[10px] text-white transition hover:bg-rose-600"
+                  title="Remover <%= p.name %>"
+                >
+                  x
+                </button>
+              <% } %>
             </div>
           <% }); %>
         </div>
@@ -215,6 +235,7 @@
     const roomId = '<%= room.id %>';
     const userId = '<%= user.id %>';
     const userName = '<%= user.name %>';
+    const canManageRoom = <%= canManageRoom ? 'true' : 'false' %>;
     let selectedFileType = null;
     let mediaRecorder = null;
     let audioChunks = [];
@@ -225,6 +246,7 @@
     let reconnectTimeout = null;
     const renderedMessageIds = new Set();
     let currentAudioElement = null;
+    let roomDeletedHandled = false;
 
     document.addEventListener('DOMContentLoaded', () => {
       initRenderedMessageIds();
@@ -408,6 +430,12 @@
           updateTypingStatus(data);
         } else if (data.type === 'message_deleted') {
           removeMessageFromDOM(data.messageId);
+        } else if (data.type === 'room_cleared') {
+          clearMessagesFromDOM();
+        } else if (data.type === 'room_deleted') {
+          handleRoomDeleted();
+        } else if (data.type === 'participant_removed') {
+          handleParticipantRemoved(data.userId);
         }
       };
 
@@ -642,6 +670,74 @@
     function removeMessageFromDOM(messageId) {
       const msg = document.querySelector(`[data-id="${messageId}"]`);
       if (msg) msg.remove();
+    }
+
+    function clearMessagesFromDOM() {
+      document.querySelectorAll('.message[data-id]').forEach((el) => el.remove());
+      renderedMessageIds.clear();
+    }
+
+    function handleRoomDeleted() {
+      if (roomDeletedHandled) return;
+      roomDeletedHandled = true;
+      alert('Esta sala foi excluida.');
+      window.location.href = '/chat/rooms';
+    }
+
+    function removeParticipantFromDOM(participantId) {
+      document.querySelectorAll(`[data-participant-id="${participantId}"]`).forEach((el) => el.remove());
+    }
+
+    function handleParticipantRemoved(participantId) {
+      const normalizedId = String(participantId);
+      if (normalizedId === String(userId)) {
+        alert('Voce foi removido desta sala.');
+        window.location.href = '/chat/rooms';
+        return;
+      }
+      removeParticipantFromDOM(normalizedId);
+    }
+
+    async function removeParticipant(participantId) {
+      if (!canManageRoom) return;
+      if (!confirm('Deseja remover este participante desta sala?')) return;
+
+      try {
+        const response = await fetch(`/api/chat/rooms/${roomId}/participants/${participantId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erro ao remover participante');
+        removeParticipantFromDOM(String(participantId));
+      } catch (error) {
+        alert(error.message || 'Falha ao remover participante');
+      }
+    }
+
+    async function clearRoomMessages() {
+      if (!canManageRoom) return;
+      if (!confirm('Deseja limpar todas as mensagens desta sala?')) return;
+
+      try {
+        const response = await fetch(`/api/chat/rooms/${roomId}/messages`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erro ao limpar chat');
+        clearMessagesFromDOM();
+      } catch (error) {
+        alert(error.message || 'Falha ao limpar chat');
+      }
+    }
+
+    async function deleteRoom() {
+      if (!canManageRoom) return;
+      if (!confirm('Deseja excluir esta sala permanentemente?')) return;
+
+      try {
+        const response = await fetch(`/api/chat/rooms/${roomId}`, { method: 'DELETE' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Erro ao excluir sala');
+        handleRoomDeleted();
+      } catch (error) {
+        alert(error.message || 'Falha ao excluir sala');
+      }
     }
 
     function markAllAsRead() {

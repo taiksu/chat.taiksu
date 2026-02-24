@@ -84,6 +84,21 @@ class ChatRoom {
     });
   }
 
+  static hasActiveParticipant(roomId, userId) {
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT id FROM room_participants
+         WHERE room_id = ? AND user_id = ? AND left_at IS NULL
+         LIMIT 1`,
+        [roomId, userId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(Boolean(row));
+        }
+      );
+    });
+  }
+
   static getParticipants(roomId) {
     return new Promise((resolve, reject) => {
       db.all(
@@ -172,6 +187,33 @@ class ChatRoom {
     });
 
     return { room: { ...room, chamado_id: String(chamadoId) }, created: true };
+  }
+
+  static deleteById(roomId) {
+    return new Promise((resolve, reject) => {
+      db.serialize(() => {
+        db.run(`DELETE FROM support_chamados_rooms WHERE room_id = ?`, [roomId], (mapErr) => {
+          if (mapErr) return reject(mapErr);
+
+          db.run(`DELETE FROM typing_status WHERE room_id = ?`, [roomId], (typingErr) => {
+            if (typingErr) return reject(typingErr);
+
+            db.run(`DELETE FROM room_participants WHERE room_id = ?`, [roomId], (participantsErr) => {
+              if (participantsErr) return reject(participantsErr);
+
+              db.run(`DELETE FROM messages WHERE room_id = ?`, [roomId], (messagesErr) => {
+                if (messagesErr) return reject(messagesErr);
+
+                db.run(`DELETE FROM chat_rooms WHERE id = ?`, [roomId], function(roomErr) {
+                  if (roomErr) reject(roomErr);
+                  else resolve(this.changes || 0);
+                });
+              });
+            });
+          });
+        });
+      });
+    });
   }
 }
 

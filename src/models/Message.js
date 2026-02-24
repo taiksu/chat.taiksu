@@ -85,6 +85,28 @@ class Message {
     });
   }
 
+  static findAttachmentsByRoomId(roomId) {
+    return new Promise((resolve, reject) => {
+      db.all(
+        `SELECT id, file_url FROM messages WHERE room_id = ? AND file_url IS NOT NULL`,
+        [roomId],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+  }
+
+  static deleteByRoomId(roomId) {
+    return new Promise((resolve, reject) => {
+      db.run(`DELETE FROM messages WHERE room_id = ?`, [roomId], function(err) {
+        if (err) reject(err);
+        else resolve(this.changes || 0);
+      });
+    });
+  }
+
   static delete(messageId) {
     return new Promise((resolve, reject) => {
       db.run(`DELETE FROM messages WHERE id = ?`, [messageId], function(err) {

@@ -99,8 +99,13 @@ app.use((req, res) => {
 });
 
 // Inicializar servidor
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || (isProd ? null : 3000);
 const HOST = process.env.HOST || '0.0.0.0';
+
+if (!PORT) {
+  console.error('PORT nao definido em producao. Configure a porta interna fornecida pela hospedagem em process.env.PORT.');
+  process.exit(1);
+}
 
 (async () => {
   try {
