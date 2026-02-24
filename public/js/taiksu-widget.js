@@ -99,7 +99,7 @@
       .tw-root { font-family: "Figtree","Segoe UI",Tahoma,Geneva,Verdana,sans-serif; color: #0f172a; line-height: 1.2; }
       .tw-toggle { width: 58px; height: 58px; border: 0; border-radius: 999px; background: linear-gradient(135deg,#10b981 0%,#047857 100%); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 14px 28px rgba(6,78,59,.28); }
       .tw-widget { width:min(${Math.max(320, Number(config.width) || 380)}px,calc(100vw - 24px)); height:min(${Math.max(460, Number(config.height) || 620)}px,calc(100vh - 24px)); background:#fff; border-radius:16px; border:1px solid #e2e8f0; box-shadow:0 22px 50px rgba(0,0,0,.22); overflow:hidden; display:flex; flex-direction:column; }
-      .tw-header { background:linear-gradient(135deg,#059669 0%,#047857 100%); color:#fff; display:flex; align-items:center; justify-content:space-between; padding:12px 14px; }
+      .tw-header { background: rgba(5, 150, 105, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color:#fff; display:flex; align-items:center; justify-content:space-between; padding:12px 14px; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid rgba(255,255,255,0.1); }
       .tw-head-main { display:flex; align-items:center; gap:10px; min-width:0; }
       .tw-head-icon { width:34px; height:34px; border-radius:9999px; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
       .tw-head-txt { display:flex; flex-direction:column; gap:2px; min-width:0; }
@@ -107,17 +107,22 @@
       .tw-subtitle { font-size:11px; color:#d1fae5; display:flex; align-items:center; gap:6px; }
       .tw-online-dot { width:7px; height:7px; border-radius:9999px; background:#34d399; display:inline-block; box-shadow:0 0 0 3px rgba(52,211,153,.18); }
       .tw-close { width:28px; height:28px; border-radius:8px; border:0; background:rgba(255,255,255,.18); color:#fff; cursor:pointer; font-size:18px; line-height:1; }
-      .tw-messages { flex:1; overflow-y:auto; padding:12px; background:linear-gradient(180deg,#f9f9f9 0%,#ecfeff 100%); }
-      .tw-messages::-webkit-scrollbar { width:8px; }
-      .tw-messages::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:999px; }
+      .tw-messages { flex:1; overflow-y:auto; padding:16px 12px; background: #f8fafc; scroll-behavior: smooth; }
+      .tw-messages::-webkit-scrollbar { width: 5px; }
+      .tw-messages::-webkit-scrollbar-track { background: transparent; }
+      .tw-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+      .tw-messages::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
       .tw-empty { min-height:100%; display:flex; align-items:center; justify-content:center; text-align:center; padding:24px 14px; color:#64748b; font-size:13px; }
       .tw-empty-wrap { display:flex; flex-direction:column; align-items:center; gap:10px; max-width:230px; }
       .tw-empty-icon { width:72px; height:72px; border-radius:9999px; background:linear-gradient(135deg,#d1fae5,#a7f3d0); color:#065f46; display:flex; align-items:center; justify-content:center; box-shadow:inset 0 0 0 1px rgba(16,185,129,.28); }
       .tw-empty strong { color:#065f46; display:block; margin-bottom:6px; }
-      .tw-message { display:flex; margin-bottom:10px; align-items:flex-end; gap:8px; }
+      .tw-message { display:flex; margin-bottom:12px; align-items:flex-end; gap:8px; animation: twFadeUp 0.3s ease-out forwards; opacity: 0; }
+      @keyframes twFadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       .tw-message.own { justify-content:flex-end; }
-      .tw-message-row { max-width:80%; display:flex; flex-direction:column; }
+      .tw-message-row { max-width:85%; display:flex; flex-direction:column; }
       .tw-message.own .tw-message-row { align-items:flex-end; }
+      .tw-message.grouped { margin-top: -8px; }
+      .tw-message.grouped .tw-avatar, .tw-message.grouped .tw-name { display: none; }
       .tw-avatar { width:28px; height:28px; border-radius:9999px; overflow:hidden; background:#059669; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
       .tw-message.own .tw-avatar { order:2; background:#047857; }
       .tw-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
@@ -157,8 +162,8 @@
       .tw-dot:nth-child(2) { animation-delay:.15s; }
       .tw-dot:nth-child(3) { animation-delay:.3s; }
       @keyframes twTyping { 0%,80%,100% { opacity:.2; transform:translateY(0); } 40% { opacity:1; transform:translateY(-3px); } }
-      .tw-input-area { border-top:1px solid #dbe4ee; background:#ffffff; padding:10px; display:flex; gap:8px; align-items:flex-end; position:relative; margin-top:-6px; border-top-left-radius:14px; border-top-right-radius:14px; box-shadow:0 -6px 12px rgba(15,23,42,.04); }
-      .tw-compose { flex:1; display:flex; align-items:flex-end; gap:8px; border:1px solid #cbd5e1; border-radius:14px; padding:6px; background:#fff; box-shadow:0 2px 0 rgba(15,23,42,.02); }
+      .tw-input-area { border-top: 1px solid rgba(219, 228, 238, 0.5); background: rgba(255, 255, 255, 0.82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 12px; display: flex; gap: 8px; align-items: flex-end; position: relative; margin-top: -10px; border-top-left-radius: 18px; border-top-right-radius: 18px; box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06); }
+      .tw-compose { flex:1; display:flex; align-items:flex-end; gap:8px; border:1px solid #e2e8f0; border-radius:14px; padding:6px; background:#fff; box-shadow:0 2px 4px rgba(15,23,42,0.02); }
       .tw-attach, .tw-send, .tw-mic { width:40px; height:40px; border:0; border-radius:10px; background:#059669; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
       .tw-mic.recording { background:#dc2626; }
       .tw-send[disabled] { opacity:.45; cursor:default; }
@@ -469,13 +474,30 @@
       </span>
     `;
 
+    const messages = container.querySelectorAll(".tw-message");
+    const previousMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+    let isGrouped = false;
+
+    if (previousMessage) {
+      const prevId = previousMessage.getAttribute("data-sender-id");
+      const currentId = String(message.user_id || message.name);
+      if (prevId === currentId) {
+        isGrouped = true;
+      }
+    }
+
     const row = document.createElement("div");
-    row.className = `tw-message ${own ? "own" : ""}`;
+    row.className = `tw-message ${own ? "own" : ""} ${isGrouped ? "grouped" : ""}`;
+    row.setAttribute("data-sender-id", String(message.user_id || message.name));
     if (message.id) row.setAttribute("data-message-id", String(message.id));
+    
+    const avatarHtml = isGrouped ? "" : `<div class="tw-avatar">${renderAvatar(message.avatar, message.name)}</div>`;
+    const nameHtml = isGrouped ? "" : `<div class="tw-name">${escapeHtml(sender)}</div>`;
+
     row.innerHTML = `
-      <div class="tw-avatar">${renderAvatar(message.avatar, message.name)}</div>
+      ${avatarHtml}
       <div class="tw-message-row">
-        <div class="tw-name">${escapeHtml(sender)}</div>
+        ${nameHtml}
         ${renderMessageBody(message)}
         <div class="tw-meta">
           <div class="tw-time">${time}</div>
