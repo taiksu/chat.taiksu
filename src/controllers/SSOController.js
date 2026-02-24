@@ -3,7 +3,7 @@
  * Gerencia validacao de tokens e integracao com servidor centralizado
  */
 
-const { validateSSOToken } = require('../middleware/ssoValidation');
+const { validateSSOToken, validateSSOTokenDetailed } = require('../middleware/ssoValidation');
 const User = require('../models/User');
 
 class SSOController {
@@ -29,10 +29,17 @@ class SSOController {
         return res.redirect('/auth/login?error=missing_token');
       }
 
-      const ssoUserData = await validateSSOToken(token);
-      if (!ssoUserData) {
+      const validation = await validateSSOTokenDetailed(token);
+      if (!validation.ok) {
+        console.error('[SSO callback] Token rejeitado', {
+          status: validation.status,
+          error: validation.error,
+          message: validation.message,
+          responseBody: validation.responseBody
+        });
         return res.redirect('/auth/login?error=invalid_token');
       }
+      const ssoUserData = validation.userData;
 
       const user = await this.syncSSOUser(ssoUserData);
       req.session.user = user;
@@ -122,7 +129,7 @@ class SSOController {
           email,
           password: null,
           avatar: foto || null,
-          role: grupo_nome === 'Administrador' ? 'admin' : 'user',
+          role: grupo_nome === 'Desenvolvedor' ? 'admin' : 'user',
           ssoId: id,
           ssoData: JSON.stringify(ssoUserData)
         });
@@ -130,7 +137,7 @@ class SSOController {
         await User.update(user.id, {
           name,
           avatar: foto || user.avatar,
-          role: grupo_nome === 'Administrador' ? 'admin' : 'user',
+          role: grupo_nome === 'Desenvolvedor' ? 'admin' : 'user',
           ssoId: id,
           ssoData: JSON.stringify(ssoUserData)
         });

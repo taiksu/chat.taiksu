@@ -242,7 +242,7 @@ Campos sincronizados:
 - `name` - Nome completo do usuário
 - `email` - Email
 - `avatar` - URL da foto de perfil
-- `role` - 'admin' se grupo_nome é 'Administrador', caso contrário 'user'
+- `role` - 'admin' se grupo_nome é 'Desenvolvedor', caso contrário 'user'
 - `sso_id` - ID do usuário no SSO
 - `sso_data` - Dados completos em JSON (unidade, permissions, etc)
 

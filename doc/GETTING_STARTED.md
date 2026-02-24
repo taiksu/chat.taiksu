@@ -200,7 +200,7 @@ Role: User
 - De diferentes usuários
 
 **4 Usuários:**
-- Admin Taiksu (administrador)
+- Admin Taiksu (Desenvolvedor)
 - João Silva
 - Maria Santos
 - Pedro Costa
