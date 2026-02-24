@@ -270,6 +270,10 @@
           </div>
         </div>
       </div>
+      <div id="tw-lightbox" class="tw-lightbox">
+        <button class="tw-lightbox-close" id="tw-lightbox-close">&times;</button>
+        <img id="tw-lightbox-img" src="" alt="Zoom" />
+      </div>
     `;
 
     shadow.getElementById("tw-close-btn").addEventListener("click", closeWidget);
@@ -297,6 +301,39 @@
     input.addEventListener("input", onInputTyping);
     onInputTyping();
     setComposerDisabled(false);
+
+    const lightbox = shadow.getElementById("tw-lightbox");
+    const lightboxImg = shadow.getElementById("tw-lightbox-img");
+    const lightboxClose = shadow.getElementById("tw-lightbox-close");
+    const msgContainer = shadow.getElementById("tw-messages");
+
+    if (lightbox && lightboxImg && lightboxClose && msgContainer) {
+      const openLightbox = (src) => {
+        lightboxImg.src = src;
+        lightbox.classList.add("show");
+        document.body.style.overflow = "hidden";
+      };
+      const closeLightbox = () => {
+        lightbox.classList.remove("show");
+        document.body.style.overflow = "";
+        setTimeout(() => { if (!lightbox.classList.contains("show")) lightboxImg.src = ""; }, 300);
+      };
+
+      msgContainer.addEventListener("click", (e) => {
+        const img = e.target.closest(".tw-media.image");
+        if (img && img.src) {
+          openLightbox(img.src);
+        }
+      });
+
+      lightbox.addEventListener("click", (e) => {
+        if (e.target === lightbox || e.target === lightboxClose) {
+          closeLightbox();
+        }
+      });
+
+      lightboxClose.addEventListener("click", closeLightbox);
+    }
   }
   function init(options) {
     config = { ...DEFAULTS, ...(options || {}) };
