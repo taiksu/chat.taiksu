@@ -411,6 +411,7 @@
       isRecording = false;
       setMicRecordingVisual(false);
       hideRecordingIndicator();
+      setTypingStatus(false, 'idle');
     }
 
     async function toggleAudioRecording() {
@@ -442,6 +443,7 @@
           isRecording = true;
           setMicRecordingVisual(true);
           showRecordingIndicator();
+          setTypingStatus(true, 'recording');
         } catch (error) {
           console.error('Erro ao acessar microfone:', error);
           finalizeRecordingState();
@@ -925,7 +927,7 @@
       setUnreadCount(0);
     }
 
-    function setTypingStatus(isTyping) {
+    function setTypingStatus(isTyping, activity = 'typing') {
       if (!isTyping) {
         if (!typingIsActive) return;
         typingIsActive = false;
@@ -933,17 +935,17 @@
         fetch(`/api/messages/typing/${roomId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isTyping: false })
+          body: JSON.stringify({ isTyping: false, activity: 'idle' })
         });
         return;
       }
 
-      if (!typingIsActive) {
+      if (!typingIsActive || activity === 'recording') {
         typingIsActive = true;
         fetch(`/api/messages/typing/${roomId}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ isTyping: true })
+          body: JSON.stringify({ isTyping: true, activity })
         });
       }
 
@@ -964,11 +966,15 @@
           const typingDiv = document.createElement('div');
           typingDiv.id = 'typingContainer';
           typingDiv.className = 'mt-1 flex items-center gap-1 text-xs italic text-gray-500';
-          typingDiv.innerHTML = `<strong class="not-italic text-green-700">${escapeHtml(data.userName || 'Usuario')}</strong> digitando <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>`;
+          const actionText = String(data.activity || 'typing') === 'recording' ? 'gravando audio' : 'digitando';
+          typingDiv.innerHTML = `<strong class="not-italic text-green-700">${escapeHtml(data.userName || 'Usuario')}</strong> ${actionText} <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>`;
           area.appendChild(typingDiv);
           if (isNearBottom(area)) {
             scrollMessagesToBottom(true);
           }
+        } else {
+          const actionText = String(data.activity || 'typing') === 'recording' ? 'gravando audio' : 'digitando';
+          container.innerHTML = `<strong class="not-italic text-green-700">${escapeHtml(data.userName || 'Usuario')}</strong> ${actionText} <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>`;
         }
       } else if (container) {
         container.remove();

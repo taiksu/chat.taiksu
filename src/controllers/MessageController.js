@@ -275,6 +275,7 @@ class MessageController {
     try {
       const { roomId } = req.params;
       const { isTyping } = req.body;
+      const activity = String(req.body?.activity || '').trim().toLowerCase();
       const userId = req.session.user?.id;
 
       if (!userId) {
@@ -288,6 +289,7 @@ class MessageController {
           type: 'typing_status',
           userId,
           isTyping,
+          activity: ['typing', 'recording'].includes(activity) ? activity : (isTyping ? 'typing' : 'idle'),
           userName: req.session.user.name
         })}\n\n`);
       });

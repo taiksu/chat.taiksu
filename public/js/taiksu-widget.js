@@ -13,6 +13,7 @@
     zIndex: 2147483000,
     autoOpen: false,
     authToken: "",
+    userName: "",
     placeholder: "Digite sua mensagem...",
     mode: "floating",
     mountSelector: ""
@@ -32,8 +33,22 @@
   let audioChunks = [];
   let recording = false;
   let chatClosed = false;
+  let currentActivity = "idle";
+  let localUserName = "";
   let currentAudio = null;
   const renderedIds = new Set();
+
+  function parseJwtSub(token) {
+    try {
+      if (!token || String(token).split(".").length < 2) return "";
+      const payload = String(token).split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+      const padded = payload.padEnd(payload.length + (4 - (payload.length % 4 || 4)) % 4, "=");
+      const decoded = JSON.parse(atob(padded));
+      return decoded && decoded.sub != null ? String(decoded.sub) : "";
+    } catch (_err) {
+      return "";
+    }
+  }
 
   function normalizePosition(position) {
     return position === "bottom-left" ? "bottom-left" : "bottom-right";
@@ -107,7 +122,7 @@
       .tw-message.own .tw-avatar { order:2; background:#047857; }
       .tw-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
       .tw-name { font-size:12px; color:#475569; margin-bottom:4px; font-weight:600; }
-      .tw-bubble { color:#1f2937; padding:8px 10px; font-size:14px; line-height:1.35; word-break:break-word; }
+      .tw-bubble { border-radius:14px; border:1px solid #cbd5e1; background:#f1f5f9; color:#1f2937; padding:8px 10px; font-size:14px; line-height:1.35; word-break:break-word; }
       .tw-message.own .tw-bubble { background:#047857; border-color:#065f46; color:#fff; }
       .tw-time { margin-top:4px; font-size:11px; color:#64748b; }
       .tw-media.image { max-width:220px; width:100%; border-radius:10px; border:1px solid rgba(148,163,184,.4); display:block; }
@@ -265,6 +280,9 @@
     config = { ...DEFAULTS, ...(options || {}) };
     config.position = normalizePosition(config.position);
     config.mode = normalizeMode(config.mode);
+    if (!config.userId && config.authToken) {
+      config.userId = parseJwtSub(config.authToken);
+    }
     if (!config.roomId) {
       console.error("TaiksuChat: roomId é obrigatório.");
       return;
@@ -520,12 +538,16 @@
           return;
         }
         input.value = "";
+        if (!config.userId && data.message && (data.message.user_id || data.message.userId)) {
+          config.userId = String(data.message.user_id || data.message.userId);
+        }
         const sendBtn = shadow.getElementById("tw-send-btn");
         if (sendBtn) sendBtn.disabled = true;
         showSystemMessage("");
         if (typingTimer) clearTimeout(typingTimer);
         typingActive = false;
-        postTyping(false);
+        postTyping(false, "idle");
+        onInputTyping();
       })
       .catch((err) => console.error("TaiksuChat: erro ao enviar mensagem:", err));
   }
@@ -544,6 +566,9 @@
           if (handleChatClosedResponse(data)) return;
           showSystemMessage("Nao foi possivel enviar o arquivo.", "error");
           return;
+        }
+        if (!config.userId && data.message && (data.message.user_id || data.message.userId)) {
+          config.userId = String(data.message.user_id || data.message.userId);
         }
         showSystemMessage("");
       })
@@ -590,34 +615,52 @@
       sendBtn.style.display = hasText ? "flex" : "none";
       micBtn.style.display = hasText ? "none" : "flex";
     }
-    if (!typingActive) {
+    if (!hasText) {
+      if (typingActive) {
+        typingActive = false;
+        postTyping(false, "idle");
+      }
+      if (typingTimer) {
+        clearTimeout(typingTimer);
+        typingTimer = null;
+      }
+      return;
+    }
+    if (!typingActive || currentActivity !== "typing") {
       typingActive = true;
-      postTyping(true);
+      postTyping(true, "typing");
     }
     if (typingTimer) clearTimeout(typingTimer);
     typingTimer = setTimeout(() => {
       typingActive = false;
-      postTyping(false);
+      postTyping(false, "idle");
     }, 1200);
   }
 
-  function postTyping(isTyping) {
+  function postTyping(isTyping, activity = "typing") {
     if (chatClosed) return;
+    currentActivity = isTyping ? activity : "idle";
     fetch(buildApiUrl(`/api/messages/typing/${encodeURIComponent(config.roomId)}`), {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isTyping })
+      body: JSON.stringify({ isTyping, activity: currentActivity })
     }).catch(() => {});
   }
 
   function renderTyping(data) {
     const typingEl = shadow.getElementById("tw-typing");
     if (!typingEl) return;
-    if (String(data.userId) === String(config.userId)) return;
-    typingEl.innerHTML = data.isTyping
-      ? `<strong>${escapeHtml(data.userName || "Usuario")}</strong> esta digitando <span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`
-      : "";
+    if (config.userId && String(data.userId) === String(config.userId)) return;
+    if (!data.isTyping) {
+      typingEl.innerHTML = "";
+      return;
+    }
+    const user = escapeHtml(data.userName || "Usuario");
+    const activity = String(data.activity || "typing");
+    typingEl.innerHTML = activity === "recording"
+      ? `<strong>${user}</strong> esta gravando audio <span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`
+      : `<strong>${user}</strong> esta digitando <span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`;
   }
 
   function scrollToBottom() {
@@ -712,6 +755,7 @@
           mediaStream = null;
           mediaRecorder = null;
           audioChunks = [];
+          postTyping(false, "idle");
           setRecordingUI(false);
         };
         mediaRecorder.onerror = () => {
@@ -719,12 +763,15 @@
           mediaStream = null;
           mediaRecorder = null;
           audioChunks = [];
+          postTyping(false, "idle");
           setRecordingUI(false);
         };
         mediaRecorder.start();
+        postTyping(true, "recording");
         setRecordingUI(true);
       } catch (err) {
         console.error("TaiksuChat: erro ao iniciar gravacao:", err);
+        postTyping(false, "idle");
         setRecordingUI(false);
       }
       return;
@@ -734,6 +781,7 @@
       mediaRecorder.stop();
       return;
     }
+    postTyping(false, "idle");
     setRecordingUI(false);
   }
 
@@ -753,6 +801,9 @@
           console.error("TaiksuChat: falha ao enviar audio", data);
           return;
         }
+        if (!config.userId && data.message && (data.message.user_id || data.message.userId)) {
+          config.userId = String(data.message.user_id || data.message.userId);
+        }
         showSystemMessage("");
       })
       .catch((err) => console.error("TaiksuChat: erro ao enviar audio:", err));
@@ -764,6 +815,7 @@
     const recordingChip = shadow && shadow.getElementById("tw-recording-chip");
     if (micBtn) micBtn.classList.remove("recording");
     if (recordingChip) recordingChip.classList.remove("show");
+    postTyping(false, "idle");
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
     }
