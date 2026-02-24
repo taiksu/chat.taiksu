@@ -134,7 +134,7 @@
       .tw-message.own .tw-meta { justify-content: flex-end; }
       .tw-read { display: inline-flex; align-items: center; color: #94a3b8; }
       .tw-read .tw-check-read { display: none; }
-      .tw-read.read { color: #34d399; }
+      .tw-read.read { color: #0ea5e9; }
       .tw-read.read .tw-check-sent { display: none; }
       .tw-read.read .tw-check-read { display: inline-block; }
       .tw-media.image { max-width:220px; width:100%; border-radius:10px; border:1px solid rgba(148,163,184,.4); display:block; }
@@ -454,12 +454,20 @@
     const container = shadow.getElementById("tw-messages");
     if (!container) return;
 
-    let own = config.userId ? String(message.user_id) === String(config.userId) : false;
-    if (!own && !config.userId && localUserName && String(message.name || "") === localUserName) {
+    const msgUserId = String(message.user_id || message.userId || "").trim();
+    const cfgUserId = String(config.userId || "").trim();
+    const msgName = String(message.name || "").trim();
+    const cfgName = localUserName.trim();
+
+    let own = false;
+    if (cfgUserId && msgUserId && cfgUserId === msgUserId) {
+      own = true;
+    } else if (cfgName && msgName && cfgName === msgName) {
       own = true;
     }
-    if (own && !config.userId && message.user_id) {
-      config.userId = String(message.user_id);
+
+    if (own && !config.userId && msgUserId) {
+      config.userId = msgUserId;
     }
     const sender = own ? "Voce" : message.name;
     const time = new Date(message.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -488,7 +496,7 @@
 
     const row = document.createElement("div");
     row.className = `tw-message ${own ? "own" : ""} ${isGrouped ? "grouped" : ""}`;
-    row.setAttribute("data-sender-id", String(message.user_id || message.name));
+    row.setAttribute("data-sender-id", msgUserId || msgName);
     if (message.id) row.setAttribute("data-message-id", String(message.id));
     
     const avatarHtml = isGrouped ? "" : `<div class="tw-avatar">${renderAvatar(message.avatar, message.name)}</div>`;
