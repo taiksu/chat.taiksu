@@ -118,6 +118,11 @@
     .record-pulse {
       animation: recordPulse 1s ease-in-out infinite;
     }
+
+    .message-read { line-height: 1; }
+    .message-read .check-read { display: none; }
+    .message-read.read .check-sent { display: none; }
+    .message-read.read .check-read { display: inline-flex; }
   </style>
 </head>
 <body class="flex h-dvh min-h-dvh flex-col overflow-hidden bg-green-50 text-green-700">
@@ -247,8 +252,25 @@
               <div class="message-time mt-1 text-[11px] text-gray-500">
                 <%= new Date(msg.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) %>
               </div>
-              <% if (msg.is_read) { %>
-                <div class="message-read mt-0.5 text-[11px] text-emerald-600">Lido</div>
+              <% if (isOwn) { %>
+                <div
+                  class="message-read mt-0.5 inline-flex items-center <%= msg.is_read ? 'read text-emerald-600' : 'text-gray-500' %>"
+                  data-read-for="<%= msg.id %>"
+                  title="<%= msg.is_read ? 'Lido' : 'Enviado' %>"
+                  aria-label="<%= msg.is_read ? 'Lido' : 'Enviado' %>"
+                >
+                  <span class="check-sent" aria-hidden="true">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 8.5l2.2 2.2L9.8 6.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                  </span>
+                  <span class="check-read" aria-hidden="true">
+                    <svg width="16" height="14" viewBox="0 0 20 16" fill="none">
+                      <path d="M1.6 8.6l2.4 2.4 4.8-4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                      <path d="M8.2 8.6l2.4 2.4 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+                    </svg>
+                  </span>
+                </div>
               <% } %>
             </div>
           </div>
@@ -587,6 +609,8 @@
         if (data.type === 'new_message') {
           addMessageToDOM(normalizeMessage(data.message));
           markAllAsRead();
+        } else if (data.type === 'messages_read') {
+          applyReadReceipts(data.messageIds);
         } else if (data.type === 'typing_status') {
           updateTypingStatus(data);
         } else if (data.type === 'message_deleted') {
@@ -821,6 +845,21 @@
       const senderName = isOwn ? 'Voce' : (message.name || 'Usuario');
       const createdAt = message.created_at ? new Date(message.created_at) : new Date();
       const timeStr = createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const readStatus = Number(message.is_read) === 1 ? 'Lido' : 'Enviado';
+      const readClass = Number(message.is_read) === 1 ? 'read text-emerald-600' : 'text-gray-500';
+      const readIconHtml = `
+        <span class="check-sent" aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8.5l2.2 2.2L9.8 6.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </span>
+        <span class="check-read" aria-hidden="true">
+          <svg width="16" height="14" viewBox="0 0 20 16" fill="none">
+            <path d="M1.6 8.6l2.4 2.4 4.8-4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+            <path d="M8.2 8.6l2.4 2.4 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </span>
+      `;
 
       const msgHTML = `
         <div class="message message-enter ${isOwn ? 'own justify-end' : ''} mb-1 flex items-end gap-2 sm:gap-3" data-id="${message.id || ''}" data-user-id="${message.user_id}">
@@ -831,6 +870,7 @@
             <div class="message-sender mb-0.5 text-xs font-semibold text-gray-500">${escapeHtml(senderName)}</div>
             <div class="${getMessageBubbleClass(isOwn)}">${contentHTML}</div>
             <div class="message-time mt-1 text-[11px] text-gray-500">${timeStr}</div>
+            ${isOwn ? `<div class="message-read mt-0.5 inline-flex items-center ${readClass}" data-read-for="${message.id || ''}" title="${readStatus}" aria-label="${readStatus}">${readIconHtml}</div>` : ''}
           </div>
         </div>
       `;
@@ -925,6 +965,24 @@
 
     function markAllAsRead() {
       setUnreadCount(0);
+      fetch(`/api/messages/mark-read/${roomId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      }).catch(() => {});
+    }
+
+    function applyReadReceipts(messageIds) {
+      if (!Array.isArray(messageIds) || !messageIds.length) return;
+      messageIds.forEach((id) => {
+        const receipt = document.querySelector(`[data-read-for="${String(id)}"]`);
+        if (!receipt) return;
+        receipt.setAttribute('title', 'Lido');
+        receipt.setAttribute('aria-label', 'Lido');
+        receipt.classList.add('read');
+        receipt.classList.remove('text-gray-500');
+        receipt.classList.add('text-emerald-600');
+      });
     }
 
     function setTypingStatus(isTyping, activity = 'typing') {

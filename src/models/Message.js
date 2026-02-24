@@ -60,16 +60,30 @@ class Message {
   }
 
   static async markRoomAsRead(roomId, userId) {
+    const unreadRows = await MessageModel.findAll({
+      where: {
+        room_id: roomId,
+        user_id: { [Op.ne]: userId },
+        is_read: 0
+      },
+      attributes: ['id'],
+      raw: true
+    });
+
+    const messageIds = unreadRows.map((row) => row.id);
+    if (!messageIds.length) {
+      return { count: 0, messageIds: [] };
+    }
+
     const [changes] = await MessageModel.update(
       { is_read: 1, read_at: new Date() },
       {
         where: {
-          room_id: roomId,
-          user_id: { [Op.ne]: userId }
+          id: { [Op.in]: messageIds }
         }
       }
     );
-    return changes;
+    return { count: changes, messageIds };
   }
 
   static async countUnread(roomId) {

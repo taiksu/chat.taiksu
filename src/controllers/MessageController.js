@@ -179,11 +179,41 @@ class MessageController {
 
   async markAsRead(req, res) {
     try {
-      const { messageId } = req.body;
+      const userId = req.session.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const { messageId, roomId: bodyRoomId } = req.body || {};
+      const roomId = req.params.roomId || bodyRoomId;
+
+      if (roomId) {
+        const result = await Message.markRoomAsRead(roomId, userId);
+        if (result.count > 0) {
+          const clients = this.getRoomClients(roomId);
+          const payload = {
+            type: 'messages_read',
+            roomId,
+            messageIds: result.messageIds,
+            readerId: userId,
+            readerName: req.session.user?.name || 'Usuario',
+            readAt: new Date().toISOString()
+          };
+          clients.forEach((client) => {
+            client.write(`data: ${JSON.stringify(payload)}\n\n`);
+          });
+        }
+        return res.json({ success: true, roomId, updated: result.count, messageIds: result.messageIds });
+      }
+
+      if (!messageId) {
+        return res.status(400).json({ error: 'messageId ou roomId obrigatorio' });
+      }
+
       await Message.markAsRead(messageId);
-      res.json({ success: true });
+      return res.json({ success: true, messageId });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      return res.status(500).json({ error: error.message });
     }
   }
 

@@ -125,6 +125,13 @@
       .tw-bubble { border-radius:14px; border:1px solid #cbd5e1; background:#f1f5f9; color:#1f2937; padding:8px 10px; font-size:14px; line-height:1.35; word-break:break-word; }
       .tw-message.own .tw-bubble { background:#047857; border-color:#065f46; color:#fff; }
       .tw-time { margin-top:4px; font-size:11px; color:#64748b; }
+      .tw-meta { margin-top:4px; display:flex; align-items:center; gap:6px; }
+      .tw-message.own .tw-meta { justify-content:flex-end; }
+      .tw-read { display:inline-flex; align-items:center; color:#64748b; }
+      .tw-read .tw-check-read { display:none; }
+      .tw-read.read { color:#0ea5e9; }
+      .tw-read.read .tw-check-sent { display:none; }
+      .tw-read.read .tw-check-read { display:inline-block; }
       .tw-media.image { max-width:220px; width:100%; border-radius:10px; border:1px solid rgba(148,163,184,.4); display:block; }
       .tw-media.audio { width:230px; max-width:100%; }
       .tw-audio-player { display:flex; align-items:center; gap:8px; width:260px; max-width:100%; background:rgba(255,255,255,.18); border-radius:999px; padding:7px 10px; }
@@ -330,10 +337,17 @@
       }
       if (!payload) return;
       if (payload.type === "new_message") {
-        addMessage(payload.message);
+        const normalized = normalizeMessage(payload.message);
+        addMessage(normalized);
+        const isOwnIncoming = normalized && config.userId && String(normalized.user_id) === String(config.userId);
+        if (!isOwnIncoming) {
+          markRoomAsRead();
+        }
         scrollToBottom();
       } else if (payload.type === "typing_status") {
         renderTyping(payload);
+      } else if (payload.type === "messages_read") {
+        applyReadReceipts(payload.messageIds);
       }
     };
     eventSource.onerror = () => {
@@ -353,6 +367,7 @@
         (messages || []).forEach(addMessage);
         syncEmptyState();
         initAudioPlayers(container);
+        markRoomAsRead();
         scrollToBottom();
       })
       .catch((err) => console.error("TaiksuChat: erro ao carregar mensagens:", err));
@@ -438,20 +453,55 @@
     }
     const sender = own ? "Voce" : message.name;
     const time = new Date(message.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const readClass = own && Number(message.is_read) === 1 ? "tw-read read" : "tw-read";
+    const readLabel = Number(message.is_read) === 1 ? "Lido" : "Enviado";
+    const readIconHtml = `
+      <span class="tw-check-sent" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l2.2 2.2L9.8 6.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="tw-check-read" aria-hidden="true">
+        <svg width="16" height="14" viewBox="0 0 20 16" fill="none"><path d="M1.6 8.6l2.4 2.4 4.8-4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.2 8.6l2.4 2.4 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </span>
+    `;
 
     const row = document.createElement("div");
     row.className = `tw-message ${own ? "own" : ""}`;
+    if (message.id) row.setAttribute("data-message-id", String(message.id));
     row.innerHTML = `
       <div class="tw-avatar">${renderAvatar(message.avatar, message.name)}</div>
       <div class="tw-message-row">
         <div class="tw-name">${escapeHtml(sender)}</div>
         ${renderMessageBody(message)}
-        <div class="tw-time">${time}</div>
+        <div class="tw-meta">
+          <div class="tw-time">${time}</div>
+          ${own ? `<div class="${readClass}" data-read-for="${escapeAttr(String(message.id || ""))}" title="${readLabel}" aria-label="${readLabel}">${readIconHtml}</div>` : ""}
+        </div>
       </div>
     `;
     container.appendChild(row);
     syncEmptyState();
     initAudioPlayers(container);
+  }
+
+  function applyReadReceipts(messageIds) {
+    if (!Array.isArray(messageIds) || !messageIds.length) return;
+    messageIds.forEach((id) => {
+      const receiptEl = shadow && shadow.querySelector(`[data-read-for="${String(id)}"]`);
+      if (!receiptEl) return;
+      receiptEl.classList.add("read");
+      receiptEl.setAttribute("title", "Lido");
+      receiptEl.setAttribute("aria-label", "Lido");
+    });
+  }
+
+  function markRoomAsRead() {
+    if (!widgetOpen) return;
+    fetch(buildApiUrl(`/api/messages/mark-read/${encodeURIComponent(config.roomId)}`), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    }).catch(() => {});
   }
 
   function syncEmptyState() {
@@ -873,6 +923,20 @@
     shadow = null;
     widgetOpen = false;
     renderedIds.clear();
+  }
+
+  if (typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        markRoomAsRead();
+      }
+    });
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("focus", () => {
+      markRoomAsRead();
+    });
   }
 
   const api = { init, open: openWidget, close: closeWidget, sendMessage, destroy };

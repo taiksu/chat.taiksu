@@ -6,6 +6,7 @@ const router = express.Router();
 
 router.post('/send', requireApiAuth, MessageController.sendMessage.bind(MessageController));
 router.post('/mark-read', requireApiAuth, MessageController.markAsRead.bind(MessageController));
+router.post('/mark-read/:roomId', requireApiAuth, MessageController.markAsRead.bind(MessageController));
 router.delete('/:messageId', requireApiAuth, MessageController.deleteMessage.bind(MessageController));
 router.get('/:roomId', requireApiAuth, MessageController.getMessages.bind(MessageController));
 
