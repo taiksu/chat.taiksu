@@ -28,9 +28,42 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .map((o) => o.trim())
   .filter(Boolean);
 
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+
+  if (allowedOrigins.includes(origin)) return true;
+
+  try {
+    const url = new URL(origin);
+    const hostname = (url.hostname || '').toLowerCase();
+    if (hostname === 'taiksu.com.br' || hostname.endsWith('.taiksu.com.br')) {
+      return true;
+    }
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return true;
+    }
+  } catch (_err) {
+    return false;
+  }
+
+  return false;
+}
+
 app.use(cors({
-  origin: allowedOrigins.length ? allowedOrigins : true,
-  credentials: true
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) return callback(null, true);
+    return callback(new Error(`CORS bloqueado para origem: ${origin}`));
+  },
+  credentials: true,
+  optionsSuccessStatus: 204
+}));
+app.options('*', cors({
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) return callback(null, true);
+    return callback(new Error(`CORS bloqueado para origem: ${origin}`));
+  },
+  credentials: true,
+  optionsSuccessStatus: 204
 }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
