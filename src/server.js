@@ -152,8 +152,8 @@ app.use((req, res) => {
   res.status(404).render('error', { message: 'Pagina nao encontrada' });
 });
 
-const PORT = Number(process.env.PORT || process.env.APP_PORT || 3000);
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = Number(process.env.PORT || 3000);
+const HOST = '0.0.0.0';
 
 (async () => {
   try {
