@@ -36,6 +36,8 @@
   let currentActivity = "idle";
   let localUserName = "";
   let currentAudio = null;
+  let statusCheckTimer = null;
+  let roomStatus = { isReadOnly: false, message: null };
   const renderedIds = new Set();
 
   function parseJwtSub(token) {
@@ -306,11 +308,13 @@
     renderOpen();
     loadMessages();
     connectSSE();
+    checkRoomStatus();
   }
 
   function closeWidget() {
     widgetOpen = false;
     stopRecording();
+    stopStatusCheck();
     closeSSE();
     renderClosed();
   }
@@ -323,6 +327,54 @@
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
+    }
+  }
+
+  function stopStatusCheck() {
+    if (statusCheckTimer) {
+      clearTimeout(statusCheckTimer);
+      statusCheckTimer = null;
+    }
+  }
+
+  function checkRoomStatus() {
+    if (!widgetOpen || !config.roomId) return;
+
+    fetch(buildApiUrl(`/api/messages/room-status/${encodeURIComponent(config.roomId)}`), {
+      method: "GET",
+      credentials: "include"
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data || !data.success) return;
+
+        const wasReadOnly = roomStatus.isReadOnly;
+        roomStatus = {
+          isReadOnly: data.isReadOnly || false,
+          status: data.status || 'open',
+          message: data.message || null
+        };
+
+        if (roomStatus.isReadOnly !== wasReadOnly) {
+          if (roomStatus.isReadOnly) {
+            setComposerDisabled(true, roomStatus.message || "Este chamado foi fechado. Você pode visualizar o histórico, mas não pode enviar novas mensagens.");
+          } else {
+            setComposerDisabled(false);
+          }
+        }
+
+        scheduleStatusCheck();
+      })
+      .catch((err) => {
+        console.error("TaiksuChat: erro ao verificar status da room:", err);
+        scheduleStatusCheck();
+      });
+  }
+
+  function scheduleStatusCheck() {
+    stopStatusCheck();
+    if (widgetOpen) {
+      statusCheckTimer = setTimeout(checkRoomStatus, 30000);
     }
   }
 
@@ -926,6 +978,7 @@
 
   function destroy() {
     stopRecording();
+    stopStatusCheck();
     closeSSE();
     if (host && host.parentNode) host.parentNode.removeChild(host);
     host = null;

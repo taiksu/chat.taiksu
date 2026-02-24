@@ -344,6 +344,35 @@ class MessageController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  async getRoomStatus(req, res) {
+    try {
+      const { roomId } = req.params;
+
+      if (!roomId) {
+        return res.status(400).json({
+          code: 'invalid_room',
+          error: 'roomId é obrigatório'
+        });
+      }
+
+      const statusInfo = await ChatRoom.getRoomStatus(roomId);
+
+      res.json({
+        code: 'room_status',
+        success: true,
+        ...statusInfo
+      });
+    } catch (error) {
+      console.error('Erro ao obter status da room:', error);
+      res.status(500).json({
+        code: 'status_error',
+        success: false,
+        error: error.message,
+        isReadOnly: true
+      });
+    }
+  }
 }
 
 module.exports = new MessageController();

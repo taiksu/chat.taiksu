@@ -28,7 +28,8 @@ const ChatRoomModel = sequelize.define('chat_rooms', {
   name: { type: DataTypes.STRING(255), allowNull: false },
   type: { type: DataTypes.STRING(64), allowNull: false, defaultValue: 'support' },
   description: { type: DataTypes.TEXT, allowNull: true },
-  owner_id: { type: DataTypes.STRING(64), allowNull: false }
+  owner_id: { type: DataTypes.STRING(64), allowNull: false },
+  status: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'open' }
 }, {
   ...common,
   timestamps: true,

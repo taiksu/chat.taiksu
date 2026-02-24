@@ -172,6 +172,62 @@ class ChatRoom {
       return ChatRoomModel.destroy({ where: { id: roomId }, transaction });
     });
   }
+
+  static async getRoomStatus(roomId) {
+    try {
+      const room = await ChatRoomModel.findByPk(roomId, { raw: true });
+      if (!room) {
+        return {
+          roomId,
+          status: 'not_found',
+          isReadOnly: true,
+          message: 'Sala não encontrada'
+        };
+      }
+
+      const isClosed = String(room.status).toLowerCase() === 'closed';
+      return {
+        roomId,
+        status: room.status || 'open',
+        isReadOnly: isClosed,
+        message: isClosed ? 'Este chamado foi fechado. Você pode visualizar o histórico, mas não pode enviar novas mensagens.' : null
+      };
+    } catch (error) {
+      console.error('Erro ao obter status da room:', error);
+      return {
+        roomId,
+        status: 'error',
+        isReadOnly: true,
+        message: 'Erro ao verificar status da sala'
+      };
+    }
+  }
+
+  static async closeRoom(roomId) {
+    try {
+      await ChatRoomModel.update(
+        { status: 'closed' },
+        { where: { id: roomId } }
+      );
+      return { success: true, status: 'closed' };
+    } catch (error) {
+      console.error('Erro ao fechar room:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  static async reopenRoom(roomId) {
+    try {
+      await ChatRoomModel.update(
+        { status: 'open' },
+        { where: { id: roomId } }
+      );
+      return { success: true, status: 'open' };
+    } catch (error) {
+      console.error('Erro ao reabrir room:', error);
+      return { success: false, error: error.message };
+    }
+  }
 }
 
 module.exports = ChatRoom;
