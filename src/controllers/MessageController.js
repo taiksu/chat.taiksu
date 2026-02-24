@@ -10,12 +10,23 @@ const defaultPublicDir = process.env.PUBLIC_DIR
   ? path.resolve(process.cwd(), process.env.PUBLIC_DIR)
   : path.resolve(process.cwd(), 'public_html');
 
-const uploadsDir = process.env.FILES_DIR
+let uploadsDir = process.env.FILES_DIR
   ? path.resolve(process.cwd(), process.env.FILES_DIR)
   : path.join(defaultPublicDir, 'uploads');
 
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+try {
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
+  fs.accessSync(uploadsDir, fs.constants.W_OK);
+} catch (err) {
+  const fallbackUploadsDir = path.join(process.cwd(), 'tmp', 'uploads');
+  console.error(`[uploads] Falha ao usar FILES_DIR (${uploadsDir}): ${err.message}`);
+  console.warn(`[uploads] Usando fallback em ${fallbackUploadsDir}`);
+  uploadsDir = fallbackUploadsDir;
+  if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  }
 }
 
 function getExtFromMime(mime) {
