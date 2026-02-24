@@ -122,16 +122,16 @@
       .tw-message.own .tw-avatar { order:2; background:#047857; }
       .tw-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
       .tw-name { font-size:12px; color:#475569; margin-bottom:4px; font-weight:600; }
-      .tw-bubble { border-radius:14px; border:1px solid #cbd5e1; background:#f1f5f9; color:#1f2937; padding:8px 10px; font-size:14px; line-height:1.35; word-break:break-word; }
-      .tw-message.own .tw-bubble { background:#047857; border-color:#065f46; color:#fff; }
-      .tw-time { margin-top:4px; font-size:11px; color:#64748b; }
-      .tw-meta { margin-top:4px; display:flex; align-items:center; gap:6px; }
-      .tw-message.own .tw-meta { justify-content:flex-end; }
-      .tw-read { display:inline-flex; align-items:center; color:#64748b; }
-      .tw-read .tw-check-read { display:none; }
-      .tw-read.read { color:#0ea5e9; }
-      .tw-read.read .tw-check-sent { display:none; }
-      .tw-read.read .tw-check-read { display:inline-block; }
+      .tw-bubble { border-radius: 14px 14px 14px 2px; border: 1px solid #e2e8f0; background: #fff; color: #1e293b; padding: 10px 14px; font-size: 14px; line-height: 1.5; word-break: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s; }
+      .tw-message.own .tw-bubble { background: #065f46; border-color: #064e3b; color: #fff; border-radius: 14px 14px 2px 14px; box-shadow: 0 4px 12px rgba(6,95,70,0.15); }
+      .tw-time { margin-top: 4px; font-size: 11px; color: #64748b; font-weight: 500; }
+      .tw-meta { margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+      .tw-message.own .tw-meta { justify-content: flex-end; }
+      .tw-read { display: inline-flex; align-items: center; color: #94a3b8; }
+      .tw-read .tw-check-read { display: none; }
+      .tw-read.read { color: #34d399; }
+      .tw-read.read .tw-check-sent { display: none; }
+      .tw-read.read .tw-check-read { display: inline-block; }
       .tw-media.image { max-width:220px; width:100%; border-radius:10px; border:1px solid rgba(148,163,184,.4); display:block; }
       .tw-media.audio { width:230px; max-width:100%; }
       .tw-audio-player { display:flex; align-items:center; gap:8px; width:260px; max-width:100%; background:rgba(255,255,255,.18); border-radius:999px; padding:7px 10px; }
@@ -170,8 +170,10 @@
       .tw-input::placeholder { color:#64748b; }
       .tw-system { min-height:0; margin:4px 10px -2px; padding:0; font-size:12px; color:#64748b; }
       .tw-system.show { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:7px 9px; }
-      .tw-system.error.show { color:#9f1239; border-color:#fecdd3; background:#fff1f2; }
-      .tw-system.warn.show { color:#92400e; border-color:#fde68a; background:#fffbeb; }
+      .tw-system.error.show { color: #9f1239; border-color: #fecdd3; background: #fff1f2; }
+      .tw-system.warn.show { color: #92400e; border-color: #fde68a; background: #fffbeb; }
+      .tw-typing { min-height: 28px; margin: 0 14px 8px; padding: 6px 12px; font-size: 12px; color: #475569; font-style: normal; display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; width: fit-content; max-width: calc(100% - 28px); box-shadow: 0 2px 4px rgba(0,0,0,0.03); opacity: 0; transform: translateY(5px); transition: all 0.3s ease; pointer-events: none; }
+      .tw-typing.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
       .tw-recording-chip { position:absolute; right:60px; bottom:62px; background:#fff1f2; border:1px solid #fecdd3; color:#be123c; font-size:12px; font-weight:600; border-radius:999px; padding:6px 10px; display:none; align-items:center; gap:6px; }
       .tw-recording-chip.show { display:flex; }
       .tw-recording-chip span { width:8px; height:8px; border-radius:999px; background:#ef4444; animation:twRecPulse 1s infinite; }
@@ -718,17 +720,37 @@
   function renderTyping(data) {
     const typingEl = shadow.getElementById("tw-typing");
     if (!typingEl) return;
-    if (config.userId && String(data.userId) === String(config.userId)) return;
-    if (!config.userId && localUserName && String(data.userName || "") === localUserName) return;
-    if (!data.isTyping) {
-      typingEl.innerHTML = "";
+    
+    // Nao mostrar para si mesmo
+    if (config.userId && String(data.userId) === String(config.userId)) {
+      typingEl.classList.remove("show");
       return;
     }
+    if (!config.userId && localUserName && String(data.userName || "") === localUserName) {
+      typingEl.classList.remove("show");
+      return;
+    }
+
+    if (!data.isTyping) {
+      typingEl.classList.remove("show");
+      setTimeout(() => { if (!typingEl.classList.contains("show")) typingEl.innerHTML = ""; }, 300);
+      return;
+    }
+    
     const user = escapeHtml(data.userName || "Usuario");
     const activity = String(data.activity || "typing");
-    typingEl.innerHTML = activity === "recording"
-      ? `<strong>${user}</strong> esta gravando audio <span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`
-      : `<strong>${user}</strong> esta digitando <span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`;
+    const icon = activity === "recording" 
+      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:#ef4444"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`
+      : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:#059669"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>`;
+
+    typingEl.innerHTML = `
+      ${icon}
+      <span><strong>${user}</strong> ${activity === "recording" ? "está gravando áudio" : "está digitando"}</span>
+      <div style="display:flex;gap:3px;margin-left:2px">
+        <span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>
+      </div>
+    `;
+    typingEl.classList.add("show");
   }
 
   function scrollToBottom() {
