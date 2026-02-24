@@ -137,9 +137,10 @@
       .tw-audio-player { display:flex; align-items:center; gap:8px; width:260px; max-width:100%; background:rgba(255,255,255,.18); border-radius:999px; padding:7px 10px; }
       .tw-audio-toggle { width:30px; height:30px; border:0; border-radius:9999px; background:#fff; color:#065f46; display:flex; align-items:center; justify-content:center; cursor:pointer; }
       .tw-audio-main { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
-      .tw-audio-wave { display:flex; align-items:center; gap:6px; min-height:16px; }
-      .tw-audio-dot { width:11px; height:11px; border-radius:9999px; background:#38bdf8; box-shadow:0 0 0 2px rgba(56,189,248,.2); flex-shrink:0; }
-      .tw-audio-bars { display:flex; flex:1; align-items:flex-end; gap:2px; height:18px; }
+      .tw-audio-wave { display:flex; align-items:center; min-height:16px; }
+      .tw-audio-progress { position:relative; flex:1; height:18px; display:flex; align-items:flex-end; }
+      .tw-audio-dot { position:absolute; left:0%; bottom:8px; width:11px; height:11px; border-radius:9999px; background:#38bdf8; box-shadow:0 0 0 2px rgba(56,189,248,.2); transform:translateX(-50%); transition:left .09s linear; z-index:2; }
+      .tw-audio-bars { display:flex; flex:1; align-items:flex-end; gap:2px; height:18px; padding-left:7px; }
       .tw-audio-bar { width:3px; border-radius:999px; background:rgba(255,255,255,.95); transform-origin:center bottom; }
       .tw-audio-time { width:auto; text-align:left; font-size:11px; font-weight:700; color:#fff; }
       .tw-audio-player.playing .tw-audio-bar { animation: twEq 0.9s ease-in-out infinite; }
@@ -151,12 +152,12 @@
       .tw-message:not(.own) .tw-audio-time { color:#475569; }
       .tw-message:not(.own) .tw-audio-bar { background:#9ca3af; }
       .tw-file-link { color:inherit; font-weight:600; text-decoration:underline; word-break:break-all; }
-      .tw-typing { min-height:22px; padding:0 12px 8px; font-size:12px; color:#64748b; font-style:italic; display:flex; align-items:center; gap:6px; }
+      .tw-typing { min-height:0; margin:-10px 10px 0; padding:4px 10px; font-size:12px; color:#64748b; font-style:italic; display:flex; align-items:center; gap:6px; background:rgba(248,250,252,.9); border:1px solid rgba(226,232,240,.9); border-radius:10px; width:fit-content; max-width:calc(100% - 20px); }
       .tw-dot { width:6px; height:6px; border-radius:9999px; background:#94a3b8; display:inline-block; animation:twTyping 1.2s infinite ease-in-out; }
       .tw-dot:nth-child(2) { animation-delay:.15s; }
       .tw-dot:nth-child(3) { animation-delay:.3s; }
       @keyframes twTyping { 0%,80%,100% { opacity:.2; transform:translateY(0); } 40% { opacity:1; transform:translateY(-3px); } }
-      .tw-input-area { border-top:1px solid #e2e8f0; background:#fff; padding:10px; display:flex; gap:8px; align-items:flex-end; position:relative; }
+      .tw-input-area { border-top:1px solid #dbe4ee; background:#ffffff; padding:10px; display:flex; gap:8px; align-items:flex-end; position:relative; margin-top:-6px; border-top-left-radius:14px; border-top-right-radius:14px; box-shadow:0 -6px 12px rgba(15,23,42,.04); }
       .tw-compose { flex:1; display:flex; align-items:flex-end; gap:8px; border:1px solid #cbd5e1; border-radius:14px; padding:6px; background:#fff; box-shadow:0 2px 0 rgba(15,23,42,.02); }
       .tw-attach, .tw-send, .tw-mic { width:40px; height:40px; border:0; border-radius:10px; background:#059669; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
       .tw-mic.recording { background:#dc2626; }
@@ -167,7 +168,7 @@
       .tw-attach-opt:hover { background:#f1f5f9; }
       .tw-input { flex:1; min-height:40px; max-height:110px; resize:none; border:0; border-radius:10px; padding:9px 10px; font:inherit; font-size:14px; outline:none; color:#065f46; }
       .tw-input::placeholder { color:#64748b; }
-      .tw-system { min-height:18px; margin:0 10px 6px; padding:0; font-size:12px; color:#64748b; }
+      .tw-system { min-height:0; margin:4px 10px -2px; padding:0; font-size:12px; color:#64748b; }
       .tw-system.show { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:7px 9px; }
       .tw-system.error.show { color:#9f1239; border-color:#fecdd3; background:#fff1f2; }
       .tw-system.warn.show { color:#92400e; border-color:#fde68a; background:#fffbeb; }
@@ -425,8 +426,10 @@
         </button>
         <div class="tw-audio-main">
           <div class="tw-audio-wave">
-            <span class="tw-audio-dot"></span>
-            <div class="tw-audio-bars">${bars}</div>
+            <div class="tw-audio-progress">
+              <span class="tw-audio-dot"></span>
+              <div class="tw-audio-bars">${bars}</div>
+            </div>
           </div>
           <span class="tw-audio-time">00:00</span>
         </div>
@@ -751,9 +754,15 @@
       const playIcon = player.querySelector(".tw-audio-icon-play");
       const pauseIcon = player.querySelector(".tw-audio-icon-pause");
       const timeEl = player.querySelector(".tw-audio-time");
+      const progressDot = player.querySelector(".tw-audio-dot");
       if (!audio || !toggle) return;
 
       const sync = () => {
+        const hasDuration = Number.isFinite(audio.duration) && audio.duration > 0;
+        const ratio = hasDuration ? Math.max(0, Math.min(1, (audio.currentTime || 0) / audio.duration)) : 0;
+        if (progressDot) {
+          progressDot.style.left = `${ratio * 100}%`;
+        }
         if (timeEl) {
           if (!audio.paused && audio.currentTime > 0) timeEl.textContent = formatAudioTime(audio.currentTime);
           else if (Number.isFinite(audio.duration) && audio.duration > 0) timeEl.textContent = formatAudioTime(audio.duration);

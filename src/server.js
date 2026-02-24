@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const bodyParser = require('body-parser');
 const session = require('express-session');
 const MySQLStoreFactory = require('express-mysql-session');
@@ -67,11 +68,18 @@ app.options('*', cors({
 }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, '../public')));
+
+const defaultPublicDir = path.resolve(process.cwd(), 'public_html');
+const legacyPublicDir = path.join(__dirname, '../public');
+const publicRoot = process.env.PUBLIC_DIR
+  ? path.resolve(process.cwd(), process.env.PUBLIC_DIR)
+  : (fs.existsSync(defaultPublicDir) ? defaultPublicDir : legacyPublicDir);
+
+app.use(express.static(publicRoot));
 
 const uploadsPath = process.env.FILES_DIR
   ? path.resolve(process.cwd(), process.env.FILES_DIR)
-  : path.join(__dirname, '../public/uploads');
+  : path.join(publicRoot, 'uploads');
 app.use('/uploads', express.static(uploadsPath));
 
 app.set('view engine', 'ejs');

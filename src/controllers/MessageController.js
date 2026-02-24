@@ -6,9 +6,13 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
 // Configurar multer
+const defaultPublicDir = process.env.PUBLIC_DIR
+  ? path.resolve(process.cwd(), process.env.PUBLIC_DIR)
+  : path.resolve(process.cwd(), 'public_html');
+
 const uploadsDir = process.env.FILES_DIR
   ? path.resolve(process.cwd(), process.env.FILES_DIR)
-  : path.join(process.cwd(), 'public', 'uploads');
+  : path.join(defaultPublicDir, 'uploads');
 
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });

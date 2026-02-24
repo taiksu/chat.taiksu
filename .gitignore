@@ -27,3 +27,4 @@ yarn-error.log
 coverage/
 .nyc_output/
 # public/uploads is no longer used; external uploads directory should not be tracked
+public_html/
