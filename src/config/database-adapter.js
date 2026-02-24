@@ -1,6 +1,6 @@
 /**
- * ConfiguraÃ§Ã£o de banco de dados adaptÃ¡vel
- * Suporta SQLite (desenvolvimento) e MySQL (produÃ§Ã£o)
+ * Configuracao de banco de dados adaptavel
+ * Suporta SQLite (desenvolvimento) e MySQL (producao)
  */
 
 const path = require('path');
@@ -9,17 +9,32 @@ require('dotenv').config();
 const dbType = process.env.DB_TYPE || 'sqlite';
 const nodeEnv = process.env.NODE_ENV || 'development';
 
-console.log(`ðŸ“¦ Banco de Dados: ${dbType.toUpperCase()} (${nodeEnv})`);
+console.log(`Banco de Dados: ${dbType.toUpperCase()} (${nodeEnv})`);
 
 let db;
 
+function normalizeParamsAndCallback(params, callback) {
+  let parsedParams = params;
+  let parsedCallback = callback;
+
+  if (typeof parsedParams === 'function') {
+    parsedCallback = parsedParams;
+    parsedParams = [];
+  }
+
+  if (!Array.isArray(parsedParams)) {
+    parsedParams = parsedParams === undefined || parsedParams === null ? [] : [parsedParams];
+  }
+
+  return { params: parsedParams, callback: parsedCallback };
+}
+
 if (dbType === 'mysql') {
-  // ==================== MySQL ====================
   const mysql = require('mysql2/promise');
-  
+
   const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 3306,
+    port: Number(process.env.DB_PORT || 3306),
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'chat_taiksu',
@@ -28,183 +43,234 @@ if (dbType === 'mysql') {
     queueLimit: 0
   });
 
-  console.log(`âœ… MySQL conectado em ${process.env.DB_HOST}:${process.env.DB_PORT}`);
+  console.log(`MySQL pool criado em ${process.env.DB_HOST}:${process.env.DB_PORT}`);
 
   db = {
-    run: async (sql, params = []) => {
-      try {
-        const conn = await pool.getConnection();
-        const result = await conn.execute(sql, params);
-        conn.release();
-        return { lastID: result[0].insertId, changes: result[0].affectedRows };
-      } catch (error) {
-        console.error('MySQL run error:', error);
-        throw error;
+    pool,
+    run(sql, params, callback) {
+      const normalized = normalizeParamsAndCallback(params, callback);
+      const promise = pool.execute(sql, normalized.params)
+        .then(([result]) => ({
+          lastID: result?.insertId,
+          changes: result?.affectedRows || 0
+        }));
+
+      if (typeof normalized.callback === 'function') {
+        promise
+          .then((meta) => normalized.callback.call(meta, null))
+          .catch((err) => normalized.callback(err));
+        return;
       }
-    },
 
-    get: async (sql, params = []) => {
-      try {
-        const conn = await pool.getConnection();
-        const [rows] = await conn.execute(sql, params);
-        conn.release();
-        return rows[0] || null;
-      } catch (error) {
-        console.error('MySQL get error:', error);
-        throw error;
+      return promise;
+    },
+    get(sql, params, callback) {
+      const normalized = normalizeParamsAndCallback(params, callback);
+      const promise = pool.execute(sql, normalized.params)
+        .then(([rows]) => (rows && rows.length ? rows[0] : null));
+
+      if (typeof normalized.callback === 'function') {
+        promise
+          .then((row) => normalized.callback(null, row))
+          .catch((err) => normalized.callback(err));
+        return;
       }
-    },
 
-    all: async (sql, params = []) => {
-      try {
-        const conn = await pool.getConnection();
-        const [rows] = await conn.execute(sql, params);
-        conn.release();
-        return rows || [];
-      } catch (error) {
-        console.error('MySQL all error:', error);
-        throw error;
+      return promise;
+    },
+    all(sql, params, callback) {
+      const normalized = normalizeParamsAndCallback(params, callback);
+      const promise = pool.execute(sql, normalized.params)
+        .then(([rows]) => rows || []);
+
+      if (typeof normalized.callback === 'function') {
+        promise
+          .then((rows) => normalized.callback(null, rows))
+          .catch((err) => normalized.callback(err));
+        return;
       }
-    },
 
-    serialize: (callback) => {
-      callback();
+      return promise;
     },
-
-    exec: async (sql) => {
+    serialize(callback) {
+      if (typeof callback === 'function') callback();
+    },
+    async exec(sql) {
+      const conn = await pool.getConnection();
       try {
-        const conn = await pool.getConnection();
-        // Executar mÃºltiplas declaraÃ§Ãµes
-        const statements = sql.split(';').filter(s => s.trim());
+        const statements = String(sql)
+          .split(';')
+          .map((s) => s.trim())
+          .filter(Boolean);
         for (const statement of statements) {
-          if (statement.trim()) {
-            await conn.execute(statement);
-          }
+          await conn.execute(statement);
         }
+      } finally {
         conn.release();
-      } catch (error) {
-        console.error('MySQL exec error:', error);
-        throw error;
       }
     }
   };
+
+  initializeDatabase().catch((error) => {
+    console.error('Erro ao inicializar MySQL:', error.message);
+  });
 } else {
-  // ==================== SQLite ====================
   const sqlite3 = require('sqlite3').verbose();
   const dbPath = path.join(__dirname, 'database.db');
 
-  db = new sqlite3.Database(dbPath, (err) => {
+  const sqlite = new sqlite3.Database(dbPath, (err) => {
     if (err) {
-      console.error('âŒ Erro ao conectar ao SQLite:', err);
-    } else {
-      console.log(`âœ… SQLite conectado em ${dbPath}`);
-      initializeDatabase();
+      console.error('Erro ao conectar ao SQLite:', err);
+      return;
     }
+    console.log(`SQLite conectado em ${dbPath}`);
+    initializeDatabase().catch((error) => {
+      console.error('Erro ao inicializar SQLite:', error.message);
+    });
   });
+
+  db = {
+    run(sql, params, callback) {
+      const normalized = normalizeParamsAndCallback(params, callback);
+      return new Promise((resolve, reject) => {
+        sqlite.run(sql, normalized.params, function(err) {
+          if (typeof normalized.callback === 'function') {
+            normalized.callback.call(this, err || null);
+          }
+          if (err) return reject(err);
+          resolve({ lastID: this.lastID, changes: this.changes || 0 });
+        });
+      });
+    },
+    get(sql, params, callback) {
+      const normalized = normalizeParamsAndCallback(params, callback);
+      return new Promise((resolve, reject) => {
+        sqlite.get(sql, normalized.params, (err, row) => {
+          if (typeof normalized.callback === 'function') {
+            normalized.callback(err || null, row);
+          }
+          if (err) return reject(err);
+          resolve(row || null);
+        });
+      });
+    },
+    all(sql, params, callback) {
+      const normalized = normalizeParamsAndCallback(params, callback);
+      return new Promise((resolve, reject) => {
+        sqlite.all(sql, normalized.params, (err, rows) => {
+          if (typeof normalized.callback === 'function') {
+            normalized.callback(err || null, rows);
+          }
+          if (err) return reject(err);
+          resolve(rows || []);
+        });
+      });
+    },
+    serialize(callback) {
+      sqlite.serialize(() => {
+        if (typeof callback === 'function') callback();
+      });
+    },
+    exec(sql) {
+      return new Promise((resolve, reject) => {
+        sqlite.exec(sql, (err) => {
+          if (err) return reject(err);
+          resolve();
+        });
+      });
+    }
+  };
 }
 
-function initializeDatabase() {
-  if (dbType === 'sqlite') {
-    db.serialize(() => {
-      createTables();
-    });
-  } else {
-    createTables();
-  }
+async function initializeDatabase() {
+  await createTables();
 }
 
 async function createTables() {
   const tables = [
-    // Tabela de usuÃ¡rios
     `
       CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password TEXT,
+        id VARCHAR(64) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255),
         avatar TEXT,
-        status TEXT DEFAULT 'offline',
-        role TEXT DEFAULT 'user',
-        sso_id INTEGER,
+        status VARCHAR(32) DEFAULT 'offline',
+        role VARCHAR(32) DEFAULT 'user',
+        sso_id BIGINT,
         sso_data TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `,
-    // Tabela de salas de chat
     `
       CREATE TABLE IF NOT EXISTS chat_rooms (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        type TEXT DEFAULT 'support',
+        id VARCHAR(64) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(64) DEFAULT 'support',
         description TEXT,
-        owner_id TEXT NOT NULL,
+        owner_id VARCHAR(64) NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (owner_id) REFERENCES users(id)
       )
     `,
-    // Tabela de mensagens
     `
       CREATE TABLE IF NOT EXISTS messages (
-        id TEXT PRIMARY KEY,
-        room_id TEXT NOT NULL,
-        user_id TEXT NOT NULL,
+        id VARCHAR(64) PRIMARY KEY,
+        room_id VARCHAR(64) NOT NULL,
+        user_id VARCHAR(64) NOT NULL,
         content TEXT,
-        type TEXT DEFAULT 'text',
+        type VARCHAR(32) DEFAULT 'text',
         file_url TEXT,
-        file_type TEXT,
+        file_type VARCHAR(255),
         is_read INTEGER DEFAULT 0,
         read_at DATETIME,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
     `,
-    // Tabela de participantes
     `
       CREATE TABLE IF NOT EXISTS room_participants (
-        id TEXT PRIMARY KEY,
-        room_id TEXT NOT NULL,
-        user_id TEXT NOT NULL,
+        id VARCHAR(64) PRIMARY KEY,
+        room_id VARCHAR(64) NOT NULL,
+        user_id VARCHAR(64) NOT NULL,
         joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         left_at DATETIME,
         FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
         FOREIGN KEY (user_id) REFERENCES users(id)
       )
     `,
-    // Tabela de mÃ©tricas
     `
       CREATE TABLE IF NOT EXISTS metrics (
-        id TEXT PRIMARY KEY,
-        room_id TEXT,
+        id VARCHAR(64) PRIMARY KEY,
+        room_id VARCHAR(64),
         date DATE,
         messages_count INTEGER DEFAULT 0,
         active_users INTEGER DEFAULT 0,
         avg_response_time INTEGER DEFAULT 0,
-        satisfaction_rating REAL,
+        satisfaction_rating DECIMAL(5,2),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (room_id) REFERENCES chat_rooms(id)
       )
     `,
-    // Tabela de vínculo entre chamado e sala (1:1)
     `
       CREATE TABLE IF NOT EXISTS support_chamados_rooms (
-        id TEXT PRIMARY KEY,
-        chamado_id TEXT NOT NULL UNIQUE,
-        room_id TEXT NOT NULL UNIQUE,
-        created_by TEXT NOT NULL,
+        id VARCHAR(64) PRIMARY KEY,
+        chamado_id VARCHAR(64) NOT NULL UNIQUE,
+        room_id VARCHAR(64) NOT NULL UNIQUE,
+        created_by VARCHAR(64) NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
         FOREIGN KEY (created_by) REFERENCES users(id)
       )
     `,
-    // Tabela de status de digitação
     `
       CREATE TABLE IF NOT EXISTS typing_status (
-        id TEXT PRIMARY KEY,
-        room_id TEXT NOT NULL,
-        user_id TEXT NOT NULL,
+        id VARCHAR(64) PRIMARY KEY,
+        room_id VARCHAR(64) NOT NULL,
+        user_id VARCHAR(64) NOT NULL,
         status INTEGER DEFAULT 0,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
@@ -213,27 +279,15 @@ async function createTables() {
     `
   ];
 
-  for (const table of tables) {
+  for (const tableSql of tables) {
     try {
-      if (dbType === 'mysql') {
-        const conn = await db.pool.getConnection();
-        await conn.execute(table);
-        conn.release();
-      } else {
-        await new Promise((resolve, reject) => {
-          db.run(table, (err) => {
-            if (err) reject(err);
-            else resolve();
-          });
-        });
-      }
+      await db.run(tableSql);
     } catch (error) {
       console.error('Erro ao criar tabela:', error.message);
     }
   }
 
-  console.log('âœ… Tabelas criadas/verificadas com sucesso');
+  console.log('Tabelas criadas/verificadas com sucesso');
 }
 
 module.exports = db;
-
