@@ -14,12 +14,35 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+function getExtFromMime(mime) {
+  const map = {
+    'audio/webm': '.webm',
+    'audio/ogg': '.ogg',
+    'audio/mpeg': '.mp3',
+    'audio/wav': '.wav',
+    'audio/x-wav': '.wav',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'application/pdf': '.pdf',
+    'application/msword': '.doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+    'text/plain': '.txt'
+  };
+  return map[mime] || '';
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadsDir);
   },
   filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
+    let ext = path.extname(file.originalname || '') || '';
+    if (!ext) {
+      ext = getExtFromMime(file.mimetype) || '';
+    }
     const name = uuidv4() + ext;
     cb(null, name);
   }
@@ -57,14 +80,24 @@ class MessageController {
 
         // Enviar SSE para todos os clientes
         const clients = global.sseClients[roomId] || [];
+        const sseMessage = {
+          id: message.id,
+          room_id: roomId,
+          user_id: userId,
+          content: content || '',
+          type: type || 'text',
+          file_url: fileUrl,
+          file_type: fileType,
+          created_at: new Date().toISOString(),
+          is_read: 0,
+          name: req.session.user.name,
+          avatar: req.session.user.avatar
+        };
+
         clients.forEach(client => {
           client.write(`data: ${JSON.stringify({
             type: 'new_message',
-            message: {
-              ...message,
-              name: req.session.user.name,
-              avatar: req.session.user.avatar
-            }
+            message: sseMessage
           })}\n\n`);
         });
 
@@ -100,6 +133,19 @@ class MessageController {
       }
 
       await Message.delete(messageId);
+
+      // Remover arquivo físico se existir
+      try {
+        if (message && message.file_url) {
+          const filename = path.basename(message.file_url);
+          const fullPath = path.join(uploadsDir, filename);
+          if (fs.existsSync(fullPath)) {
+            fs.unlinkSync(fullPath);
+          }
+        }
+      } catch (e) {
+        console.warn('Não foi possível remover arquivo físico:', e.message);
+      }
 
       // Notificar via SSE
       const clients = global.sseClients[message.room_id] || [];

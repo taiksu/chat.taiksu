@@ -52,14 +52,25 @@ class ChatRoom {
 
   static addParticipant(roomId, userId) {
     return new Promise((resolve, reject) => {
-      const id = uuidv4();
-      db.run(
-        `INSERT INTO room_participants (id, room_id, user_id)
-         VALUES (?, ?, ?)`,
-        [id, roomId, userId],
-        function(err) {
-          if (err) reject(err);
-          else resolve({ id, roomId, userId });
+      db.get(
+        `SELECT id FROM room_participants
+         WHERE room_id = ? AND user_id = ? AND left_at IS NULL
+         LIMIT 1`,
+        [roomId, userId],
+        (findErr, existing) => {
+          if (findErr) return reject(findErr);
+          if (existing) return resolve({ id: existing.id, roomId, userId, existing: true });
+
+          const id = uuidv4();
+          db.run(
+            `INSERT INTO room_participants (id, room_id, user_id)
+             VALUES (?, ?, ?)`,
+            [id, roomId, userId],
+            function(err) {
+              if (err) reject(err);
+              else resolve({ id, roomId, userId, existing: false });
+            }
+          );
         }
       );
     });
@@ -68,7 +79,7 @@ class ChatRoom {
   static getParticipants(roomId) {
     return new Promise((resolve, reject) => {
       db.all(
-        `SELECT u.* FROM users u
+        `SELECT DISTINCT u.* FROM users u
          JOIN room_participants rp ON u.id = rp.user_id
          WHERE rp.room_id = ? AND rp.left_at IS NULL`,
         [roomId],

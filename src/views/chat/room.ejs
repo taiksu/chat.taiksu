@@ -4,134 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
+  <link rel="stylesheet" href="/css/tailwind.css">
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #f5f5f5;
-      color: #333;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .navbar {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-
-    .navbar h1 {
-      font-size: 1.5rem;
-      font-weight: 700;
-    }
-
-    .navbar-links {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-    }
-
-    .navbar a {
-      color: white;
-      text-decoration: none;
-      padding: 0.5rem 1rem;
-      border: none;
-      background: rgba(255,255,255,0.2);
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .navbar a:hover {
-      background: rgba(255,255,255,0.3);
-    }
-
-    .chat-container {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    .chat-header {
-      background: white;
-      padding: 1.5rem 2rem;
-      border-bottom: 1px solid #ddd;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .chat-header h2 {
-      color: #667eea;
-    }
-
-    .participants-list {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-    }
-
-    .participant {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    .avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 0.9rem;
-      position: relative;
-    }
-
-    .avatar .status {
-      position: absolute;
-      bottom: 0;
-      right: 0;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: #27ae60;
-      border: 2px solid white;
-    }
-
-    .avatar.offline .status {
-      background: #95a5a6;
-    }
-
-    .messages-area {
-      flex: 1;
-      padding: 2rem;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .message {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 1rem;
-      animation: slideIn 0.3s ease;
-    }
-
     @keyframes slideIn {
       from {
         opacity: 0;
@@ -143,234 +17,27 @@
       }
     }
 
-    .message.own {
-      justify-content: flex-end;
+    @keyframes typing {
+      0%, 60%, 100% {
+        opacity: 0.3;
+        transform: translateY(0);
+      }
+      30% {
+        opacity: 1;
+        transform: translateY(-6px);
+      }
     }
 
-    .message-avatar {
-      width: 35px;
-      height: 35px;
-      border-radius: 50%;
-      background: #667eea;
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.85rem;
-      font-weight: bold;
-      flex-shrink: 0;
-    }
-
-    .message.own .message-avatar {
-      order: 2;
-    }
-
-    .message-content {
-      max-width: 60%;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .message.own .message-content {
-      align-items: flex-end;
-    }
-
-    .message-bubble {
-      background: white;
-      padding: 0.75rem 1rem;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      word-wrap: break-word;
-    }
-
-    .message.own .message-bubble {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-    }
-
-    .message-time {
-      font-size: 0.75rem;
-      color: #999;
-      margin-top: 0.25rem;
-    }
-
-    .message.own .message-time {
-      color: #bbb;
-    }
-
-    .message-read {
-      font-size: 0.75rem;
-      color: #667eea;
-      margin-top: 0.25rem;
-    }
-
-    .typing-indicator {
-      color: #999;
-      font-size: 0.9rem;
-      font-style: italic;
-      padding: 0.5rem 1rem;
-    }
-
-    .message-attachment {
-      margin-top: 0.5rem;
-      max-width: 100%;
-    }
-
-    .message-attachment img,
-    .message-attachment video {
-      max-width: 300px;
-      border-radius: 8px;
-    }
-
-    .input-area {
-      background: white;
-      padding: 1.5rem 2rem;
-      border-top: 1px solid #ddd;
-      display: flex;
-      gap: 1rem;
-      align-items: flex-end;
-    }
-
-    .input-group {
-      flex: 1;
-      display: flex;
-      gap: 0.5rem;
-      align-items: flex-end;
-    }
-
-    .message-input {
-      flex: 1;
-      padding: 0.75rem;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-family: inherit;
-      font-size: 1rem;
-      resize: none;
-      max-height: 100px;
-    }
-
-    .message-input:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .file-input-wrapper {
-      position: relative;
-    }
-
-    .file-input-wrapper input {
-      display: none;
-    }
-
-    .file-type-selector {
-      position: relative;
-      display: inline-block;
-    }
-
-    .file-type-dropdown {
-      position: absolute;
-      top: -150px;
-      left: 0;
-      background: white;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-      z-index: 1000;
-      min-width: 150px;
-      display: none;
-    }
-
-    .file-type-dropdown.show {
-      display: block;
-    }
-
-    .file-type-option {
-      padding: 0.75rem 1rem;
-      cursor: pointer;
-      transition: background 0.2s;
-      border-bottom: 1px solid #eee;
-    }
-
-    .file-type-option:last-child {
-      border-bottom: none;
-    }
-
-    .file-type-option:hover {
-      background: #f5f5f5;
-    }
-
-    .file-btn {
-      width: 40px;
-      height: 40px;
-      padding: 0;
-      background: #667eea;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 1.2rem;
-      transition: all 0.3s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-    }
-
-    .file-btn:hover {
-      background: #764ba2;
-    }
-
-    .action-btn {
-      width: 40px;
-      height: 40px;
-      padding: 0;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 1.2rem;
-      transition: all 0.3s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .action-btn:hover {
-      transform: scale(1.05);
-    }
-
-    .send-btn {
-      display: none;
-    }
-
-    .send-btn.active {
-      display: flex;
-    }
-
-    .mic-btn {
-      display: flex;
-    }
-
-    .mic-btn.hidden {
-      display: none;
-    }
-
-    .typing-container {
-      padding: 0.5rem 1rem;
-      font-size: 0.9rem;
-      color: #999;
-      font-style: italic;
-      min-height: 1.5rem;
+    .message-enter {
+      animation: slideIn 0.18s ease;
     }
 
     .typing-dot {
       display: inline-block;
       width: 8px;
       height: 8px;
-      border-radius: 50%;
-      background: #999;
+      border-radius: 9999px;
+      background: #94a3b8;
       margin-right: 4px;
       animation: typing 1.4s infinite;
     }
@@ -383,170 +50,121 @@
       animation-delay: 0.4s;
     }
 
-    @keyframes typing {
-      0%, 60%, 100% {
-        opacity: 0.3;
-        transform: translateY(0);
-      }
-      30% {
-        opacity: 1;
-        transform: translateY(-10px);
-      }
+    @keyframes equalize {
+      0%, 100% { transform: scaleY(0.35); }
+      50% { transform: scaleY(1); }
     }
 
-    .recording-indicator {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1rem;
-      background: #fff3cd;
-      border: 1px solid #ffc107;
-      border-radius: 4px;
-      color: #856404;
-      font-size: 0.9rem;
+    .audio-bar {
+      transform-origin: center bottom;
     }
 
-    .recording-dot {
-      width: 10px;
-      height: 10px;
-      background: #dc3545;
-      border-radius: 50%;
-      animation: pulse 1s infinite;
+    .audio-player.is-playing .audio-bar {
+      animation: equalize 0.9s ease-in-out infinite;
     }
 
-    @keyframes pulse {
-      0%, 100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.5;
-      }
+    .audio-player.is-playing .audio-bar:nth-child(2n) {
+      animation-duration: 1.05s;
     }
 
-    .user-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: white;
-      color: #667eea;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 0.9rem;
-    }
-
-    .back-btn {
-      padding: 0.5rem 1rem;
-      background: rgba(255,255,255,0.2);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      text-decoration: none;
-    }
-
-    .back-btn:hover {
-      background: rgba(255,255,255,0.3);
+    .audio-player.is-playing .audio-bar:nth-child(3n) {
+      animation-duration: 0.8s;
     }
   </style>
 </head>
-<body>
-  <nav class="navbar">
-    <h1>💬 Chat Taiksu</h1>
-    <div class="navbar-links">
-      <% if (user) { %>
-        <span><%= user.name %></span>
-        <div class="user-avatar"><%= user.name.charAt(0).toUpperCase() %></div>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/chat/rooms">Chat</a>
-        <a href="/auth/logout">Sair</a>
-      <% } %>
+<body class="flex h-dvh min-h-dvh flex-col overflow-hidden bg-slate-100 text-slate-800">
+  <nav class="bg-gradient-to-r from-emerald-600 to-emerald-700 px-3 py-3 text-white shadow-sm sm:px-5">
+    <div class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2">
+      <h1 class="text-base font-bold sm:text-lg">Chat Taiksu</h1>
+      <div class="flex flex-wrap items-center justify-end gap-2 text-sm">
+        <% if (user) { %>
+          <span class="hidden text-emerald-50 sm:inline"><%= user.name %></span>
+          <div class="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-bold text-emerald-700"><%= user.name.charAt(0).toUpperCase() %></div>
+          <a href="/dashboard" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Dashboard</a>
+          <a href="/chat/rooms" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Chat</a>
+          <a href="/auth/logout" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Sair</a>
+        <% } %>
+      </div>
     </div>
   </nav>
 
-  <div class="chat-container">
-    <div style="flex: 1; display: flex; flex-direction: column;">
-      <div class="chat-header">
-        <div>
-          <a href="/chat/rooms" class="back-btn">← Voltar</a>
-          <h2><%= room.name %></h2>
-          <p style="color: #999; font-size: 0.9rem;"><%= room.description %></p>
+  <div class="flex min-h-0 flex-1">
+    <div class="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col">
+      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white px-3 py-3 sm:px-4 sm:py-4">
+        <div class="min-w-0">
+          <a href="/chat/rooms" class="inline-block rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-200">Voltar</a>
+          <h2 class="mt-2 truncate text-base font-bold text-emerald-700 sm:text-lg"><%= room.name %></h2>
+          <p class="truncate text-xs text-slate-500 sm:text-sm"><%= room.description %></p>
         </div>
-        <div class="participants-list">
+
+        <div class="hidden items-center gap-2 sm:flex">
           <% participants.forEach(p => { %>
-            <div class="participant">
-              <div class="avatar <%= p.status === 'online' ? '' : 'offline' %>">
-                <%= p.name.charAt(0).toUpperCase() %>
-                <div class="status"></div>
-              </div>
+            <div class="relative flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white <%= p.status === 'online' ? 'bg-emerald-600' : 'bg-slate-400' %>">
+              <%= p.name.charAt(0).toUpperCase() %>
+              <span class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-white <%= p.status === 'online' ? 'bg-emerald-400' : 'bg-slate-300' %>"></span>
             </div>
           <% }); %>
         </div>
       </div>
 
-      <div class="messages-area" id="messagesArea">
-        <% messages.forEach(msg => { %>
-          <div class="message <%= msg.user_id === user.id ? 'own' : '' %>" data-id="<%= msg.id %>">
-            <div class="message-avatar" title="<%= msg.name %>">
+      <div class="messages-area flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-3 sm:px-4 md:px-6" id="messagesArea">
+        <% messages.forEach(msg => { const isOwn = String(msg.user_id) === String(user.id); %>
+          <div class="message message-enter <%= isOwn ? 'own justify-end' : '' %> mb-1 flex items-end gap-2 sm:gap-3" data-id="<%= msg.id %>" data-user-id="<%= msg.user_id %>">
+            <div class="message-avatar <%= isOwn ? 'order-2 bg-emerald-700' : 'bg-emerald-600' %> flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white" title="<%= msg.name %>">
               <%= msg.name.charAt(0).toUpperCase() %>
             </div>
-            <div class="message-content">
-              <div class="message-bubble">
+            <div class="message-content <%= isOwn ? 'items-end text-right' : 'items-start text-left' %> flex max-w-[84%] min-w-0 flex-col sm:max-w-[70%]">
+              <div class="message-sender mb-0.5 text-xs font-semibold text-slate-600">
+                <%= isOwn ? 'Voce' : msg.name %>
+              </div>
+              <div class="message-bubble <%= isOwn ? 'bg-emerald-700 text-white border border-emerald-800' : 'bg-emerald-100 text-emerald-900 border border-emerald-200' %> rounded-2xl px-3 py-2 text-sm leading-relaxed break-words">
                 <% if (msg.type === 'text') { %>
                   <%= msg.content %>
                 <% } else if (msg.type === 'image') { %>
-                  <img src="<%= msg.file_url %>" alt="Imagem" class="message-attachment">
+                  <img src="<%= msg.file_url %>" alt="Imagem" class="message-attachment max-w-full rounded-lg sm:max-w-[300px]">
                 <% } else if (msg.type === 'video') { %>
-                  <video controls class="message-attachment" src="<%= msg.file_url %>"></video>
+                  <video controls class="message-attachment max-w-full rounded-lg sm:max-w-[300px]" src="<%= msg.file_url %>"></video>
                 <% } else if (msg.type === 'audio') { %>
-                  <audio controls class="message-attachment" src="<%= msg.file_url %>"></audio>
+                  <audio controls preload="metadata" class="message-attachment block w-[240px] max-w-full sm:w-[300px]" src="<%= msg.file_url %>">
+                    Seu navegador não suporta áudio embutido.
+                  </audio>
                 <% } else { %>
-                  <a href="<%= msg.file_url %>" download>📎 <%= msg.file_type %></a>
+                  <a href="<%= msg.file_url %>" download class="text-emerald-700 underline">Arquivo: <%= msg.file_type %></a>
                 <% } %>
               </div>
-              <div class="message-time">
+              <div class="message-time mt-1 text-[11px] text-slate-400">
                 <%= new Date(msg.created_at).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'}) %>
               </div>
               <% if (msg.is_read) { %>
-                <div class="message-read">✓ Lido</div>
+                <div class="message-read mt-0.5 text-[11px] text-emerald-600">Lido</div>
               <% } %>
             </div>
           </div>
         <% }); %>
       </div>
 
-      <div class="input-area">
-        <div class="input-group">
-          <div class="file-input-wrapper">
-            <div class="file-type-selector">
-              <button class="file-btn" id="fileBtn" onclick="toggleFileTypeDropdown()" title="Selecionar tipo de arquivo">
-                📎
-              </button>
-              <div class="file-type-dropdown" id="fileTypeDropdown">
-                <div class="file-type-option" onclick="setFileType('image'); document.getElementById('fileInput').click();">
-                  📷 FOTO
-                </div>
-                <div class="file-type-option" onclick="setFileType('video'); document.getElementById('fileInput').click();">
-                  🎥 VÍDEO
-                </div>
-                <div class="file-type-option" onclick="setFileType('audio'); document.getElementById('fileInput').click();">
-                  🎵 ÁUDIO
-                </div>
-                <div class="file-type-option" onclick="setFileType('document'); document.getElementById('fileInput').click();">
-                  📄 DOCUMENTO
-                </div>
-              </div>
+      <div class="border-t border-slate-200 bg-white px-3 py-3 sm:px-4" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));">
+        <div class="flex min-w-0 items-end gap-2">
+          <div class="relative">
+            <button class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-lg text-white transition hover:bg-emerald-700" id="fileBtn" onclick="toggleFileTypeDropdown()" title="Selecionar tipo de arquivo" type="button">
+              +
+            </button>
+            <div class="absolute bottom-12 left-0 z-20 hidden min-w-40 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg" id="fileTypeDropdown">
+              <button class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('image'); document.getElementById('fileInput').click();" type="button">Foto</button>
+              <button class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('video'); document.getElementById('fileInput').click();" type="button">Video</button>
+              <button class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('audio'); document.getElementById('fileInput').click();" type="button">Audio</button>
+              <button class="block w-full px-4 py-2 text-left text-sm text-slate-700 transition hover:bg-slate-100" onclick="setFileType('document'); document.getElementById('fileInput').click();" type="button">Documento</button>
             </div>
-            <input type="file" id="fileInput" onchange="sendFile(this)">
+            <input type="file" id="fileInput" class="hidden" onchange="sendFile(this)">
           </div>
-          <textarea class="message-input" id="messageInput" placeholder="Digite sua mensagem..." 
-            onkeypress="handleKeyPress(event)" onkeyup="updateActionButton()" onkeydown="setTypingStatus(true)"></textarea>
-          <button class="action-btn send-btn" id="sendBtn" onclick="sendMessage()" title="Enviar mensagem">
-            ✈️
+
+          <textarea class="message-input min-h-11 max-h-28 w-full resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-700 outline-none ring-0 placeholder:text-slate-400 focus:border-emerald-500 focus:shadow-[0_0_0_3px_rgba(16,185,129,0.15)]" id="messageInput" placeholder="Digite sua mensagem..." onkeypress="handleKeyPress(event)" onkeyup="updateActionButton()" onkeydown="setTypingStatus(true)"></textarea>
+
+          <button class="hidden h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-white transition hover:bg-emerald-700" id="sendBtn" onclick="sendMessage()" title="Enviar mensagem" type="button">
+            >
           </button>
-          <button class="action-btn mic-btn" id="micBtn" title="Mensagem de voz">
-            🎤
+          <button class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-600 text-white transition hover:bg-emerald-700" id="micBtn" title="Mensagem de voz" type="button">
+            Mic
           </button>
         </div>
       </div>
@@ -562,20 +180,29 @@
     let audioChunks = [];
     let isRecording = false;
     let typingTimeout = null;
+    let typingIsActive = false;
+    let chatEventSource = null;
+    let reconnectTimeout = null;
+    const renderedMessageIds = new Set();
 
-    // Inicializar botão de ação
     document.addEventListener('DOMContentLoaded', () => {
+      initRenderedMessageIds();
       updateActionButton();
       setupMicrophoneButton();
     });
 
-    // Configurar o botão do microfone
+    function initRenderedMessageIds() {
+      document.querySelectorAll('.message[data-id]').forEach((el) => {
+        const id = el.getAttribute('data-id');
+        if (id) renderedMessageIds.add(String(id));
+      });
+    }
+
     function setupMicrophoneButton() {
       const micBtn = document.getElementById('micBtn');
       micBtn.addEventListener('click', toggleAudioRecording);
     }
 
-    // Alternar gravação de áudio
     async function toggleAudioRecording() {
       if (!isRecording) {
         try {
@@ -598,7 +225,7 @@
           showRecordingIndicator();
         } catch (error) {
           console.error('Erro ao acessar microfone:', error);
-          alert('Não foi possível acessar o microfone');
+          alert('Nao foi possivel acessar o microfone');
         }
       } else {
         mediaRecorder.stop();
@@ -607,26 +234,23 @@
       }
     }
 
-    // Mostrar indicador de gravação
     function showRecordingIndicator() {
       const input = document.getElementById('messageInput');
       const indicator = document.createElement('div');
-      indicator.className = 'recording-indicator';
+      indicator.className = 'recording-indicator flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800';
       indicator.id = 'recordingIndicator';
-      indicator.innerHTML = '<div class="recording-dot"></div> Gravando áudio...';
+      indicator.innerHTML = '<span class="inline-flex h-2.5 w-2.5 animate-pulse rounded-full bg-red-500"></span> Gravando audio...';
       input.parentElement.insertBefore(indicator, input);
-      input.style.display = 'none';
+      input.classList.add('hidden');
     }
 
-    // Esconder indicador de gravação
     function hideRecordingIndicator() {
       const indicator = document.getElementById('recordingIndicator');
       const input = document.getElementById('messageInput');
       if (indicator) indicator.remove();
-      input.style.display = 'flex';
+      input.classList.remove('hidden');
     }
 
-    // Enviar áudio
     function sendAudio(audioBlob) {
       const formData = new FormData();
       formData.append('roomId', roomId);
@@ -640,47 +264,43 @@
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          console.log('Áudio enviado com sucesso');
+          console.log('Audio enviado com sucesso');
         }
       })
-      .catch(error => console.error('Erro ao enviar áudio:', error));
+      .catch(error => console.error('Erro ao enviar audio:', error));
     }
 
-    // Alternar dropdown de tipo de arquivo
     function toggleFileTypeDropdown() {
       const dropdown = document.getElementById('fileTypeDropdown');
-      dropdown.classList.toggle('show');
+      dropdown.classList.toggle('hidden');
       document.addEventListener('click', closeDropdownOnClickOutside);
     }
 
     function closeDropdownOnClickOutside(e) {
       const dropdown = document.getElementById('fileTypeDropdown');
       const fileBtn = document.getElementById('fileBtn');
-      
+
       if (!dropdown.contains(e.target) && !fileBtn.contains(e.target)) {
-        dropdown.classList.remove('show');
+        dropdown.classList.add('hidden');
         document.removeEventListener('click', closeDropdownOnClickOutside);
       }
     }
 
-    // Definir tipo de arquivo selecionado
     function setFileType(type) {
       selectedFileType = type;
       const fileInput = document.getElementById('fileInput');
-      
-      // Definir accept attribute baseado no tipo
+
       const acceptMap = {
-        'image': 'image/*',
-        'video': 'video/*',
-        'audio': 'audio/*',
-        'document': '.pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx,.zip'
+        image: 'image/*',
+        video: 'video/*',
+        audio: 'audio/*',
+        document: '.pdf,.doc,.docx,.txt,.xls,.xlsx,.ppt,.pptx,.zip'
       };
-      
+
       fileInput.accept = acceptMap[type] || '*';
-      document.getElementById('fileTypeDropdown').classList.remove('show');
+      document.getElementById('fileTypeDropdown').classList.add('hidden');
     }
 
-    // Atualizar botão de ação (microfone ou seta de envio)
     function updateActionButton() {
       const input = document.getElementById('messageInput');
       const sendBtn = document.getElementById('sendBtn');
@@ -688,23 +308,50 @@
       const hasText = input.value.trim().length > 0;
 
       if (hasText) {
-        sendBtn.classList.add('active');
+        sendBtn.classList.remove('hidden');
+        sendBtn.classList.add('flex');
         micBtn.classList.add('hidden');
+        micBtn.classList.remove('flex');
       } else {
-        sendBtn.classList.remove('active');
+        sendBtn.classList.add('hidden');
+        sendBtn.classList.remove('flex');
         micBtn.classList.remove('hidden');
+        micBtn.classList.add('flex');
       }
     }
 
-    // Conectar ao SSE
+    function normalizeMessage(message) {
+      if (!message) return null;
+      return {
+        ...message,
+        id: message.id,
+        user_id: message.user_id ?? message.userId,
+        room_id: message.room_id ?? message.roomId,
+        file_url: message.file_url ?? message.fileUrl ?? null,
+        file_type: message.file_type ?? message.fileType ?? null,
+        created_at: message.created_at ?? message.createdAt ?? new Date().toISOString()
+      };
+    }
+
     function connectSSE() {
-      const eventSource = new EventSource(`/api/messages/stream/${roomId}`);
-      
-      eventSource.onmessage = (event) => {
+      if (chatEventSource) {
+        chatEventSource.close();
+      }
+
+      chatEventSource = new EventSource(`/api/messages/stream/${roomId}`);
+
+      chatEventSource.onopen = () => {
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout);
+          reconnectTimeout = null;
+        }
+      };
+
+      chatEventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
 
         if (data.type === 'new_message') {
-          addMessageToDOM(data.message);
+          addMessageToDOM(normalizeMessage(data.message));
           markAllAsRead();
         } else if (data.type === 'typing_status') {
           updateTypingStatus(data);
@@ -713,9 +360,18 @@
         }
       };
 
-      eventSource.onerror = () => {
-        console.log('Reconectando ao servidor...');
-        setTimeout(connectSSE, 3000);
+      chatEventSource.onerror = () => {
+        if (chatEventSource) {
+          chatEventSource.close();
+          chatEventSource = null;
+        }
+
+        if (!reconnectTimeout) {
+          reconnectTimeout = setTimeout(() => {
+            reconnectTimeout = null;
+            connectSSE();
+          }, 3000);
+        }
       };
     }
 
@@ -780,41 +436,64 @@
       }
     }
 
+    function getMessageBubbleClass(isOwn) {
+      return `message-bubble rounded-2xl px-3 py-2 text-sm leading-relaxed break-words ${isOwn ? 'border border-emerald-800 bg-emerald-700 text-white' : 'border border-emerald-200 bg-emerald-100 text-emerald-900'}`;
+    }
+
+    function getMessageContentClass(isOwn) {
+      return `message-content flex min-w-0 max-w-[84%] flex-col sm:max-w-[70%] ${isOwn ? 'items-end text-right' : 'items-start text-left'}`;
+    }
+
+    function getMessageAvatarClass(isOwn) {
+      return `message-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${isOwn ? 'order-2 bg-emerald-700' : 'bg-emerald-600'}`;
+    }
+
     function addMessageToDOM(message) {
+      message = normalizeMessage(message);
+      if (!message) return;
+
+      if (message?.id && renderedMessageIds.has(String(message.id))) {
+        return;
+      }
+
       const area = document.getElementById('messagesArea');
-      const isOwn = message.user_id === userId;
+      const isOwn = String(message.user_id) === String(userId);
       let contentHTML = '';
 
-      // Renderizar conteúdo baseado no tipo
       if (message.type === 'text') {
         contentHTML = escapeHtml(message.content);
       } else if (message.type === 'image') {
-        contentHTML = `<img src="${message.file_url}" alt="Imagem" style="max-width: 300px; border-radius: 8px;">`;
+        contentHTML = `<img src="${message.file_url}" alt="Imagem" class="max-w-full rounded-lg sm:max-w-[300px]">`;
       } else if (message.type === 'video') {
-        contentHTML = `<video controls style="max-width: 300px; border-radius: 8px;" src="${message.file_url}"></video>`;
+        contentHTML = `<video controls class="max-w-full rounded-lg sm:max-w-[300px]" src="${message.file_url}"></video>`;
       } else if (message.type === 'audio') {
-        contentHTML = `<audio controls style="width: 100%; max-width: 300px;" src="${message.file_url}"></audio>`;
+        contentHTML = `<audio controls preload="metadata" class="block w-[240px] max-w-full sm:w-[300px]" src="${message.file_url}">Seu navegador não suporta áudio embutido.</audio>`;
       } else {
-        contentHTML = `<a href="${message.file_url}" download style="color: #667eea; text-decoration: none;">📎 ${message.file_type || 'Documento'}</a>`;
+        contentHTML = `<a href="${message.file_url}" download class="text-emerald-700 underline">Arquivo: ${message.file_type || 'Documento'}</a>`;
       }
 
+      const senderName = isOwn ? 'Voce' : (message.name || 'Usuario');
+      const createdAt = message.created_at ? new Date(message.created_at) : new Date();
+      const timeStr = createdAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
       const msgHTML = `
-        <div class="message ${isOwn ? 'own' : ''}" data-id="${message.id}">
-          <div class="message-avatar" title="${message.name}">
-            ${message.name.charAt(0).toUpperCase()}
+        <div class="message message-enter ${isOwn ? 'own justify-end' : ''} mb-1 flex items-end gap-2 sm:gap-3" data-id="${message.id || ''}" data-user-id="${message.user_id}">
+          <div class="${getMessageAvatarClass(isOwn)}" title="${escapeHtml(message.name || '')}">
+            ${(message.name ? message.name.charAt(0).toUpperCase() : '?')}
           </div>
-          <div class="message-content">
-            <div class="message-bubble">
-              ${contentHTML}
-            </div>
-            <div class="message-time">
-              ${new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
-            </div>
+          <div class="${getMessageContentClass(isOwn)}">
+            <div class="message-sender mb-0.5 text-xs font-semibold text-slate-600">${escapeHtml(senderName)}</div>
+            <div class="${getMessageBubbleClass(isOwn)}">${contentHTML}</div>
+            <div class="message-time mt-1 text-[11px] text-slate-400">${timeStr}</div>
           </div>
         </div>
       `;
-
       area.insertAdjacentHTML('beforeend', msgHTML);
+
+      if (message?.id) {
+        renderedMessageIds.add(String(message.id));
+      }
+
       area.scrollTop = area.scrollHeight;
     }
 
@@ -824,52 +503,54 @@
     }
 
     function markAllAsRead() {
-      // Implementar marcação de leitura
+      // Implementar marcacao de leitura
     }
 
     function setTypingStatus(isTyping) {
-      // Limpar timeout anterior
-      if (typingTimeout) clearTimeout(typingTimeout);
-
-      fetch(`/api/messages/typing/${roomId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isTyping })
-      });
-
-      // Parar de enviar status após alguns segundos
-      if (isTyping) {
-        typingTimeout = setTimeout(() => {
-          fetch(`/api/messages/typing/${roomId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isTyping: false })
-          });
-        }, 3000);
+      if (!isTyping) {
+        if (!typingIsActive) return;
+        typingIsActive = false;
+        if (typingTimeout) clearTimeout(typingTimeout);
+        fetch(`/api/messages/typing/${roomId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isTyping: false })
+        });
+        return;
       }
+
+      if (!typingIsActive) {
+        typingIsActive = true;
+        fetch(`/api/messages/typing/${roomId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ isTyping: true })
+        });
+      }
+
+      if (typingTimeout) clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        setTypingStatus(false);
+      }, 1500);
     }
 
     function updateTypingStatus(data) {
-      if (data.userId === userId) return;
-      
+      if (String(data.userId) === String(userId)) return;
+
       const container = document.getElementById('typingContainer');
-      
+
       if (data.isTyping) {
-        // Mostrar indicador de digitação
         if (!container) {
           const area = document.getElementById('messagesArea');
           const typingDiv = document.createElement('div');
           typingDiv.id = 'typingContainer';
-          typingDiv.className = 'typing-container';
-          typingDiv.innerHTML = `<strong>${data.userName}</strong> está digitando <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>`;
+          typingDiv.className = 'mt-1 flex items-center gap-1 text-xs italic text-slate-500';
+          typingDiv.innerHTML = `<strong class="not-italic text-slate-600">${escapeHtml(data.userName || 'Usuario')}</strong> digitando <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>`;
           area.appendChild(typingDiv);
           area.scrollTop = area.scrollHeight;
         }
-      } else {
-        // Esconder indicador de digitação
-        if (container) {
-          container.remove();
-        }
+      } else if (container) {
+        container.remove();
       }
     }
 
@@ -879,10 +560,18 @@
       return div.innerHTML;
     }
 
-    // Inicializar conexão SSE
-    connectSSE();
+    window.addEventListener('beforeunload', () => {
+      if (chatEventSource) {
+        chatEventSource.close();
+        chatEventSource = null;
+      }
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
+      }
+    });
 
-    // Scroll para o final
+    connectSSE();
     document.getElementById('messagesArea').scrollTop = document.getElementById('messagesArea').scrollHeight;
   </script>
 </body>

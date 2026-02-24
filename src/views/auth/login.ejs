@@ -4,142 +4,31 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1rem;
-    }
-
-    .auth-container {
-      background: white;
-      padding: 2rem;
-      border-radius: 8px;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-      width: 100%;
-      max-width: 400px;
-    }
-
-    .auth-container h2 {
-      color: #667eea;
-      margin-bottom: 1.5rem;
-      text-align: center;
-      font-size: 1.8rem;
-    }
-
-    .form-group {
-      margin-bottom: 1.5rem;
-    }
-
-    .form-group label {
-      display: block;
-      margin-bottom: 0.5rem;
-      color: #333;
-      font-weight: 500;
-    }
-
-    .form-group input {
-      width: 100%;
-      padding: 0.75rem;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-size: 1rem;
-    }
-
-    .form-group input:focus {
-      outline: none;
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    button {
-      width: 100%;
-      padding: 0.75rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
-    }
-
-    .auth-link {
-      text-align: center;
-      margin-top: 1.5rem;
-      color: #666;
-    }
-
-    .auth-link a {
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 600;
-    }
-
-    .auth-link a:hover {
-      text-decoration: underline;
-    }
-
-    .error {
-      color: #e74c3c;
-      padding: 0.75rem;
-      background: #fadbd8;
-      border-radius: 4px;
-      margin-bottom: 1rem;
-      font-size: 0.9rem;
-    }
-
-    .success {
-      color: #27ae60;
-      padding: 0.75rem;
-      background: #d5f4e6;
-      border-radius: 4px;
-      margin-bottom: 1rem;
-      font-size: 0.9rem;
-    }
-  </style>
+  <link rel="stylesheet" href="/css/tailwind.css">
 </head>
-<body>
-  <div class="auth-container">
-    <h2>🔐 Login</h2>
+<body class="flex min-h-dvh items-center justify-center bg-[radial-gradient(circle_at_top,#6366f1_0%,#4f46e5_40%,#0f172a_100%)] p-4">
+  <main class="w-full max-w-md rounded-2xl border border-white/20 bg-white p-6 shadow-2xl">
+    <h1 class="mb-5 text-center text-2xl font-bold text-indigo-700">Login</h1>
 
     <% if (message) { %>
-      <div class="error"><%= message %></div>
+      <div class="mb-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"><%= message %></div>
     <% } %>
 
-    <form method="POST" action="/auth/login">
-      <div class="form-group">
-        <label for="email">Email</label>
-        <input type="email" id="email" name="email" required placeholder="seu@email.com">
+    <form method="POST" action="/auth/login" class="space-y-4">
+      <div>
+        <label for="email" class="mb-1 block text-sm font-semibold text-slate-700">Email</label>
+        <input type="email" id="email" name="email" required placeholder="seu@email.com" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
       </div>
 
-      <div class="form-group">
-        <label for="password">Senha</label>
-        <input type="password" id="password" name="password" required placeholder="Sua senha">
+      <div>
+        <label for="password" class="mb-1 block text-sm font-semibold text-slate-700">Senha</label>
+        <input type="password" id="password" name="password" required placeholder="Sua senha" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:shadow-[0_0_0_3px_rgba(79,70,229,0.12)]">
       </div>
 
-      <button type="submit">Entrar</button>
+      <button type="submit" class="w-full rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700">Entrar</button>
     </form>
 
-    <div class="auth-link">
-      Não tem uma conta? <a href="/auth/register">Registre-se aqui</a>
-    </div>
-  </div>
+    <p class="mt-5 text-center text-sm text-slate-600">Nao tem conta? <a href="/auth/register" class="font-semibold text-indigo-700 hover:underline">Registre-se aqui</a></p>
+  </main>
 </body>
 </html>

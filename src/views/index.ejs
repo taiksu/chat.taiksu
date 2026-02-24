@@ -4,144 +4,46 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
-  <link rel="stylesheet" href="/css/style.css">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .container {
-      max-width: 1200px;
-      width: 100%;
-      padding: 2rem;
-    }
-
-    .hero {
-      text-align: center;
-      color: white;
-      margin-bottom: 3rem;
-    }
-
-    .hero h1 {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-      font-weight: 700;
-    }
-
-    .hero p {
-      font-size: 1.2rem;
-      margin-bottom: 2rem;
-      opacity: 0.9;
-    }
-
-    .cta-buttons {
-      display: flex;
-      gap: 1rem;
-      justify-content: center;
-    }
-
-    .cta-buttons a {
-      display: inline-block;
-      padding: 1rem 2rem;
-      background: white;
-      color: #667eea;
-      text-decoration: none;
-      border-radius: 4px;
-      font-weight: 600;
-      transition: all 0.3s;
-    }
-
-    .cta-buttons a:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-    }
-
-    .features {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 2rem;
-      margin-top: 4rem;
-    }
-
-    .feature-card {
-      background: white;
-      padding: 2rem;
-      border-radius: 8px;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-      text-align: center;
-    }
-
-    .feature-card h3 {
-      color: #667eea;
-      margin-bottom: 1rem;
-      font-size: 1.5rem;
-    }
-
-    .feature-card p {
-      color: #666;
-      line-height: 1.6;
-    }
-
-    .icon {
-      font-size: 2.5rem;
-      margin-bottom: 1rem;
-    }
-  </style>
+  <link rel="stylesheet" href="/css/tailwind.css">
 </head>
-<body>
-  <div class="container">
-    <div class="hero">
-      <h1>💬 Chat Taiksu</h1>
-      <p>A Plataforma Completa de Chat para Suporte ao Cliente</p>
-      <div class="cta-buttons">
-        <a href="/auth/login">Fazer Login</a>
-        <a href="/auth/register">Criar Conta</a>
+<body class="min-h-dvh bg-[radial-gradient(circle_at_top,#7c3aed_0%,#4f46e5_45%,#111827_100%)] text-white">
+  <main class="mx-auto flex w-full max-w-6xl flex-col gap-10 px-4 py-8 sm:px-6 lg:px-10 lg:py-14">
+    <section class="text-center">
+      <p class="mb-4 inline-flex rounded-full border border-white/20 bg-white/10 px-4 py-1 text-xs font-semibold tracking-[0.2em] uppercase">Chat de ajuda</p>
+      <h1 class="text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">Chat Taiksu</h1>
+      <p class="mx-auto mt-4 max-w-2xl text-sm text-white/85 sm:text-lg">Plataforma de atendimento em tempo real para suporte ao cliente com mensagens, mídia e métricas.</p>
+      <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+        <a href="/auth/login" class="rounded-xl bg-emerald-400 px-6 py-3 text-sm font-semibold text-emerald-950 shadow-lg shadow-emerald-950/25 transition hover:-translate-y-0.5 hover:bg-emerald-300">Fazer login</a>
+        <a href="/auth/register" class="rounded-xl border border-white/35 bg-white/10 px-6 py-3 text-sm font-semibold backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white/20">Criar conta</a>
       </div>
-    </div>
+    </section>
 
-    <div class="features">
-      <div class="feature-card">
-        <div class="icon">🚀</div>
-        <h3>Tempo Real</h3>
-        <p>Chat em tempo real com SSE para atualizações instantâneas</p>
-      </div>
-      <div class="feature-card">
-        <div class="icon">📊</div>
-        <h3>Dashboard</h3>
-        <p>Métricas e gráficos de uso para análise de desempenho</p>
-      </div>
-      <div class="feature-card">
-        <div class="icon">📁</div>
-        <h3>Compartilhamento</h3>
-        <p>Envie mensagens, áudio, vídeo, fotos e documentos</p>
-      </div>
-      <div class="feature-card">
-        <div class="icon">⌨️</div>
-        <h3>Digitação</h3>
-        <p>Indicador de quando alguém está digitando</p>
-      </div>
-      <div class="feature-card">
-        <div class="icon">✅</div>
-        <h3>Leitura</h3>
-        <p>Saiba quando suas mensagens foram lidas</p>
-      </div>
-      <div class="feature-card">
-        <div class="icon">🎨</div>
-        <h3>Widget</h3>
-        <p>Widget JavaScript embutível nas suas aplicações</p>
-      </div>
-    </div>
-  </div>
+    <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
+        <h2 class="text-lg font-bold">Tempo real</h2>
+        <p class="mt-2 text-sm text-white/80">Mensagens instantâneas via SSE com atualização contínua.</p>
+      </article>
+      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
+        <h2 class="text-lg font-bold">Dashboard</h2>
+        <p class="mt-2 text-sm text-white/80">Métricas para acompanhar uso, salas e mensagens.</p>
+      </article>
+      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
+        <h2 class="text-lg font-bold">Mídia</h2>
+        <p class="mt-2 text-sm text-white/80">Envio de áudio, vídeo, imagens e documentos no chat.</p>
+      </article>
+      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
+        <h2 class="text-lg font-bold">Status de digitação</h2>
+        <p class="mt-2 text-sm text-white/80">Sinaliza quando alguém está digitando em tempo real.</p>
+      </article>
+      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
+        <h2 class="text-lg font-bold">Leitura</h2>
+        <p class="mt-2 text-sm text-white/80">Confirmação de leitura para melhorar o fluxo de suporte.</p>
+      </article>
+      <article class="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
+        <h2 class="text-lg font-bold">Widget</h2>
+        <p class="mt-2 text-sm text-white/80">Integração com sites e apps via widget JavaScript.</p>
+      </article>
+    </section>
+  </main>
 </body>
 </html>

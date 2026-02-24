@@ -47,13 +47,13 @@ class ChatController {
         });
       }
 
-      const participants = await ChatRoom.getParticipants(roomId);
-      const messages = await Message.findByRoomId(roomId, 100);
-
       // Adicionar usuário como participante
       if (req.session.user) {
         await ChatRoom.addParticipant(roomId, req.session.user.id);
       }
+
+      const participants = await ChatRoom.getParticipants(roomId);
+      const messages = await Message.findByRoomId(roomId, 100);
 
       res.render('chat/room', {
         title: `${room.name} - Chat Taiksu`,

@@ -4,241 +4,61 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #f5f5f5;
-      color: #333;
-    }
-
-    .navbar {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 1rem 2rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
-
-    .navbar h1 {
-      font-size: 1.5rem;
-      font-weight: 700;
-    }
-
-    .navbar-links {
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-    }
-
-    .navbar a {
-      color: white;
-      text-decoration: none;
-      padding: 0.5rem 1rem;
-      border: none;
-      background: rgba(255,255,255,0.2);
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.3s;
-    }
-
-    .navbar a:hover {
-      background: rgba(255,255,255,0.3);
-    }
-
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 2rem;
-    }
-
-    .rooms-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 1.5rem;
-    }
-
-    .room-card {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      overflow: hidden;
-      transition: all 0.3s;
-      cursor: pointer;
-    }
-
-    .room-card:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 5px 20px rgba(0,0,0,0.15);
-    }
-
-    .room-header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 1.5rem;
-    }
-
-    .room-name {
-      font-size: 1.3rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-    }
-
-    .room-description {
-      font-size: 0.9rem;
-      opacity: 0.9;
-    }
-
-    .room-body {
-      padding: 1.5rem;
-    }
-
-    .room-info {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 1rem;
-      font-size: 0.9rem;
-    }
-
-    .room-info span {
-      color: #666;
-    }
-
-    .room-badge {
-      display: inline-block;
-      background: #667eea;
-      color: white;
-      padding: 0.25rem 0.75rem;
-      border-radius: 20px;
-      font-size: 0.8rem;
-      font-weight: 600;
-    }
-
-    .room-badge.unread {
-      background: #e74c3c;
-    }
-
-    .participants {
-      display: flex;
-      margin-bottom: 1rem;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-
-    .participant-avatar {
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      background: #667eea;
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.75rem;
-      font-weight: bold;
-    }
-
-    .btn {
-      width: 100%;
-      padding: 0.75rem;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: 600;
-      transition: all 0.3s;
-    }
-
-    .btn:hover {
-      transform: translateY(-2px);
-    }
-
-    .create-room-btn {
-      margin-bottom: 2rem;
-      padding: 0.75rem 1.5rem;
-      width: auto;
-    }
-
-    .user-avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      background: white;
-      color: #667eea;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 0.9rem;
-    }
-
-    h2 {
-      color: #667eea;
-      margin-bottom: 2rem;
-    }
-  </style>
+  <link rel="stylesheet" href="/css/tailwind.css">
 </head>
-<body>
-  <nav class="navbar">
-    <h1>💬 Chat Taiksu</h1>
-    <div class="navbar-links">
-      <% if (user) { %>
-        <span><%= user.name %></span>
-        <div class="user-avatar"><%= user.name.charAt(0).toUpperCase() %></div>
-        <a href="/dashboard">Dashboard</a>
-        <a href="/chat/rooms">Chat</a>
-        <a href="/auth/logout">Sair</a>
-      <% } %>
+<body class="min-h-dvh bg-slate-100 text-slate-800">
+  <nav class="bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-3 text-white shadow-sm sm:px-5">
+    <div class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2">
+      <h1 class="text-base font-bold sm:text-lg">Chat Taiksu</h1>
+      <div class="flex flex-wrap items-center justify-end gap-2 text-sm">
+        <% if (user) { %>
+          <span class="hidden text-indigo-100 sm:inline"><%= user.name %></span>
+          <div class="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-bold text-indigo-700"><%= user.name.charAt(0).toUpperCase() %></div>
+          <a href="/dashboard" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Dashboard</a>
+          <a href="/chat/rooms" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Chat</a>
+          <a href="/auth/logout" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Sair</a>
+        <% } %>
+      </div>
     </div>
   </nav>
 
-  <div class="container">
-    <h2>💬 Salas de Chat</h2>
+  <main class="mx-auto w-full max-w-7xl px-3 py-4 sm:px-5 sm:py-6">
+    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <h2 class="text-xl font-bold text-indigo-700 sm:text-2xl">Salas de Chat</h2>
+      <button class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-700" onclick="createNewRoom()" type="button">+ Criar Nova Sala</button>
+    </div>
 
-    <button class="btn create-room-btn" onclick="createNewRoom()">+ Criar Nova Sala</button>
-
-    <div class="rooms-grid">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <% rooms.forEach(room => { %>
-        <div class="room-card" onclick="window.location.href='/chat/room/<%= room.id %>'">
-          <div class="room-header">
-            <div class="room-name"><%= room.name %></div>
-            <div class="room-description"><%= room.description || 'Sem descrição' %></div>
+        <article class="cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md" onclick="window.location.href='/chat/room/<%= room.id %>'">
+          <div class="bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-4 text-white">
+            <h3 class="truncate text-lg font-semibold"><%= room.name %></h3>
+            <p class="mt-1 truncate text-sm text-indigo-100"><%= room.description || 'Sem descricao' %></p>
           </div>
-          <div class="room-body">
-            <div class="room-info">
-              <span>👥 <%= room.participantsCount %> participantes</span>
+
+          <div class="space-y-4 px-4 py-4">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+              <span class="text-slate-600"><%= room.participantsCount %> participantes</span>
               <% if (room.unreadCount > 0) { %>
-                <span class="room-badge unread"><%= room.unreadCount %> não lidas</span>
+                <span class="rounded-full bg-rose-500 px-3 py-1 text-xs font-semibold text-white"><%= room.unreadCount %> nao lidas</span>
               <% } else { %>
-                <span class="room-badge">✓ Tudo lido</span>
+                <span class="rounded-full bg-emerald-500 px-3 py-1 text-xs font-semibold text-white">Tudo lido</span>
               <% } %>
             </div>
 
-            <div class="participants">
-              <!-- Aqui iriam os avatares dos participantes -->
-            </div>
-
-            <button class="btn">Abrir Chat</button>
+            <button class="w-full rounded-xl bg-indigo-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-indigo-700" type="button">Abrir Chat</button>
           </div>
-        </div>
+        </article>
       <% }); %>
     </div>
-  </div>
+  </main>
 
   <script>
     function createNewRoom() {
       const name = prompt('Nome da sala:');
       if (!name) return;
 
-      const description = prompt('Descrição (opcional):');
+      const description = prompt('Descricao (opcional):');
 
       fetch('/chat/create-room', {
         method: 'POST',
