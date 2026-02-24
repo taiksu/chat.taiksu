@@ -1,65 +1,53 @@
 const User = require('../models/User');
 const ChatRoom = require('../models/ChatRoom');
-const Message = require('../models/Message');
-const db = require('../config/database');
+const { MetricModel, MessageModel } = require('../models/sequelize-models');
 
 class DashboardController {
   async index(req, res) {
     try {
-      // Contar usuários ativos
       const allUsers = await User.findAll();
-      const activeUsers = allUsers.filter(u => u.status === 'online').length;
-
-      // Contar salas
+      const activeUsers = allUsers.filter((u) => u.status === 'online').length;
       const rooms = await ChatRoom.findAll();
 
-      // Contar mensagens totais
-      db.get(`SELECT COUNT(*) as total FROM messages`, async (err, result) => {
-        const totalMessages = result.total;
+      const [totalMessages, unreadMessages] = await Promise.all([
+        MessageModel.count(),
+        MessageModel.count({ where: { is_read: 0 } })
+      ]);
 
-        // Contar mensagens não lidas
-        db.get(`SELECT COUNT(*) as total FROM messages WHERE is_read = 0`, async (err, unreadResult) => {
-          const unreadMessages = unreadResult.total;
+      const metrics = await MetricModel.findAll({
+        order: [['date', 'DESC']],
+        limit: 30,
+        raw: true
+      });
 
-          // Obter métricas
-          db.all(
-            `SELECT * FROM metrics ORDER BY date DESC LIMIT 30`,
-            (err, metrics) => {
-              res.render('dashboard/index', {
-                title: 'Dashboard - Chat Taiksu',
-                activeUsers,
-                totalUsers: allUsers.length,
-                totalRooms: rooms.length,
-                totalMessages,
-                unreadMessages,
-                metrics: metrics || [],
-                user: req.session.user
-              });
-            }
-          );
-        });
+      res.render('dashboard/index', {
+        title: 'Dashboard - Chat Taiksu',
+        activeUsers,
+        totalUsers: allUsers.length,
+        totalRooms: rooms.length,
+        totalMessages,
+        unreadMessages,
+        metrics: metrics || [],
+        user: req.session.user
       });
     } catch (error) {
       console.error('Dashboard error:', error);
-      res.status(500).render('error', { 
+      res.status(500).render('error', {
         title: 'Erro',
         message: 'Erro ao carregar dashboard',
-        user: req.session.user 
+        user: req.session.user
       });
     }
   }
 
   async metrics(req, res) {
     try {
-      db.all(
-        `SELECT * FROM metrics ORDER BY date DESC LIMIT 30`,
-        (err, metrics) => {
-          if (err) {
-            return res.status(500).json({ error: 'Erro ao buscar métricas' });
-          }
-          res.json(metrics || []);
-        }
-      );
+      const metrics = await MetricModel.findAll({
+        order: [['date', 'DESC']],
+        limit: 30,
+        raw: true
+      });
+      res.json(metrics || []);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

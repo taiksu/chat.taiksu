@@ -51,6 +51,17 @@ const storage = multer.diskStorage({
 const upload = multer({ storage, limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE || '52428800') } });
 
 class MessageController {
+  ensureSSEStore() {
+    if (!global.sseClients) {
+      global.sseClients = {};
+    }
+  }
+
+  getRoomClients(roomId) {
+    this.ensureSSEStore();
+    return global.sseClients[roomId] || [];
+  }
+
   sendMessage(req, res) {
     return upload.single('file')(req, res, async () => {
       try {
@@ -79,7 +90,7 @@ class MessageController {
         });
 
         // Enviar SSE para todos os clientes
-        const clients = global.sseClients[roomId] || [];
+        const clients = this.getRoomClients(roomId);
         const sseMessage = {
           id: message.id,
           room_id: roomId,
@@ -148,7 +159,7 @@ class MessageController {
       }
 
       // Notificar via SSE
-      const clients = global.sseClients[message.room_id] || [];
+      const clients = this.getRoomClients(message.room_id);
       clients.forEach(client => {
         client.write(`data: ${JSON.stringify({
           type: 'message_deleted',
@@ -175,10 +186,7 @@ class MessageController {
 
   sendSSE(req, res) {
     const { roomId } = req.params;
-
-    if (!global.sseClients) {
-      global.sseClients = {};
-    }
+    this.ensureSSEStore();
 
     if (!global.sseClients[roomId]) {
       global.sseClients[roomId] = [];
@@ -196,7 +204,13 @@ class MessageController {
     global.sseClients[roomId].push(res);
 
     req.on('close', () => {
-      global.sseClients[roomId] = global.sseClients[roomId].filter(client => client !== res);
+      const roomClients = global.sseClients?.[roomId];
+      if (!Array.isArray(roomClients)) return;
+
+      global.sseClients[roomId] = roomClients.filter((client) => client !== res);
+      if (!global.sseClients[roomId].length) {
+        delete global.sseClients[roomId];
+      }
     });
   }
 
@@ -211,7 +225,7 @@ class MessageController {
       }
 
       // Notificar outros usuários
-      const clients = global.sseClients[roomId] || [];
+      const clients = this.getRoomClients(roomId);
       clients.forEach(client => {
         client.write(`data: ${JSON.stringify({
           type: 'typing_status',

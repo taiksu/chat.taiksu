@@ -1,119 +1,100 @@
-const db = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
+const { Op } = require('sequelize');
+const { MessageModel, UserModel } = require('./sequelize-models');
 
 class Message {
-  static create(messageData) {
-    return new Promise((resolve, reject) => {
-      const id = uuidv4();
-      const { roomId, userId, content, type, fileUrl, fileType } = messageData;
-      
-      db.run(
-        `INSERT INTO messages (id, room_id, user_id, content, type, file_url, file_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [id, roomId, userId, content || '', type || 'text', fileUrl || null, fileType || null],
-        function(err) {
-          if (err) reject(err);
-          else resolve({ id, roomId, userId, ...messageData });
+  static async create(messageData) {
+    const id = uuidv4();
+    const created = await MessageModel.create({
+      id,
+      room_id: messageData.roomId,
+      user_id: messageData.userId,
+      content: messageData.content || '',
+      type: messageData.type || 'text',
+      file_url: messageData.fileUrl || null,
+      file_type: messageData.fileType || null,
+      is_read: 0
+    });
+
+    return {
+      id: created.id,
+      roomId: created.room_id,
+      userId: created.user_id,
+      content: created.content,
+      type: created.type,
+      fileUrl: created.file_url,
+      fileType: created.file_type
+    };
+  }
+
+  static async findById(id) {
+    return MessageModel.findByPk(id, { raw: true });
+  }
+
+  static async findByRoomId(roomId, limit = 50) {
+    const rows = await MessageModel.findAll({
+      where: { room_id: roomId },
+      include: [{ model: UserModel, as: 'sender', attributes: ['name', 'avatar'] }],
+      order: [['created_at', 'DESC']],
+      limit: Number(limit)
+    });
+
+    return rows
+      .map((row) => {
+        const plain = row.get({ plain: true });
+        return {
+          ...plain,
+          name: plain.sender?.name || null,
+          avatar: plain.sender?.avatar || null
+        };
+      })
+      .reverse();
+  }
+
+  static async markAsRead(messageId) {
+    const [changes] = await MessageModel.update(
+      { is_read: 1, read_at: new Date() },
+      { where: { id: messageId } }
+    );
+    return changes;
+  }
+
+  static async markRoomAsRead(roomId, userId) {
+    const [changes] = await MessageModel.update(
+      { is_read: 1, read_at: new Date() },
+      {
+        where: {
+          room_id: roomId,
+          user_id: { [Op.ne]: userId }
         }
-      );
+      }
+    );
+    return changes;
+  }
+
+  static async countUnread(roomId) {
+    return MessageModel.count({
+      where: { room_id: roomId, is_read: 0 }
     });
   }
 
-  static findById(id) {
-    return new Promise((resolve, reject) => {
-      db.get(`SELECT * FROM messages WHERE id = ?`, [id], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
+  static async findAttachmentsByRoomId(roomId) {
+    return MessageModel.findAll({
+      where: {
+        room_id: roomId,
+        file_url: { [Op.ne]: null }
+      },
+      attributes: ['id', 'file_url'],
+      raw: true
     });
   }
 
-  static findByRoomId(roomId, limit = 50) {
-    return new Promise((resolve, reject) => {
-      db.all(
-        `SELECT m.*, u.name, u.avatar FROM messages m
-         JOIN users u ON m.user_id = u.id
-         WHERE m.room_id = ?
-         ORDER BY m.created_at DESC
-         LIMIT ?`,
-        [roomId, limit],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve((rows || []).reverse());
-        }
-      );
-    });
+  static async deleteByRoomId(roomId) {
+    return MessageModel.destroy({ where: { room_id: roomId } });
   }
 
-  static markAsRead(messageId) {
-    return new Promise((resolve, reject) => {
-      db.run(
-        `UPDATE messages SET is_read = 1, read_at = CURRENT_TIMESTAMP WHERE id = ?`,
-        [messageId],
-        function(err) {
-          if (err) reject(err);
-          else resolve(this.changes);
-        }
-      );
-    });
-  }
-
-  static markRoomAsRead(roomId, userId) {
-    return new Promise((resolve, reject) => {
-      db.run(
-        `UPDATE messages SET is_read = 1, read_at = CURRENT_TIMESTAMP 
-         WHERE room_id = ? AND user_id != ?`,
-        [roomId, userId],
-        function(err) {
-          if (err) reject(err);
-          else resolve(this.changes);
-        }
-      );
-    });
-  }
-
-  static countUnread(roomId) {
-    return new Promise((resolve, reject) => {
-      db.get(
-        `SELECT COUNT(*) as count FROM messages WHERE room_id = ? AND is_read = 0`,
-        [roomId],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row.count);
-        }
-      );
-    });
-  }
-
-  static findAttachmentsByRoomId(roomId) {
-    return new Promise((resolve, reject) => {
-      db.all(
-        `SELECT id, file_url FROM messages WHERE room_id = ? AND file_url IS NOT NULL`,
-        [roomId],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        }
-      );
-    });
-  }
-
-  static deleteByRoomId(roomId) {
-    return new Promise((resolve, reject) => {
-      db.run(`DELETE FROM messages WHERE room_id = ?`, [roomId], function(err) {
-        if (err) reject(err);
-        else resolve(this.changes || 0);
-      });
-    });
-  }
-
-  static delete(messageId) {
-    return new Promise((resolve, reject) => {
-      db.run(`DELETE FROM messages WHERE id = ?`, [messageId], function(err) {
-        if (err) reject(err);
-        else resolve(this.changes);
-      });
-    });
+  static async delete(messageId) {
+    return MessageModel.destroy({ where: { id: messageId } });
   }
 }
 

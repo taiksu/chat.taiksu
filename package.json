@@ -1,8 +1,11 @@
 {
   "name": "chat-taiksu",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Chat de Suporte com Dashboard e SSE - Chat Taiksu",
   "main": "src/server.js",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
@@ -30,14 +33,21 @@
     "moment": "^2.29.4",
     "multer": "1.4.5-lts.1",
     "mysql2": "^3.6.5",
-    "sqlite3": "^5.1.6",
+    "sequelize": "^6.37.7",
+    "sqlite3": "^5.0.2",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.2.1",
-    "autoprefixer": "^10.4.24",
-    "nodemon": "^3.0.2",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.2.1"
+    "autoprefixer": "^10.4.20",
+    "nodemon": "^3.1.14",
+    "postcss": "^8.4.47",
+    "tailwindcss": "3.3.6"
+  },
+  "overrides": {
+    "jake": "10.8.7",
+    "filelist": "1.0.4",
+    "minimatch": "9.0.5",
+    "brace-expansion": "2.0.1",
+    "balanced-match": "1.0.2"
   }
 }

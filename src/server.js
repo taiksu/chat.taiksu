@@ -5,13 +5,13 @@ const session = require('express-session');
 const cors = require('cors');
 require('dotenv').config();
 
-// Importar banco de dados
-const db = require('./config/database');
 const { runMigrations } = require('./config/migrations');
+const { syncDatabase } = require('./models/sequelize-models');
 
-// Criar app
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
+const isDev = !isProd;
+let startupError = null;
 
 if (process.env.PROXY_TRUST === '1' || process.env.PROXY_TRUST === 'true') {
   app.set('trust proxy', 1);
@@ -22,7 +22,6 @@ const allowedOrigins = (process.env.CORS_ORIGIN || '')
   .map((o) => o.trim())
   .filter(Boolean);
 
-// Middleware global
 app.use(cors({
   origin: allowedOrigins.length ? allowedOrigins : true,
   credentials: true
@@ -31,23 +30,20 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Servir arquivos enviados a partir de um diretório fora do repositório (configurável)
 const uploadsPath = process.env.FILES_DIR
   ? path.resolve(process.cwd(), process.env.FILES_DIR)
   : path.join(__dirname, '../public/uploads');
 app.use('/uploads', express.static(uploadsPath));
 
-// Configurar EJS
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Configurar sessão
 app.use(session({
   secret: process.env.SESSION_SECRET || 'chat_taiksu_secret',
   resave: false,
   saveUninitialized: true,
   name: process.env.SESSION_COOKIE_NAME || 'taiksu.sid',
-  cookie: { 
+  cookie: {
     secure: process.env.SESSION_COOKIE_SECURE
       ? process.env.SESSION_COOKIE_SECURE === 'true'
       : isProd,
@@ -58,13 +54,11 @@ app.use(session({
   }
 }));
 
-// Middleware de autenticação
 app.use((req, res, next) => {
   res.locals.user = req.session.user || null;
   next();
 });
 
-// Rotas
 const authRoutes = require('./routes/auth');
 const dashboardRoutes = require('./routes/dashboard');
 const chatRoutes = require('./routes/chat');
@@ -79,8 +73,38 @@ app.use('/chat', chatRoutes);
 app.use('/api/chat', chatApiRoutes);
 app.use('/api/messages', messageRoutes);
 
-// Rota inicial
 app.get('/', (req, res) => {
+  if (isDev && startupError) {
+    const message = startupError?.message || String(startupError);
+    const stack = startupError?.stack || '';
+    return res.status(500).send(`
+      <!doctype html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Erro de inicializacao</title>
+        <style>
+          body { font-family: Arial, sans-serif; background:#111827; color:#e5e7eb; margin:0; padding:24px; }
+          .box { max-width:1000px; margin:0 auto; background:#1f2937; border:1px solid #374151; border-radius:12px; padding:16px; }
+          h1 { margin:0 0 12px 0; font-size:20px; color:#fca5a5; }
+          p { margin:0 0 12px 0; color:#d1d5db; }
+          pre { white-space:pre-wrap; background:#0b1220; border:1px solid #334155; border-radius:8px; padding:12px; overflow:auto; }
+          code { color:#fca5a5; }
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <h1>Erro ao inicializar o servidor (modo development)</h1>
+          <p>O servidor subiu para depuracao, mas a inicializacao falhou:</p>
+          <pre><code>${escapeHtml(message)}</code></pre>
+          ${stack ? `<pre><code>${escapeHtml(stack)}</code></pre>` : ''}
+        </div>
+      </body>
+      </html>
+    `);
+  }
+
   if (req.session.user) {
     res.redirect('/dashboard');
   } else {
@@ -88,40 +112,56 @@ app.get('/', (req, res) => {
   }
 });
 
-// Healthcheck para monitoramento em produção
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'chat-taiksu', env: process.env.NODE_ENV || 'development' });
+  res.json({
+    ok: !startupError,
+    service: 'chat-taiksu',
+    env: process.env.NODE_ENV || 'development',
+    startupError: startupError ? (startupError.message || String(startupError)) : null
+  });
 });
 
-// Rota 404
 app.use((req, res) => {
-  res.status(404).render('error', { message: 'Página não encontrada' });
+  res.status(404).render('error', { message: 'Pagina nao encontrada' });
 });
 
-// Inicializar servidor
 const PORT = process.env.PORT || (isProd ? null : 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 
 if (!PORT) {
-  console.error('PORT nao definido em producao. Configure a porta interna fornecida pela hospedagem em process.env.PORT.');
+  console.error('PORT nao definido em producao. Configure process.env.PORT.');
   process.exit(1);
 }
 
 (async () => {
   try {
-    // Executar migrations automáticas na primeira inicialização
-    console.log('⏳ Verificando migrações do banco de dados...');
+    await syncDatabase();
+    console.log('Verificando migracoes do banco...');
     await runMigrations();
-    
-    // Iniciar servidor após migrações
-    app.listen(PORT, HOST, () => {
-      const appUrl = process.env.APP_URL || `http://${HOST}:${PORT}`;
-      console.log(`🚀 Chat Taiksu rodando em ${appUrl}`);
-    });
   } catch (error) {
-    console.error('❌ Erro ao inicializar servidor:', error);
-    process.exit(1);
+    console.error('Erro ao inicializar servidor:', error);
+    startupError = error;
+
+    if (isProd) {
+      process.exit(1);
+    }
+
+    console.warn('Servidor iniciado em modo development com falha de bootstrap. Acesse "/" para ver o erro.');
   }
+
+  app.listen(PORT, HOST, () => {
+    const appUrl = process.env.APP_URL || `http://${HOST}:${PORT}`;
+    console.log(`Chat Taiksu rodando em ${appUrl}`);
+  });
 })();
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 
 module.exports = app;

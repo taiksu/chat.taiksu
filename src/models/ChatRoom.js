@@ -1,218 +1,175 @@
-const db = require('../config/database');
 const { v4: uuidv4 } = require('uuid');
+const { QueryTypes } = require('sequelize');
+const {
+  sequelize,
+  ChatRoomModel,
+  RoomParticipantModel,
+  SupportChamadoRoomModel,
+  MessageModel,
+  TypingStatusModel
+} = require('./sequelize-models');
 
 class ChatRoom {
-  static create(roomData) {
-    return new Promise((resolve, reject) => {
-      const id = uuidv4();
-      const { name, type, description, ownerId } = roomData;
-      
-      db.run(
-        `INSERT INTO chat_rooms (id, name, type, description, owner_id)
-         VALUES (?, ?, ?, ?, ?)`,
-        [id, name, type || 'support', description || '', ownerId],
-        function(err) {
-          if (err) reject(err);
-          else resolve({ id, ...roomData });
-        }
-      );
+  static async create(roomData) {
+    const id = uuidv4();
+    const created = await ChatRoomModel.create({
+      id,
+      name: roomData.name,
+      type: roomData.type || 'support',
+      description: roomData.description || '',
+      owner_id: roomData.ownerId
+    });
+
+    return {
+      id: created.id,
+      name: created.name,
+      type: created.type,
+      description: created.description,
+      owner_id: created.owner_id,
+      created_at: created.created_at,
+      updated_at: created.updated_at
+    };
+  }
+
+  static async findById(id) {
+    return ChatRoomModel.findByPk(id, { raw: true });
+  }
+
+  static async findAll() {
+    return sequelize.query(
+      `SELECT cr.*
+       FROM chat_rooms cr
+       LEFT JOIN support_chamados_rooms scr ON scr.room_id = cr.id
+       WHERE scr.room_id IS NULL
+       ORDER BY cr.created_at DESC`,
+      { type: QueryTypes.SELECT }
+    );
+  }
+
+  static async findByOwnerId(ownerId) {
+    return ChatRoomModel.findAll({
+      where: { owner_id: ownerId },
+      order: [['created_at', 'DESC']],
+      raw: true
     });
   }
 
-  static findById(id) {
-    return new Promise((resolve, reject) => {
-      db.get(`SELECT * FROM chat_rooms WHERE id = ?`, [id], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
-      });
+  static async addParticipant(roomId, userId) {
+    const existing = await RoomParticipantModel.findOne({
+      where: { room_id: roomId, user_id: userId, left_at: null },
+      raw: true
     });
+
+    if (existing) {
+      return { id: existing.id, roomId, userId, existing: true };
+    }
+
+    const id = uuidv4();
+    await RoomParticipantModel.create({
+      id,
+      room_id: roomId,
+      user_id: userId,
+      joined_at: new Date(),
+      left_at: null
+    });
+
+    return { id, roomId, userId, existing: false };
   }
 
-  static findAll() {
-    return new Promise((resolve, reject) => {
-      db.all(
-        `SELECT cr.*
-         FROM chat_rooms cr
-         LEFT JOIN support_chamados_rooms scr ON scr.room_id = cr.id
-         WHERE scr.room_id IS NULL
-         ORDER BY cr.created_at DESC`,
-        [],
-        (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows || []);
-        }
-      );
+  static async hasActiveParticipant(roomId, userId) {
+    const row = await RoomParticipantModel.findOne({
+      where: { room_id: roomId, user_id: userId, left_at: null },
+      attributes: ['id'],
+      raw: true
     });
+    return Boolean(row);
   }
 
-  static findByOwnerId(ownerId) {
-    return new Promise((resolve, reject) => {
-      db.all(
-        `SELECT * FROM chat_rooms WHERE owner_id = ? ORDER BY created_at DESC`,
-        [ownerId],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        }
-      );
-    });
+  static async getParticipants(roomId) {
+    return sequelize.query(
+      `SELECT DISTINCT u.*
+       FROM users u
+       JOIN room_participants rp ON u.id = rp.user_id
+       WHERE rp.room_id = :roomId AND rp.left_at IS NULL`,
+      {
+        replacements: { roomId },
+        type: QueryTypes.SELECT
+      }
+    );
   }
 
-  static addParticipant(roomId, userId) {
-    return new Promise((resolve, reject) => {
-      db.get(
-        `SELECT id FROM room_participants
-         WHERE room_id = ? AND user_id = ? AND left_at IS NULL
-         LIMIT 1`,
-        [roomId, userId],
-        (findErr, existing) => {
-          if (findErr) return reject(findErr);
-          if (existing) return resolve({ id: existing.id, roomId, userId, existing: true });
-
-          const id = uuidv4();
-          db.run(
-            `INSERT INTO room_participants (id, room_id, user_id)
-             VALUES (?, ?, ?)`,
-            [id, roomId, userId],
-            function(err) {
-              if (err) reject(err);
-              else resolve({ id, roomId, userId, existing: false });
-            }
-          );
-        }
-      );
-    });
+  static async removeParticipant(roomId, userId) {
+    const [changes] = await RoomParticipantModel.update(
+      { left_at: new Date() },
+      { where: { room_id: roomId, user_id: userId, left_at: null } }
+    );
+    return changes;
   }
 
-  static hasActiveParticipant(roomId, userId) {
-    return new Promise((resolve, reject) => {
-      db.get(
-        `SELECT id FROM room_participants
-         WHERE room_id = ? AND user_id = ? AND left_at IS NULL
-         LIMIT 1`,
-        [roomId, userId],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(Boolean(row));
-        }
-      );
-    });
+  static async findByChamadoId(chamadoId) {
+    const rows = await sequelize.query(
+      `SELECT cr.*, scr.chamado_id
+       FROM support_chamados_rooms scr
+       JOIN chat_rooms cr ON cr.id = scr.room_id
+       WHERE scr.chamado_id = :chamadoId
+       LIMIT 1`,
+      {
+        replacements: { chamadoId: String(chamadoId) },
+        type: QueryTypes.SELECT
+      }
+    );
+    return rows[0] || null;
   }
 
-  static getParticipants(roomId) {
-    return new Promise((resolve, reject) => {
-      db.all(
-        `SELECT DISTINCT u.* FROM users u
-         JOIN room_participants rp ON u.id = rp.user_id
-         WHERE rp.room_id = ? AND rp.left_at IS NULL`,
-        [roomId],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        }
-      );
-    });
-  }
-
-  static removeParticipant(roomId, userId) {
-    return new Promise((resolve, reject) => {
-      db.run(
-        `UPDATE room_participants SET left_at = CURRENT_TIMESTAMP
-         WHERE room_id = ? AND user_id = ?`,
-        [roomId, userId],
-        function(err) {
-          if (err) reject(err);
-          else resolve(this.changes);
-        }
-      );
-    });
-  }
-
-  static findByChamadoId(chamadoId) {
-    return new Promise((resolve, reject) => {
-      db.get(
-        `SELECT cr.*, scr.chamado_id
-         FROM support_chamados_rooms scr
-         JOIN chat_rooms cr ON cr.id = scr.room_id
-         WHERE scr.chamado_id = ?`,
-        [String(chamadoId)],
-        (err, row) => {
-          if (err) reject(err);
-          else resolve(row || null);
-        }
-      );
-    });
-  }
-
-  static findChamadoRooms() {
-    return new Promise((resolve, reject) => {
-      db.all(
-        `SELECT cr.*, scr.chamado_id
-         FROM support_chamados_rooms scr
-         JOIN chat_rooms cr ON cr.id = scr.room_id
-         ORDER BY cr.created_at DESC`,
-        [],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows || []);
-        }
-      );
-    });
+  static async findChamadoRooms() {
+    return sequelize.query(
+      `SELECT cr.*, scr.chamado_id
+       FROM support_chamados_rooms scr
+       JOIN chat_rooms cr ON cr.id = scr.room_id
+       ORDER BY cr.created_at DESC`,
+      { type: QueryTypes.SELECT }
+    );
   }
 
   static async createOrGetChamadoRoom({ chamadoId, ownerId, name, description }) {
     const existing = await this.findByChamadoId(chamadoId);
-    if (existing) {
-      return { room: existing, created: false };
-    }
+    if (existing) return { room: existing, created: false };
 
-    const room = await this.create({
-      name: name || `Chamado #${chamadoId}`,
-      type: 'support_ticket',
-      description: description || `Conversa do chamado ${chamadoId}`,
-      ownerId
+    return sequelize.transaction(async (transaction) => {
+      const roomId = uuidv4();
+      const createdRoom = await ChatRoomModel.create({
+        id: roomId,
+        name: name || `Chamado #${chamadoId}`,
+        type: 'support_ticket',
+        description: description || `Conversa do chamado ${chamadoId}`,
+        owner_id: ownerId
+      }, { transaction });
+
+      await SupportChamadoRoomModel.create({
+        id: uuidv4(),
+        chamado_id: String(chamadoId),
+        room_id: createdRoom.id,
+        created_by: ownerId,
+        created_at: new Date()
+      }, { transaction });
+
+      return {
+        room: {
+          ...createdRoom.get({ plain: true }),
+          chamado_id: String(chamadoId)
+        },
+        created: true
+      };
     });
-
-    const mappingId = uuidv4();
-    await new Promise((resolve, reject) => {
-      db.run(
-        `INSERT INTO support_chamados_rooms (id, chamado_id, room_id, created_by)
-         VALUES (?, ?, ?, ?)`,
-        [mappingId, String(chamadoId), room.id, ownerId],
-        function(err) {
-          if (err) reject(err);
-          else resolve(this);
-        }
-      );
-    });
-
-    return { room: { ...room, chamado_id: String(chamadoId) }, created: true };
   }
 
-  static deleteById(roomId) {
-    return new Promise((resolve, reject) => {
-      db.serialize(() => {
-        db.run(`DELETE FROM support_chamados_rooms WHERE room_id = ?`, [roomId], (mapErr) => {
-          if (mapErr) return reject(mapErr);
-
-          db.run(`DELETE FROM typing_status WHERE room_id = ?`, [roomId], (typingErr) => {
-            if (typingErr) return reject(typingErr);
-
-            db.run(`DELETE FROM room_participants WHERE room_id = ?`, [roomId], (participantsErr) => {
-              if (participantsErr) return reject(participantsErr);
-
-              db.run(`DELETE FROM messages WHERE room_id = ?`, [roomId], (messagesErr) => {
-                if (messagesErr) return reject(messagesErr);
-
-                db.run(`DELETE FROM chat_rooms WHERE id = ?`, [roomId], function(roomErr) {
-                  if (roomErr) reject(roomErr);
-                  else resolve(this.changes || 0);
-                });
-              });
-            });
-          });
-        });
-      });
+  static async deleteById(roomId) {
+    return sequelize.transaction(async (transaction) => {
+      await SupportChamadoRoomModel.destroy({ where: { room_id: roomId }, transaction });
+      await TypingStatusModel.destroy({ where: { room_id: roomId }, transaction });
+      await RoomParticipantModel.destroy({ where: { room_id: roomId }, transaction });
+      await MessageModel.destroy({ where: { room_id: roomId }, transaction });
+      return ChatRoomModel.destroy({ where: { id: roomId }, transaction });
     });
   }
 }
