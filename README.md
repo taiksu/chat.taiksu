@@ -170,7 +170,7 @@ Utiliza SQLite com as seguintes tabelas:
 - Hora de envio
 
 ### Usuários
-- Avatar em círculo
+-  em círculo
 - Status online/offline
 - Perfil com foto
 - Nome e email

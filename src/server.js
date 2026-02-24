@@ -154,6 +154,18 @@ app.get('/health', (_req, res) => {
   });
 });
 
+app.get('/widget-test', (req, res) => {
+  res.render('widget-test', {
+    title: 'Widget Test - Chat Taiksu',
+    defaults: {
+      serverUrl: process.env.APP_URL || `http://${HOST}:${PORT}`,
+      roomId: req.query.roomId || '',
+      userId: req.query.userId || '',
+      authToken: req.query.token || ''
+    }
+  });
+});
+
 app.use((req, res) => {
   res.status(404).render('error', { message: 'Pagina nao encontrada' });
 });

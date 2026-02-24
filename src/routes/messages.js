@@ -1,24 +1,15 @@
 const express = require('express');
 const MessageController = require('../controllers/MessageController');
+const { requireApiAuth } = require('../middleware/requireAuth');
 
 const router = express.Router();
 
-// Middleware de autenticação
-const authMiddleware = (req, res, next) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Não autenticado' });
-  }
-  next();
-};
+router.post('/send', requireApiAuth, MessageController.sendMessage.bind(MessageController));
+router.post('/mark-read', requireApiAuth, MessageController.markAsRead.bind(MessageController));
+router.delete('/:messageId', requireApiAuth, MessageController.deleteMessage.bind(MessageController));
+router.get('/:roomId', requireApiAuth, MessageController.getMessages.bind(MessageController));
 
-// Rotas de mensagens
-router.post('/send', authMiddleware, MessageController.sendMessage.bind(MessageController));
-router.post('/mark-read', authMiddleware, MessageController.markAsRead.bind(MessageController));
-router.delete('/:messageId', authMiddleware, MessageController.deleteMessage.bind(MessageController));
-router.get('/:roomId', authMiddleware, MessageController.getMessages.bind(MessageController));
-
-// SSE e status de digitação
-router.get('/stream/:roomId', authMiddleware, MessageController.sendSSE.bind(MessageController));
-router.post('/typing/:roomId', authMiddleware, MessageController.setTypingStatus.bind(MessageController));
+router.get('/stream/:roomId', requireApiAuth, MessageController.sendSSE.bind(MessageController));
+router.post('/typing/:roomId', requireApiAuth, MessageController.setTypingStatus.bind(MessageController));
 
 module.exports = router;

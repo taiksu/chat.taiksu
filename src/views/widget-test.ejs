@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/css/tailwind.css">
+  <link rel="stylesheet" href="/css/theme.css">
+</head>
+<body class="min-h-dvh bg-green-50 text-green-700">
+  <main class="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
+    <h1 class="text-2xl font-bold text-green-700">Sandbox do Taiksu Widget</h1>
+    <p class="mt-1 text-sm text-gray-500">Use esta tela para validar o comportamento do <code>public/js/taiksu-widget.js</code>.</p>
+
+    <div class="mt-5 grid gap-4 rounded-2xl border border-green-100 bg-white p-4 shadow-sm sm:grid-cols-2">
+      <label class="text-sm">
+        <span class="mb-1 block text-gray-500">Server URL</span>
+        <input id="serverUrl" value="<%= defaults.serverUrl %>" class="w-full rounded-lg border border-green-200 px-3 py-2 text-sm text-green-700 outline-none focus:border-emerald-500">
+      </label>
+      <label class="text-sm">
+        <span class="mb-1 block text-gray-500">Room ID</span>
+        <input id="roomId" value="<%= defaults.roomId %>" class="w-full rounded-lg border border-green-200 px-3 py-2 text-sm text-green-700 outline-none focus:border-emerald-500">
+      </label>
+      <label class="text-sm">
+        <span class="mb-1 block text-gray-500">User ID</span>
+        <input id="userId" value="<%= defaults.userId %>" class="w-full rounded-lg border border-green-200 px-3 py-2 text-sm text-green-700 outline-none focus:border-emerald-500">
+      </label>
+      <label class="text-sm sm:col-span-2">
+        <span class="mb-1 block text-gray-500">Token (callback JWT)</span>
+        <input id="authToken" value="<%= defaults.authToken %>" class="w-full rounded-lg border border-green-200 px-3 py-2 text-sm text-green-700 outline-none focus:border-emerald-500">
+      </label>
+
+      <div class="flex flex-wrap gap-2 sm:col-span-2">
+        <button id="initBtn" class="rounded-lg bg-green-400 px-4 py-2 text-sm font-semibold text-white hover:bg-green-500">Inicializar</button>
+        <button id="openBtn" class="rounded-lg border border-green-300 bg-white px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-50">Abrir</button>
+        <button id="closeBtn" class="rounded-lg border border-green-300 bg-white px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-50">Fechar</button>
+        <button id="destroyBtn" class="rounded-lg border border-rose-300 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100">Destroy</button>
+      </div>
+    </div>
+
+    <pre id="log" class="mt-4 max-h-80 overflow-auto rounded-xl border border-green-100 bg-white p-3 text-xs text-gray-600 shadow-sm"></pre>
+  </main>
+
+  <script src="/js/taiksu-widget.js"></script>
+  <script>
+    const logEl = document.getElementById('log');
+    const log = (msg) => {
+      const line = `[${new Date().toLocaleTimeString('pt-BR')}] ${msg}`;
+      logEl.textContent += `${line}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    function readConfig() {
+      return {
+        serverUrl: document.getElementById('serverUrl').value.trim(),
+        roomId: document.getElementById('roomId').value.trim(),
+        userId: document.getElementById('userId').value.trim(),
+        authToken: document.getElementById('authToken').value.trim(),
+        title: 'Widget Teste',
+        autoOpen: false
+      };
+    }
+
+    document.getElementById('initBtn').addEventListener('click', () => {
+      try {
+        const cfg = readConfig();
+        if (!cfg.roomId) {
+          log('Informe Room ID antes de inicializar.');
+          return;
+        }
+        window.TaiksuChat.init(cfg);
+        log(`Widget inicializado para room ${cfg.roomId}`);
+      } catch (err) {
+        log(`Erro ao inicializar: ${err.message}`);
+      }
+    });
+
+    document.getElementById('openBtn').addEventListener('click', () => {
+      try {
+        window.TaiksuChat.open();
+        log('Widget aberto');
+      } catch (err) {
+        log(`Erro ao abrir: ${err.message}`);
+      }
+    });
+
+    document.getElementById('closeBtn').addEventListener('click', () => {
+      try {
+        window.TaiksuChat.close();
+        log('Widget fechado');
+      } catch (err) {
+        log(`Erro ao fechar: ${err.message}`);
+      }
+    });
+
+    document.getElementById('destroyBtn').addEventListener('click', () => {
+      try {
+        window.TaiksuChat.destroy();
+        log('Widget destruido');
+      } catch (err) {
+        log(`Erro ao destruir: ${err.message}`);
+      }
+    });
+  </script>
+</body>
+</html>
+

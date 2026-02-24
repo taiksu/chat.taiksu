@@ -5,13 +5,14 @@
 
 const { validateSSOToken, validateSSOTokenDetailed } = require('../middleware/ssoValidation');
 const User = require('../models/User');
+const TOKEN_COOKIE_NAME = process.env.SSO_TOKEN_COOKIE_NAME || 'taiksu_sso_token';
 
 class SSOController {
   persistSessionAndRedirect(req, res, url) {
     return req.session.save((err) => {
       if (err) {
         console.error('SSO session save error:', err);
-        return res.redirect('/auth/login?error=session_save_failed');
+        return res.redirect(process.env.SSO_URL || '/');
       }
       return res.redirect(url);
     });
@@ -24,9 +25,10 @@ class SSOController {
   async callback(req, res) {
     try {
       const token = req.query && req.query.token;
+      const ssoUrl = process.env.SSO_URL || '/';
 
       if (!token) {
-        return res.redirect('/auth/login?error=missing_token');
+        return res.redirect(ssoUrl);
       }
 
       const validation = await validateSSOTokenDetailed(token);
@@ -37,18 +39,29 @@ class SSOController {
           message: validation.message,
           responseBody: validation.responseBody
         });
-        return res.redirect('/auth/login?error=invalid_token');
+        return res.redirect(ssoUrl);
       }
       const ssoUserData = validation.userData;
 
       const user = await this.syncSSOUser(ssoUserData);
+      await User.updateStatus(user.id, 'online');
       req.session.user = user;
       req.session.ssoUser = ssoUserData;
+      req.session.ssoToken = token;
+
+      const isProd = process.env.NODE_ENV === 'production';
+      res.cookie(TOKEN_COOKIE_NAME, token, {
+        httpOnly: true,
+        secure: isProd,
+        sameSite: process.env.SESSION_COOKIE_SAMESITE || 'lax',
+        domain: process.env.SESSION_COOKIE_DOMAIN || undefined,
+        maxAge: 7 * 24 * 60 * 60 * 1000
+      });
 
       return this.persistSessionAndRedirect(req, res, '/dashboard');
     } catch (error) {
       console.error('SSO callback error:', error);
-      return res.redirect('/auth/login?error=sso_callback_failed');
+      return res.redirect(process.env.SSO_URL || '/');
     }
   }
 
@@ -78,9 +91,11 @@ class SSOController {
       }
 
       const user = await this.syncSSOUser(ssoUserData);
+      await User.updateStatus(user.id, 'online');
 
       req.session.user = user;
       req.session.ssoUser = ssoUserData;
+      req.session.ssoToken = token;
 
       return req.session.save((err) => {
         if (err) {
@@ -120,6 +135,10 @@ class SSOController {
   async syncSSOUser(ssoUserData) {
     try {
       const { id, name, email, foto, grupo_nome } = ssoUserData;
+      const normalizedGroup = String(grupo_nome || '').toLowerCase();
+      const role = normalizedGroup.includes('admin') || normalizedGroup.includes('desenvolvedor')
+        ? 'admin'
+        : 'user';
 
       let user = await User.findByEmail(email);
 
@@ -129,7 +148,7 @@ class SSOController {
           email,
           password: null,
           avatar: foto || null,
-          role: grupo_nome === 'Desenvolvedor' ? 'admin' : 'user',
+          role,
           ssoId: id,
           ssoData: JSON.stringify(ssoUserData)
         });
@@ -137,7 +156,7 @@ class SSOController {
         await User.update(user.id, {
           name,
           avatar: foto || user.avatar,
-          role: grupo_nome === 'Desenvolvedor' ? 'admin' : 'user',
+          role,
           ssoId: id,
           ssoData: JSON.stringify(ssoUserData)
         });

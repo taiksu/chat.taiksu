@@ -61,10 +61,13 @@
       .tw-title { margin:0; font-size:15px; font-weight:700; }
       .tw-close { width:28px; height:28px; border-radius:8px; border:0; background:rgba(255,255,255,.18); color:#fff; cursor:pointer; font-size:18px; line-height:1; }
       .tw-messages { flex:1; overflow-y:auto; padding:12px; background:#e2e8f0; }
-      .tw-message { display:flex; margin-bottom:10px; }
+      .tw-message { display:flex; margin-bottom:10px; align-items:flex-end; gap:8px; }
       .tw-message.own { justify-content:flex-end; }
       .tw-message-row { max-width:80%; display:flex; flex-direction:column; }
       .tw-message.own .tw-message-row { align-items:flex-end; }
+      .tw-avatar { width:28px; height:28px; border-radius:9999px; overflow:hidden; background:#059669; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+      .tw-message.own .tw-avatar { order:2; background:#047857; }
+      .tw-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
       .tw-name { font-size:12px; color:#475569; margin-bottom:4px; font-weight:600; }
       .tw-bubble { border-radius:14px; border:1px solid #cbd5e1; background:#e5e7eb; color:#1f2937; padding:8px 10px; font-size:14px; line-height:1.35; word-break:break-word; }
       .tw-message.own .tw-bubble { background:#047857; border-color:#065f46; color:#fff; }
@@ -235,6 +238,7 @@
       content: String(message.content || ""),
       created_at: message.created_at ?? message.createdAt ?? new Date().toISOString(),
       name: message.name || "Usuario",
+      avatar: message.avatar || "",
       type: message.type || "text",
       file_url: message.file_url ?? message.fileUrl ?? "",
       file_type: message.file_type ?? message.fileType ?? ""
@@ -280,6 +284,7 @@
     const row = document.createElement("div");
     row.className = `tw-message ${own ? "own" : ""}`;
     row.innerHTML = `
+      <div class="tw-avatar">${renderAvatar(message.avatar, message.name)}</div>
       <div class="tw-message-row">
         <div class="tw-name">${escapeHtml(sender)}</div>
         ${renderMessageBody(message)}
@@ -388,6 +393,14 @@
   function scrollToBottom() {
     const container = shadow.getElementById("tw-messages");
     if (container) container.scrollTop = container.scrollHeight;
+  }
+
+  function renderAvatar(avatarUrl, name) {
+    if (avatarUrl) {
+      return `<img src="${escapeAttr(resolveMediaUrl(avatarUrl))}" alt="Avatar de ${escapeAttr(name || "Usuario")}">`;
+    }
+    const initial = String(name || "U").trim().charAt(0).toUpperCase() || "U";
+    return escapeHtml(initial);
   }
 
   function escapeHtml(text) {

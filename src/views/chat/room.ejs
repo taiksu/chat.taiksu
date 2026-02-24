@@ -89,7 +89,13 @@
       <div class="flex flex-wrap items-center justify-end gap-2 text-sm">
         <% if (user) { %>
           <span class="hidden text-emerald-50 sm:inline"><%= user.name %></span>
-          <div class="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-bold text-emerald-700"><%= user.name.charAt(0).toUpperCase() %></div>
+          <div class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white text-xs font-bold text-emerald-700">
+            <% if (user.avatar) { %>
+              <img src="<%= user.avatar %>" alt="Avatar de <%= user.name %>" class="h-full w-full object-cover">
+            <% } else { %>
+              <span><%= user.name.charAt(0).toUpperCase() %></span>
+            <% } %>
+          </div>
           <a href="/dashboard" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Dashboard</a>
           <a href="/chat/rooms" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Chat</a>
           <a href="/auth/logout" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Sair</a>
@@ -119,8 +125,12 @@
 
         <div class="hidden items-center gap-2 sm:flex">
           <% participants.forEach(p => { %>
-            <div class="relative flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white <%= p.status === 'online' ? 'bg-emerald-600' : 'bg-gray-400' %>" data-participant-id="<%= p.id %>" title="<%= p.name %>">
-              <%= p.name.charAt(0).toUpperCase() %>
+            <div class="relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-full text-xs font-bold text-white <%= p.status === 'online' ? 'bg-emerald-600' : 'bg-gray-400' %>" data-participant-id="<%= p.id %>" title="<%= p.name %>">
+              <% if (p.avatar) { %>
+                <img src="<%= p.avatar %>" alt="Avatar de <%= p.name %>" class="h-full w-full object-cover">
+              <% } else { %>
+                <%= p.name.charAt(0).toUpperCase() %>
+              <% } %>
               <span class="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border border-white <%= p.status === 'online' ? 'bg-emerald-400' : 'bg-gray-300' %>"></span>
               <% if (canManageRoom && String(p.id) !== String(user.id) && String(p.id) !== String(room.owner_id)) { %>
                 <button
@@ -137,17 +147,21 @@
         </div>
       </div>
 
-      <div class="messages-area flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto bg-green-50 bg-[url('/images/chat-soft-bg.svg')] bg-[length:420px_420px] bg-repeat px-3 py-3 sm:px-4 md:px-6" id="messagesArea">
+      <div class="messages-area flex min-h-0 flex-1 flex-col justify-end gap-1 overflow-y-auto scroll-smooth bg-green-50 bg-[url('/images/chat-soft-bg.svg')] bg-[length:420px_420px] bg-repeat px-3 py-3 sm:px-4 md:px-6" id="messagesArea">
         <% messages.forEach(msg => { const isOwn = String(msg.user_id) === String(user.id); %>
           <div class="message message-enter <%= isOwn ? 'own justify-end' : '' %> mb-1 flex items-end gap-2 sm:gap-3" data-id="<%= msg.id %>" data-user-id="<%= msg.user_id %>">
-            <div class="message-avatar <%= isOwn ? 'order-2 bg-emerald-700' : 'bg-emerald-600' %> flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white" title="<%= msg.name %>">
-              <%= msg.name.charAt(0).toUpperCase() %>
+            <div class="message-avatar <%= isOwn ? 'order-2 bg-emerald-700' : 'bg-emerald-600' %> flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold text-white" title="<%= msg.name %>">
+              <% if (msg.avatar) { %>
+                <img src="<%= msg.avatar %>" alt="Avatar de <%= msg.name %>" class="h-full w-full object-cover">
+              <% } else { %>
+                <%= msg.name.charAt(0).toUpperCase() %>
+              <% } %>
             </div>
             <div class="message-content <%= isOwn ? 'items-end text-right' : 'items-start text-left' %> flex max-w-[84%] min-w-0 flex-col sm:max-w-[70%]">
               <div class="message-sender mb-0.5 text-xs font-semibold text-gray-500">
                 <%= isOwn ? 'Voce' : msg.name %>
               </div>
-              <div class="message-bubble <%= isOwn ? 'bg-emerald-700 text-white border border-emerald-800' : 'bg-green-50 text-green-700 border border-green-200' %> rounded-2xl px-3 py-2 text-sm leading-relaxed break-words">
+              <div class="message-bubble <%= isOwn ? 'bg-emerald-700 text-white border border-emerald-800' : 'bg-gray-100 text-gray-700 border border-gray-200' %> rounded-2xl px-3 py-2 text-sm leading-relaxed break-words">
                 <% if (msg.type === 'text') { %>
                   <%= msg.content %>
                 <% } else if (msg.type === 'image') { %>
@@ -248,13 +262,39 @@
     const renderedMessageIds = new Set();
     let currentAudioElement = null;
     let roomDeletedHandled = false;
+    let stickToBottom = true;
 
     document.addEventListener('DOMContentLoaded', () => {
       initRenderedMessageIds();
       updateActionButton();
       setupMicrophoneButton();
       initAudioPlayers();
+      bindMessageAreaScroll();
+      scrollMessagesToBottom(true);
     });
+
+    function getMessagesArea() {
+      return document.getElementById('messagesArea');
+    }
+
+    function isNearBottom(area, offset = 80) {
+      return (area.scrollHeight - area.scrollTop - area.clientHeight) <= offset;
+    }
+
+    function scrollMessagesToBottom(force = false) {
+      const area = getMessagesArea();
+      if (!area) return;
+      if (!force && !stickToBottom) return;
+      area.scrollTop = area.scrollHeight;
+    }
+
+    function bindMessageAreaScroll() {
+      const area = getMessagesArea();
+      if (!area) return;
+      area.addEventListener('scroll', () => {
+        stickToBottom = isNearBottom(area);
+      });
+    }
 
     function initRenderedMessageIds() {
       document.querySelectorAll('.message[data-id]').forEach((el) => {
@@ -401,6 +441,7 @@
         id: message.id,
         user_id: message.user_id ?? message.userId,
         room_id: message.room_id ?? message.roomId,
+        avatar: message.avatar ?? null,
         file_url: message.file_url ?? message.fileUrl ?? null,
         file_type: message.file_type ?? message.fileType ?? null,
         created_at: message.created_at ?? message.createdAt ?? new Date().toISOString()
@@ -517,7 +558,7 @@
     }
 
     function getMessageBubbleClass(isOwn) {
-      return `message-bubble rounded-2xl px-3 py-2 text-sm leading-relaxed break-words ${isOwn ? 'border border-emerald-800 bg-emerald-700 text-white' : 'border border-green-200 bg-green-50 text-green-700'}`;
+      return `message-bubble rounded-2xl px-3 py-2 text-sm leading-relaxed break-words ${isOwn ? 'border border-emerald-800 bg-emerald-700 text-white' : 'border border-gray-200 bg-gray-100 text-gray-700'}`;
     }
 
     function getMessageContentClass(isOwn) {
@@ -525,7 +566,15 @@
     }
 
     function getMessageAvatarClass(isOwn) {
-      return `message-avatar flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white ${isOwn ? 'order-2 bg-emerald-700' : 'bg-emerald-600'}`;
+      return `message-avatar flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full text-xs font-semibold text-white ${isOwn ? 'order-2 bg-emerald-700' : 'bg-emerald-600'}`;
+    }
+
+    function renderAvatarHtml(name, avatarUrl) {
+      if (avatarUrl) {
+        return `<img src="${escapeHtml(avatarUrl)}" alt="Avatar de ${escapeHtml(name || 'Usuario')}" class="h-full w-full object-cover">`;
+      }
+      const initial = name ? String(name).charAt(0).toUpperCase() : '?';
+      return `<span>${escapeHtml(initial)}</span>`;
     }
 
     function formatAudioTime(seconds) {
@@ -628,6 +677,7 @@
 
       const area = document.getElementById('messagesArea');
       const isOwn = String(message.user_id) === String(userId);
+      const shouldAutoScroll = isOwn || isNearBottom(area) || stickToBottom;
       let contentHTML = '';
 
       if (message.type === 'text') {
@@ -649,7 +699,7 @@
       const msgHTML = `
         <div class="message message-enter ${isOwn ? 'own justify-end' : ''} mb-1 flex items-end gap-2 sm:gap-3" data-id="${message.id || ''}" data-user-id="${message.user_id}">
           <div class="${getMessageAvatarClass(isOwn)}" title="${escapeHtml(message.name || '')}">
-            ${(message.name ? message.name.charAt(0).toUpperCase() : '?')}
+            ${renderAvatarHtml(message.name || 'Usuario', message.avatar)}
           </div>
           <div class="${getMessageContentClass(isOwn)}">
             <div class="message-sender mb-0.5 text-xs font-semibold text-gray-500">${escapeHtml(senderName)}</div>
@@ -665,7 +715,9 @@
       }
 
       initAudioPlayers(area);
-      area.scrollTop = area.scrollHeight;
+      if (shouldAutoScroll) {
+        scrollMessagesToBottom(true);
+      }
     }
 
     function removeMessageFromDOM(messageId) {
@@ -786,7 +838,9 @@
           typingDiv.className = 'mt-1 flex items-center gap-1 text-xs italic text-gray-500';
           typingDiv.innerHTML = `<strong class="not-italic text-green-700">${escapeHtml(data.userName || 'Usuario')}</strong> digitando <span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>`;
           area.appendChild(typingDiv);
-          area.scrollTop = area.scrollHeight;
+          if (isNearBottom(area)) {
+            scrollMessagesToBottom(true);
+          }
         }
       } else if (container) {
         container.remove();
@@ -811,7 +865,7 @@
     });
 
     connectSSE();
-    document.getElementById('messagesArea').scrollTop = document.getElementById('messagesArea').scrollHeight;
+    scrollMessagesToBottom(true);
   </script>
 </body>
 </html>

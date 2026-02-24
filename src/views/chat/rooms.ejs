@@ -14,7 +14,13 @@
       <div class="flex flex-wrap items-center justify-end gap-2 text-sm">
         <% if (user) { %>
           <span class="hidden text-green-50 sm:inline"><%= user.name %></span>
-          <div class="flex h-9 w-9 items-center justify-center rounded-full bg-white text-xs font-bold text-green-700"><%= user.name.charAt(0).toUpperCase() %></div>
+          <div class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white text-xs font-bold text-green-700">
+            <% if (user.avatar) { %>
+              <img src="<%= user.avatar %>" alt="Avatar de <%= user.name %>" class="h-full w-full object-cover">
+            <% } else { %>
+              <span><%= user.name.charAt(0).toUpperCase() %></span>
+            <% } %>
+          </div>
           <a href="/dashboard" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Dashboard</a>
           <a href="/chat/rooms" class="rounded-lg bg-white/35 px-3 py-2 text-xs font-semibold sm:text-sm">Salas</a>
           <a href="/chat/chamados" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Chamados</a>
