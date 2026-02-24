@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const bodyParser = require('body-parser');
 const session = require('express-session');
+const MySQLStoreFactory = require('express-mysql-session');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
@@ -43,10 +44,10 @@ app.use('/uploads', express.static(uploadsPath));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-app.use(session({
+const sessionOptions = {
   secret: process.env.SESSION_SECRET || 'chat_taiksu_secret',
   resave: false,
-  saveUninitialized: true,
+  saveUninitialized: false,
   name: process.env.SESSION_COOKIE_NAME || 'taiksu.sid',
   cookie: {
     secure: process.env.SESSION_COOKIE_SECURE
@@ -57,7 +58,43 @@ app.use(session({
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000
   }
-}));
+};
+
+const dbType = String(process.env.DB_TYPE || '').toLowerCase();
+if (dbType === 'mysql') {
+  try {
+    const MySQLStore = MySQLStoreFactory(session);
+    const sessionStore = new MySQLStore({
+      host: process.env.DB_HOST || '127.0.0.1',
+      port: Number(process.env.DB_PORT || 3306),
+      user: process.env.DB_USER || '',
+      password: process.env.DB_PASSWORD || '',
+      database: process.env.DB_NAME || '',
+      clearExpired: true,
+      checkExpirationInterval: 15 * 60 * 1000,
+      expiration: 24 * 60 * 60 * 1000,
+      createDatabaseTable: true,
+      schema: {
+        tableName: process.env.SESSION_TABLE_NAME || 'sessions',
+        columnNames: {
+          session_id: 'session_id',
+          expires: 'expires',
+          data: 'data'
+        }
+      }
+    });
+
+    sessionStore.on('error', (err) => {
+      console.error('Session store error:', err.message);
+    });
+    sessionOptions.store = sessionStore;
+    console.log('Sessao em MySQL habilitada');
+  } catch (error) {
+    console.error('Falha ao iniciar sessao MySQL, usando MemoryStore:', error.message);
+  }
+}
+
+app.use(session(sessionOptions));
 
 app.use((req, res, next) => {
   res.locals.user = req.session.user || null;
