@@ -9,7 +9,6 @@ router.post('/mark-read', requireApiAuth, MessageController.markAsRead.bind(Mess
 router.post('/mark-read/:roomId', requireApiAuth, MessageController.markAsRead.bind(MessageController));
 router.delete('/:messageId', requireApiAuth, MessageController.deleteMessage.bind(MessageController));
 router.get('/:roomId', requireApiAuth, MessageController.getMessages.bind(MessageController));
-router.get('/room-status/:roomId', requireApiAuth, MessageController.getRoomStatus.bind(MessageController));
 
 router.get('/stream/:roomId', requireApiAuth, MessageController.sendSSE.bind(MessageController));
 router.post('/typing/:roomId', requireApiAuth, MessageController.setTypingStatus.bind(MessageController));

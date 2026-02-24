@@ -344,47 +344,6 @@ class MessageController {
       res.status(500).json({ error: error.message });
     }
   }
-
-  async getRoomStatus(req, res) {
-    try {
-      const { roomId } = req.params;
-
-      if (!roomId) {
-        return res.status(400).json({
-          code: 'invalid_room',
-          error: 'roomId é obrigatório'
-        });
-      }
-
-      const statusInfo = await ChatRoom.getRoomStatus(roomId);
-
-      // If the model reported an internal error or not found, return success:false
-      if (!statusInfo || String(statusInfo.status) === 'error' || String(statusInfo.status) === 'not_found') {
-        return res.status(200).json({
-          code: 'room_status',
-          success: false,
-          roomId: statusInfo ? statusInfo.roomId : roomId,
-          status: statusInfo ? statusInfo.status : 'error',
-          isReadOnly: statusInfo ? Boolean(statusInfo.isReadOnly) : true,
-          message: statusInfo && statusInfo.message ? statusInfo.message : 'Erro ao verificar status da sala'
-        });
-      }
-
-      res.json({
-        code: 'room_status',
-        success: true,
-        ...statusInfo
-      });
-    } catch (error) {
-      console.error('Erro ao obter status da room:', error);
-      res.status(500).json({
-        code: 'status_error',
-        success: false,
-        error: error.message,
-        isReadOnly: true
-      });
-    }
-  }
 }
 
 module.exports = new MessageController();
