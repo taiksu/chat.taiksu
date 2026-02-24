@@ -136,6 +136,7 @@
           </div>
           <a href="/dashboard" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Dashboard</a>
           <a href="/chat/rooms" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Chat</a>
+          <a href="/widget-test" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Teste Widget</a>
           <a href="/auth/logout" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Sair</a>
         <% } %>
       </div>
@@ -394,6 +395,24 @@
       micBtn.addEventListener('click', toggleAudioRecording);
     }
 
+    function setMicRecordingVisual(active) {
+      const micBtn = document.getElementById('micBtn');
+      if (!micBtn) return;
+      if (active) {
+        micBtn.classList.remove('bg-emerald-600', 'hover:bg-emerald-700');
+        micBtn.classList.add('bg-rose-600', 'hover:bg-rose-700');
+      } else {
+        micBtn.classList.remove('bg-rose-600', 'hover:bg-rose-700');
+        micBtn.classList.add('bg-emerald-600', 'hover:bg-emerald-700');
+      }
+    }
+
+    function finalizeRecordingState() {
+      isRecording = false;
+      setMicRecordingVisual(false);
+      hideRecordingIndicator();
+    }
+
     async function toggleAudioRecording() {
       if (!isRecording) {
         try {
@@ -407,21 +426,33 @@
 
           mediaRecorder.onstop = () => {
             const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-            sendAudio(audioBlob);
-            stream.getTracks().forEach(track => track.stop());
+            if (audioBlob.size > 0) {
+              sendAudio(audioBlob);
+            }
+            stream.getTracks().forEach((track) => track.stop());
+            finalizeRecordingState();
+          };
+
+          mediaRecorder.onerror = () => {
+            stream.getTracks().forEach((track) => track.stop());
+            finalizeRecordingState();
           };
 
           mediaRecorder.start();
           isRecording = true;
+          setMicRecordingVisual(true);
           showRecordingIndicator();
         } catch (error) {
           console.error('Erro ao acessar microfone:', error);
+          finalizeRecordingState();
           alert('Nao foi possivel acessar o microfone');
         }
       } else {
-        mediaRecorder.stop();
-        isRecording = false;
-        hideRecordingIndicator();
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        } else {
+          finalizeRecordingState();
+        }
       }
     }
 

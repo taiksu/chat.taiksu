@@ -224,7 +224,7 @@ app.get('/health', (_req, res) => {
   });
 });
 
-app.get('/widget-test', (req, res) => {
+function renderWidgetTest(req, res) {
   res.render('widget-test', {
     title: 'Widget Test - Chat Taiksu',
     defaults: {
@@ -234,6 +234,30 @@ app.get('/widget-test', (req, res) => {
       authToken: req.query.token || ''
     }
   });
+}
+
+app.get('/widget-test', (req, res) => {
+  renderWidgetTest(req, res);
+});
+
+app.get('/chat/widget-test', (req, res) => {
+  renderWidgetTest(req, res);
+});
+
+app.get('/dashboard/widget-test', (req, res) => {
+  renderWidgetTest(req, res);
+});
+
+app.get('/widget/test', (req, res) => {
+  renderWidgetTest(req, res);
+});
+
+app.get('/test/widget', (req, res) => {
+  renderWidgetTest(req, res);
+});
+
+app.get('/widget-test/', (req, res) => {
+  renderWidgetTest(req, res);
 });
 
 app.use((req, res) => {

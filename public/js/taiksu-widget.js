@@ -92,7 +92,7 @@
       .tw-subtitle { font-size:11px; color:#d1fae5; display:flex; align-items:center; gap:6px; }
       .tw-online-dot { width:7px; height:7px; border-radius:9999px; background:#34d399; display:inline-block; box-shadow:0 0 0 3px rgba(52,211,153,.18); }
       .tw-close { width:28px; height:28px; border-radius:8px; border:0; background:rgba(255,255,255,.18); color:#fff; cursor:pointer; font-size:18px; line-height:1; }
-      .tw-messages { flex:1; overflow-y:auto; padding:12px; background:linear-gradient(180deg,#f8fafc 0%,#ecfeff 100%); }
+      .tw-messages { flex:1; overflow-y:auto; padding:12px; background:linear-gradient(180deg,#f9f9f9 0%,#ecfeff 100%); }
       .tw-messages::-webkit-scrollbar { width:8px; }
       .tw-messages::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:999px; }
       .tw-empty { min-height:100%; display:flex; align-items:center; justify-content:center; text-align:center; padding:24px 14px; color:#64748b; font-size:13px; }
@@ -107,7 +107,7 @@
       .tw-message.own .tw-avatar { order:2; background:#047857; }
       .tw-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
       .tw-name { font-size:12px; color:#475569; margin-bottom:4px; font-weight:600; }
-      .tw-bubble { border-radius:14px; border:1px solid #cbd5e1; background:#e5e7eb; color:#1f2937; padding:8px 10px; font-size:14px; line-height:1.35; word-break:break-word; }
+      .tw-bubble { color:#1f2937; padding:8px 10px; font-size:14px; line-height:1.35; word-break:break-word; }
       .tw-message.own .tw-bubble { background:#047857; border-color:#065f46; color:#fff; }
       .tw-time { margin-top:4px; font-size:11px; color:#64748b; }
       .tw-media.image { max-width:220px; width:100%; border-radius:10px; border:1px solid rgba(148,163,184,.4); display:block; }
@@ -485,6 +485,9 @@
     if (attachBtn) attachBtn.disabled = disabledState;
     if (sendBtn) sendBtn.disabled = disabledState || !(input && input.value.trim());
     if (micBtn) micBtn.disabled = disabledState;
+    if (disabledState && recording) {
+      stopRecording();
+    }
     chatClosed = disabledState;
     showSystemMessage(reason || "", disabledState ? "warn" : "warn");
   }
@@ -684,6 +687,13 @@
     const micBtn = shadow.getElementById("tw-mic-btn");
     const recordingChip = shadow.getElementById("tw-recording-chip");
     if (!micBtn) return;
+    if (chatClosed) return;
+
+    const setRecordingUI = (active) => {
+      recording = Boolean(active);
+      micBtn.classList.toggle("recording", recording);
+      if (recordingChip) recordingChip.classList.toggle("show", recording);
+    };
 
     if (!recording) {
       try {
@@ -695,28 +705,36 @@
         };
         mediaRecorder.onstop = () => {
           const blob = new Blob(audioChunks, { type: "audio/webm" });
-          sendAudioBlob(blob);
+          if (blob.size > 0) {
+            sendAudioBlob(blob);
+          }
           if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
           mediaStream = null;
           mediaRecorder = null;
           audioChunks = [];
+          setRecordingUI(false);
+        };
+        mediaRecorder.onerror = () => {
+          if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+          mediaStream = null;
+          mediaRecorder = null;
+          audioChunks = [];
+          setRecordingUI(false);
         };
         mediaRecorder.start();
-        recording = true;
-        micBtn.classList.add("recording");
-        if (recordingChip) recordingChip.classList.add("show");
+        setRecordingUI(true);
       } catch (err) {
         console.error("TaiksuChat: erro ao iniciar gravacao:", err);
+        setRecordingUI(false);
       }
       return;
     }
 
-    recording = false;
-    micBtn.classList.remove("recording");
-    if (recordingChip) recordingChip.classList.remove("show");
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
+      return;
     }
+    setRecordingUI(false);
   }
 
   function sendAudioBlob(blob) {
@@ -742,7 +760,9 @@
 
   function stopRecording() {
     recording = false;
+    const micBtn = shadow && shadow.getElementById("tw-mic-btn");
     const recordingChip = shadow && shadow.getElementById("tw-recording-chip");
+    if (micBtn) micBtn.classList.remove("recording");
     if (recordingChip) recordingChip.classList.remove("show");
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
@@ -789,4 +809,3 @@
   if (typeof window !== "undefined") window.TaiksuChat = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();
-
