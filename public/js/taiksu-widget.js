@@ -513,7 +513,8 @@
     if (own && !config.userId && msgUserId) {
       config.userId = msgUserId;
     }
-    const sender = own ? "Voce" : message.name;
+    const senderFull = own ? "Voce" : (message.name || "Usuario");
+    const sender = senderFull.split(" ")[0];
     const time = new Date(message.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const readClass = own && Number(message.is_read) === 1 ? "tw-read read" : "tw-read";
     const readLabel = Number(message.is_read) === 1 ? "Lido" : "Enviado";
@@ -814,11 +815,12 @@
       return;
     }
     
-    const user = escapeHtml(data.userName || "Usuario");
+    const userFull = String(data.userName || "Usuario").trim();
+    const user = escapeHtml(userFull.split(" ")[0]);
     const activity = String(data.activity || "typing");
     const icon = activity === "recording" 
-      ? `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:#ef4444"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`
-      : `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:#059669"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>`;
+      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:#ef4444"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>`
+      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:#10b981"><path d="M17 6.1H3c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8.1c0-1.1-.9-2-2-2z"/><path d="M7 10.1v4"/><path d="M11 10.1v4"/><path d="M15 10.1v4"/></svg>`;
 
     typingEl.innerHTML = `
       ${icon}
