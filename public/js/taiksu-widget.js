@@ -528,12 +528,44 @@
 
     const messagesArea = shadow.getElementById("tw-messages");
     if (messagesArea) messagesArea.addEventListener("click", closeUIExtras);
+    if (messagesArea) {
+      messagesArea.addEventListener("click", (event) => {
+        const image = event.target && event.target.closest("img.tw-media.image");
+        if (!image) return;
+        openLightbox(image.getAttribute("src"));
+      });
+    }
+
+    const lightboxClose = shadow.getElementById("tw-lightbox-close");
+    if (lightboxClose) lightboxClose.addEventListener("click", closeLightbox);
+    const lightbox = shadow.getElementById("tw-lightbox");
+    if (lightbox) {
+      lightbox.addEventListener("click", (event) => {
+        if (event.target === lightbox) closeLightbox();
+      });
+    }
 
     // Inicializar Emoji Picker
     initEmojiPicker();
     
     // Auto-scroll e outros mimos
     scrollToBottom();
+  }
+
+  function openLightbox(src) {
+    const lightbox = shadow.getElementById("tw-lightbox");
+    const img = shadow.getElementById("tw-lightbox-img");
+    if (!lightbox || !img || !src) return;
+    img.src = src;
+    lightbox.classList.add("show");
+  }
+
+  function closeLightbox() {
+    const lightbox = shadow.getElementById("tw-lightbox");
+    const img = shadow.getElementById("tw-lightbox-img");
+    if (!lightbox || !img) return;
+    lightbox.classList.remove("show");
+    img.src = "";
   }
 
   function toggleExpand() {
