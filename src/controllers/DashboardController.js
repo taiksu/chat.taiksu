@@ -181,11 +181,20 @@ class DashboardController {
         merged.set(String(room.id), room);
       });
 
-      const rooms = Array.from(merged.values()).map((room) => ({
-        id: room.id,
-        name: room.name,
-        roomType: room.chamado_id ? 'chamado' : 'sala',
-        chamadoId: room.chamado_id || null
+      const rooms = await Promise.all(Array.from(merged.values()).map(async (room) => {
+        const participants = await ChatRoom.getParticipants(room.id);
+        return {
+          id: room.id,
+          name: room.name,
+          roomType: room.chamado_id ? 'chamado' : 'sala',
+          chamadoId: room.chamado_id || null,
+          participants: (participants || []).map((p) => ({
+            id: String(p.id),
+            name: p.name || `Usuario ${p.id}`,
+            avatar: p.avatar || '',
+            status: p.status || 'offline'
+          }))
+        };
       }));
 
       const selectedRoomId = String(req.query.roomId || rooms[0]?.id || '');

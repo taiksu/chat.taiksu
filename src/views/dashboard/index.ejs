@@ -4,20 +4,34 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
-  <link rel="stylesheet" href="/css/tailwind.css">
-  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/style.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 </head>
-<body class="min-h-dvh bg-green-50 text-green-700">
-  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition lg:hidden"></div>
+<body class="min-h-dvh text-green-700">
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
   <%- include('../partials/sidebar', { user, active: 'dashboard' }) %>
 
-  <div class="lg:pl-72">
-    <%- include('../partials/topbar', { user, pageTitle: 'Dashboard' }) %>
+  <div>
+    <%- include('../partials/topbar', {
+      user,
+      pageTitle: 'Dashboard'
+    }) %>
 
     <main class="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-      <h2 class="text-xl font-bold text-green-700 sm:text-2xl">Visão Geral</h2>
-
+      <div class="flex items-center gap-4">
+        <div class="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-green-100 text-sm font-bold text-green-700">
+          <% if (user && user.avatar) { %>
+            <img src="<%= user.avatar %>" alt="Avatar de <%= user.name %>" class="h-full w-full object-cover">
+          <% } else if (user && user.name) { %>
+            <span><%= user.name.charAt(0).toUpperCase() %></span>
+          <% } else { %>
+            <span>U</span>
+          <% } %>
+        </div>
+        <h1 class="text-xl font-medium text-gray-600">
+          Olá, <span class="text-green-700 font-semibold"><%= (user && user.name) ? user.name : 'Usuario' %></span>
+        </h1>
+      </div>
     <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
         <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Usuarios ativos</h3>

@@ -1,58 +1,79 @@
 <% const navItems = [
-  { key: 'dashboard', label: 'Dashboard', href: '/dashboard' },
-  { key: 'rooms', label: 'Salas de Chat', href: '/chat/rooms' },
-  { key: 'chamados', label: 'Chamados', href: '/chat/chamados' },
-  { key: 'qa', label: 'QA do Chat', href: '/dashboard/qa-chat' },
-  { key: 'template', label: 'Template Lab', href: '/dashboard/template-lab' }
+  {
+    key: 'dashboard',
+    label: 'Inicio',
+    href: '/dashboard',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1v-9z"/></svg>'
+  },
+  {
+    key: 'rooms',
+    label: 'Salas',
+    href: '/chat/rooms',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" stroke-width="1.9"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M7 8h10M7 12h10M7 16h6"/></svg>'
+  },
+  {
+    key: 'chamados',
+    label: 'Chamados',
+    href: '/chat/chamados',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M8 10h8M8 14h5"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M5 5h14a2 2 0 012 2v9a2 2 0 01-2 2H9l-4 3v-3H5a2 2 0 01-2-2V7a2 2 0 012-2z"/></svg>'
+  },
+  {
+    key: 'qa',
+    label: 'Analiticos',
+    href: '/dashboard/qa-chat',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 19h16M7 16V9m5 7V5m5 11v-4"/></svg>'
+  },
+  {
+    key: 'template',
+    label: 'Template Lab',
+    href: '/dashboard/template-lab',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10"/></svg>'
+  }
 ]; %>
 
-<aside id="appSidebar" class="fixed inset-y-0 left-0 z-30 w-72 -translate-x-full border-r border-green-100 bg-white/95 shadow-xl backdrop-blur transition duration-300 lg:translate-x-0">
-  <div class="flex h-16 items-center gap-3 bg-gradient-to-r from-green-400 to-green-500 px-5 text-white">
-    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-lg font-black">
-      CT
-    </div>
-    <div class="leading-tight">
-      <p class="text-[10px] uppercase tracking-[0.32em] text-green-50">Taiksu</p>
-      <p class="text-sm font-semibold">Chat Suite</p>
+<aside id="appSidebar" class="fixed top-0 right-0 w-80 h-full bg-white shadow-lg transform transition-transform duration-700 ease-in-out z-50 overflow-y-auto translate-x-full">
+  <div class="border-b border-green-100 px-6 py-5">
+    <div class="flex items-center gap-3">
+      <div class="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full bg-green-100 text-sm font-bold text-green-700">
+        <% if (user && user.avatar) { %>
+          <img src="<%= user.avatar %>" alt="Avatar de <%= user.name %>" class="h-full w-full object-cover">
+        <% } else { %>
+          <span><%= user && user.name ? user.name.charAt(0).toUpperCase() : 'U' %></span>
+        <% } %>
+      </div>
+      <div class="min-w-0">
+        <p class="truncate text-base font-semibold text-green-800"><%= user ? user.name : 'Visitante' %></p>
+        <p class="truncate text-sm text-gray-500"><%= user && user.city ? user.city : 'Painel administrativo' %></p>
+      </div>
     </div>
   </div>
 
-  <div class="space-y-4 px-4 py-4">
-    <% if (user) { %>
-      <div class="flex items-center gap-3 rounded-xl border border-green-100 bg-green-50 px-3 py-2">
-        <div class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-green-400 to-green-500 text-sm font-bold text-white">
-          <% if (user.avatar) { %>
-            <img src="<%= user.avatar %>" alt="Avatar de <%= user.name %>" class="h-full w-full object-cover">
-          <% } else { %>
-            <span><%= user.name.charAt(0).toUpperCase() %></span>
-          <% } %>
-        </div>
-        <div>
-          <p class="text-xs uppercase tracking-wide text-green-500">Logado</p>
-          <p class="text-sm font-semibold text-green-800"><%= user.name %></p>
-        </div>
-      </div>
-    <% } else { %>
-      <div class="rounded-xl border border-green-100 bg-green-50 px-3 py-2">
-        <p class="text-xs uppercase tracking-wide text-green-500">Acesso</p>
-        <p class="text-sm font-semibold text-green-800">Conecte-se para continuar</p>
-        <a href="/auth/login" class="mt-2 inline-flex items-center justify-center rounded-lg bg-green-500 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-green-600">Entrar</a>
-      </div>
-    <% } %>
-
-    <nav class="space-y-1">
+  <div>
+    <nav class="space-y-0.5">
       <% navItems.forEach((item) => { const isActive = active === item.key; %>
-        <a href="<%= item.href %>" class="flex items-center justify-between rounded-xl border border-transparent px-3 py-2 text-sm font-semibold transition <%= isActive ? 'bg-green-100 text-green-800 shadow-sm border-green-200' : 'text-gray-600 hover:bg-green-50 hover:text-green-700' %>">
-          <span><%= item.label %></span>
-          <span class="h-2 w-2 rounded-full <%= isActive ? 'bg-green-500' : 'bg-green-200' %>"></span>
+        <a href="<%= item.href %>" class="flex items-center justify-between border-b border-green-50 px-6 py-5 text-sm font-semibold transition <%= isActive ? 'bg-green-50 text-green-700' : 'text-slate-600 hover:bg-green-50 hover:text-green-700' %>">
+          <div class="flex items-center gap-4">
+            <span class="<%= isActive ? 'text-green-600' : 'text-slate-500' %>"><%- item.icon %></span>
+            <span class="font-semibold"> <%= item.label %></span>
+          </div>
+          <span class="flex h-8 w-8 items-center justify-center rounded-full text-green-500">
+            <img src="https://login.taiksu.com.br/frontend/img/seta.png" class="h-5" />
+          </span>
         </a>
       <% }); %>
+      <% if (user) { %>
+        <a href="/auth/logout" class="flex items-center text-gray-600 justify-between px-6 py-6 bg-white hover:bg-red-50 hover:text-red-600 transition">
+          <div class="flex items-center gap-4">
+            <span class="text-slate-500">
+              <img src="https://loja.taiksu.com.br/images/menu/sair.png" class="w-8 h-8 group-hover:scale-106 transition-all duration-500">
+            </span>
+            <span class="font-semibold">Desconectar</span>
+          </div>
+          <span class="flex h-8 w-8 items-center justify-center rounded-full text-green-500">
+             <img src="https://login.taiksu.com.br/frontend/img/seta.png" class="h-5" />
+          </span>
+        </a>
+      <% } %>
     </nav>
   </div>
-
-  <% if (user) { %>
-    <div class="mt-auto px-4 pb-6">
-      <a href="/auth/logout" class="inline-flex w-full items-center justify-center rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50">Sair</a>
-    </div>
-  <% } %>
 </aside>

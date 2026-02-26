@@ -10,8 +10,8 @@
     "build": "npm run build:css",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "build:css": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/styles/tailwind.css -o ./public/css/tailwind.css --minify",
-    "watch:css": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/styles/tailwind.css -o ./public/css/tailwind.css --watch",
+    "build:css": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/styles/style.css -o ./public/css/style.css --minify",
+    "watch:css": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/styles/style.css -o ./public/css/style.css --watch",
     "seed": "node src/seed.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

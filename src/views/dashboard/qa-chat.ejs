@@ -4,8 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
-  <link rel="stylesheet" href="/css/tailwind.css">
-  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/style.css">
   <style>
     .qa-msg-own { justify-content: flex-end; }
     .qa-msg-other { justify-content: flex-start; }
@@ -13,14 +12,22 @@
     .qa-bubble-other { background: #ffffff; border-radius: 16px 16px 16px 4px; }
   </style>
 </head>
-<body class="min-h-dvh bg-green-50 text-green-700">
-  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition lg:hidden"></div>
+<body class="min-h-dvh text-green-700">
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
   <%- include('../partials/sidebar', { user, active: 'qa' }) %>
 
-  <div class="lg:pl-72">
-    <%- include('../partials/topbar', { user, pageTitle: 'Laboratorio QA do Chat' }) %>
+  <div>
+    <%- include('../partials/topbar', {
+      user,
+      pageTitle: 'Laboratorio QA do Chat'
+    }) %>
 
     <main class="mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <%- include('../components/breadcrumb/index', {
+        link: '/dashboard',
+        paginaAnterior: 'Dashboard',
+        paginaAtual: 'Laboratorio QA'
+      }) %>
       <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
         <div class="flex flex-wrap items-end gap-3">
           <label class="min-w-[260px] flex-1 text-sm">
@@ -33,7 +40,7 @@
               <% }); %>
             </select>
           </label>
-          <button id="refreshBtn" type="button" class="rounded-xl bg-green-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600">Atualizar dados</button>
+          <button id="refreshBtn" type="button" class="rounded-xl0 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600">Atualizar dados</button>
           <button id="typingBtn" type="button" class="rounded-xl border border-green-300 bg-white px-4 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-50">Simular digitando</button>
           <button id="auditBtn" type="button" class="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100">Executar auditoria</button>
         </div>
@@ -43,7 +50,7 @@
         <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm lg:col-span-2">
           <h2 class="text-lg font-bold text-green-800">Checklist de qualidade</h2>
           <div id="qaChecklist" class="mt-3 space-y-2 text-sm"></div>
-          <div class="mt-4 rounded-xl border border-green-100 bg-green-50 p-3 text-xs text-green-900">
+          <div class="mt-4 rounded-xl border border-green-100 p-3 text-xs text-green-900">
             <p class="font-semibold">Criterios validados</p>
             <p>- Conexao SSE ativa</p>
             <p>- Alinhamento proprio (direita) e terceiros (esquerda)</p>
@@ -67,7 +74,7 @@
             <select id="viewerA" class="mt-2 w-full rounded-lg border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400"></select>
           </div>
           <div id="typingA" class="px-4 py-2 text-xs font-semibold text-emerald-700"></div>
-          <div id="paneA" class="h-[420px] overflow-y-auto bg-green-50/60 px-4 py-4"></div>
+          <div id="paneA" class="h-[420px] overflow-y-auto/60 px-4 py-4"></div>
         </article>
 
         <article class="rounded-2xl border border-green-100 bg-white shadow-sm">
@@ -76,7 +83,7 @@
             <select id="viewerB" class="mt-2 w-full rounded-lg border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400"></select>
           </div>
           <div id="typingB" class="px-4 py-2 text-xs font-semibold text-emerald-700"></div>
-          <div id="paneB" class="h-[420px] overflow-y-auto bg-green-50/60 px-4 py-4"></div>
+          <div id="paneB" class="h-[420px] overflow-y-auto/60 px-4 py-4"></div>
         </article>
       </section>
 
@@ -84,7 +91,7 @@
         <h2 class="text-lg font-bold text-green-800">Envio de teste (usuario logado)</h2>
         <div class="mt-3 flex flex-wrap items-center gap-2">
           <input id="testMessage" placeholder="Mensagem para validar alinhamento e stream..." class="min-w-[260px] flex-1 rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-          <button id="sendBtn" type="button" class="rounded-xl bg-green-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600">Enviar</button>
+          <button id="sendBtn" type="button" class="rounded-xl0 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600">Enviar</button>
         </div>
       </section>
 
@@ -196,7 +203,7 @@
 
         stackEl.insertAdjacentHTML('beforeend', `
           <div class="relative ${idx > 0 ? '-ml-2' : ''}">
-            <div class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-green-500 text-xs font-bold text-white shadow-sm">${avatar}</div>
+            <div class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-white0 text-xs font-bold text-white shadow-sm">${avatar}</div>
             <span class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border border-white ${p.status === 'online' ? 'bg-emerald-400' : 'bg-gray-400'}"></span>
           </div>
         `);
@@ -204,7 +211,7 @@
 
       state.participants.forEach((p) => {
         listEl.insertAdjacentHTML('beforeend', `
-          <div class="rounded-lg border border-green-100 bg-green-50 px-3 py-2 text-sm">
+          <div class="rounded-lg border border-green-100 px-3 py-2 text-sm">
             <p class="font-semibold text-green-800">${p.name}</p>
             <p class="text-xs text-gray-500">${p.id}</p>
           </div>

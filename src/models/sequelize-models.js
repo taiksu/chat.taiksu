@@ -27,6 +27,7 @@ const ChatRoomModel = sequelize.define('chat_rooms', {
   id: { type: DataTypes.STRING(64), primaryKey: true },
   name: { type: DataTypes.STRING(255), allowNull: false },
   type: { type: DataTypes.STRING(64), allowNull: false, defaultValue: 'support' },
+  status: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'aberto' },
   description: { type: DataTypes.TEXT, allowNull: true },
   owner_id: { type: DataTypes.STRING(64), allowNull: false }
 }, {
@@ -126,11 +127,30 @@ async function ensureUsersColumns() {
   }
 }
 
+async function ensureChatRoomsColumns() {
+  const qi = sequelize.getQueryInterface();
+  let columns;
+  try {
+    columns = await qi.describeTable('chat_rooms');
+  } catch (_err) {
+    return;
+  }
+
+  if (!columns.status) {
+    await qi.addColumn('chat_rooms', 'status', {
+      type: DataTypes.STRING(32),
+      allowNull: false,
+      defaultValue: 'aberto'
+    });
+  }
+}
+
 async function syncDatabase() {
   if (synced) return;
   await sequelize.authenticate();
   await sequelize.sync();
   await ensureUsersColumns();
+  await ensureChatRoomsColumns();
   synced = true;
 }
 

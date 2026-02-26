@@ -1,0 +1,21 @@
+<% 
+
+let opacity = '';
+
+if (tipo == 'desativado') { 
+    opacity = 'opacity-50';
+} else {
+    opacity = '';
+} %>
+        
+        
+        <a href="/config/metodos/<%= metodo.id %>" class="<%= opacity %> group w-full flex flex-col gap-4 rounded-xl bg-white border border-gray-200 px-8 py-6">
+            <div class="flex flex-row items-center justify-between">
+                <h3 class="font-semibold text-gray-600 group-hover:text-green-600 transition-all duration-300"><%= metodo.nome %></h3>
+                <div class="flex flex-row items-center gap-3">
+                    <h3 class="bg-gray-50 group-hover:bg-gray-100 rounded-full py-0.5 px-3 text-sm font-semibold capitalize"><%= metodo.tipo %></h3>
+                    <div class="py-0.5 px-2 rounded-full text-sm bg-green-50 group-hover:bg-green-200 text-green-800 font-semibold text-gray-600"><%= metodo.porcentagem_taxa %> %</div>
+                    <img src="https://login.taiksu.com.br/frontend/img/seta.png" class="h-0 group-hover:h-5 transition-all duration-300" />
+                </div>
+            </div>
+        </a>

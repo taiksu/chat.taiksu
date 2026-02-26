@@ -16,6 +16,7 @@ class ChatRoom {
       id,
       name: roomData.name,
       type: roomData.type || 'support',
+      status: roomData.status || 'aberto',
       description: roomData.description || '',
       owner_id: roomData.ownerId
     });
@@ -24,6 +25,7 @@ class ChatRoom {
       id: created.id,
       name: created.name,
       type: created.type,
+      status: created.status,
       description: created.description,
       owner_id: created.owner_id,
       created_at: created.created_at,
@@ -171,6 +173,21 @@ class ChatRoom {
       await MessageModel.destroy({ where: { room_id: roomId }, transaction });
       return ChatRoomModel.destroy({ where: { id: roomId }, transaction });
     });
+  }
+
+  static async updateStatus(roomId, status) {
+    const [changes] = await ChatRoomModel.update(
+      { status: String(status || '').trim() || 'aberto' },
+      { where: { id: roomId } }
+    );
+    return changes;
+  }
+
+  static async updateChamadoStatus(chamadoId, status) {
+    const room = await this.findByChamadoId(chamadoId);
+    if (!room) return null;
+    await this.updateStatus(room.id, status);
+    return this.findByChamadoId(chamadoId);
   }
 }
 

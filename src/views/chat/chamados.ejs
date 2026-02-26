@@ -4,59 +4,205 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
-  <link rel="stylesheet" href="/css/tailwind.css">
-  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/style.css">
 </head>
-<body class="min-h-dvh bg-green-50 text-green-700">
-  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition lg:hidden"></div>
+<body class="min-h-dvh text-green-700">
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
   <%- include('../partials/sidebar', { user, active: 'chamados' }) %>
 
-  <div class="lg:pl-72">
-    <%- include('../partials/topbar', { user, pageTitle: 'Chamados' }) %>
+  <div>
+    <%- include('../partials/topbar', {
+      user,
+      pageTitle: 'Chamados'
+    }) %>
 
     <main class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-      <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <%- include('../components/breadcrumb/index', {
+        link: '/dashboard',
+        paginaAnterior: 'Dashboard',
+        paginaAtual: 'Chamados'
+      }) %>
+      <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
         <h2 class="text-xl font-bold text-green-700 sm:text-2xl">Chats Criados por Chamado</h2>
-        <button class="rounded-xl bg-green-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-green-500" onclick="createChamadoRoom()" type="button">
-          + Criar Chat por Chamado
-        </button>
+        <div class="w-full sm:w-80">
+          <%- include('../components/buttons/default', {
+            id: 'create-chamado-room-btn',
+            label: 'Criar Chat por Chamado',
+            icon: 'plus',
+            tipo: 'default'
+          }) %>
+        </div>
       </div>
 
-    <% if (!rooms || rooms.length === 0) { %>
-      <div class="rounded-2xl border border-green-100 bg-white px-4 py-6 text-gray-500 shadow-sm">
-        Nenhum chat de chamado criado ainda.
-      </div>
-    <% } %>
-
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      <% (rooms || []).forEach(room => { %>
-        <article class="cursor-pointer overflow-hidden rounded-2xl border border-green-100 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md" onclick="window.location.href='/chat/room/<%= room.id %>'">
-          <div class="bg-gradient-to-r from-green-400 to-green-500 px-4 py-4 text-white">
-            <div class="mb-1 text-xs font-semibold uppercase tracking-wide text-green-50">Chamado #<%= room.chamado_id %></div>
-            <h3 class="truncate text-lg font-semibold"><%= room.name %></h3>
-            <p class="mt-1 truncate text-sm text-green-50"><%= room.description || 'Sem descricao' %></p>
+      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <div class="grid gap-3 lg:grid-cols-3">
+          <label class="text-sm lg:col-span-2">
+            <span class="mb-1 block font-semibold text-gray-500">Pesquisar chamado</span>
+            <input
+              id="chamadoSearchInput"
+              type="text"
+              placeholder="Busque por chamado, sala, descricao ou ID..."
+              class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400"
+            >
+          </label>
+          <div class="text-sm">
+            <span class="mb-1 block font-semibold text-gray-500">Filtro de data (mes)</span>
+            <%- include('../components/dateSelector/index', {
+              mes: new Date().getMonth(),
+              ano: new Date().getFullYear()
+            }) %>
           </div>
+        </div>
 
-          <div class="space-y-4 px-4 py-4">
-            <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span class="text-gray-500"><%= room.participantsCount %> participantes</span>
-              <% if (room.unreadCount > 0) { %>
-                <span class="rounded-full bg-rose-500 px-3 py-1 text-xs font-semibold text-white"><%= room.unreadCount %> nao lidas</span>
-              <% } else { %>
-                <span class="rounded-full bg-green-400 px-3 py-1 text-xs font-semibold text-white">Tudo lido</span>
+        <div class="mt-3 w-full sm:w-56">
+          <%- include('../components/buttons/default', {
+            id: 'reset-chamado-filters',
+            label: 'Limpar filtros',
+            tipo: 'default'
+          }) %>
+        </div>
+      </section>
+
+      <section class="mt-5 rounded-2xl border border-green-100 bg-white shadow-sm">
+        <div class="border-b border-green-100 px-4 py-3 text-sm text-gray-500">
+          <span id="chamadosResultLabel"><%= (rooms || []).length %> chamado(s) encontrado(s)</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-left text-sm">
+            <thead class="bg-green-50 text-xs uppercase tracking-wide text-green-700">
+              <tr>
+                <th class="px-4 py-3">Chamado</th>
+                <th class="px-4 py-3">Sala</th>
+                <th class="px-4 py-3">Participantes</th>
+                <th class="px-4 py-3">Nao lidas</th>
+                <th class="px-4 py-3">Criada em</th>
+                <th class="px-4 py-3 text-right">Acao</th>
+              </tr>
+            </thead>
+            <tbody id="chamadosTableBody" class="divide-y divide-green-100 text-gray-700">
+              <% if (!rooms || rooms.length === 0) { %>
+                <tr>
+                  <td colspan="6" class="px-4 py-6 text-center text-gray-500">Nenhum chat de chamado criado ainda.</td>
+                </tr>
               <% } %>
-            </div>
-            <button class="w-full rounded-xl bg-green-400 px-3 py-2 text-sm font-semibold text-white transition hover:bg-green-500" type="button">Abrir Chat</button>
-          </div>
-        </article>
-      <% }); %>
-    </div>
+              <% (rooms || []).forEach((room) => { %>
+                <% const createdAt = room.created_at ? new Date(room.created_at) : null; %>
+                <tr
+                  class="chamado-row"
+                  data-search="<%= `${room.id} ${room.chamado_id || ''} ${room.name} ${room.description || ''}`.toLowerCase() %>"
+                  data-created-at="<%= createdAt ? createdAt.toISOString() : '' %>"
+                >
+                  <td class="px-4 py-3">
+                    <span class="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                      #<%= room.chamado_id || 'N/A' %>
+                    </span>
+                  </td>
+                  <td class="px-4 py-3">
+                    <p class="font-semibold text-green-800"><%= room.name %></p>
+                    <p class="text-xs text-gray-500"><%= room.description || 'Sem descricao' %></p>
+                    <p class="text-xs text-gray-400">ID: <%= room.id %></p>
+                  </td>
+                  <td class="px-4 py-3"><%= room.participantsCount %></td>
+                  <td class="px-4 py-3">
+                    <% if (room.unreadCount > 0) { %>
+                      <span class="rounded-full bg-rose-500 px-3 py-1 text-xs font-semibold text-white"><%= room.unreadCount %></span>
+                    <% } else { %>
+                      <span class="rounded-full bg-green-500 px-3 py-1 text-xs font-semibold text-white">0</span>
+                    <% } %>
+                  </td>
+                  <td class="px-4 py-3 text-xs text-gray-600">
+                    <%= createdAt ? createdAt.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : '-' %>
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    <div class="ml-auto w-full max-w-[180px]">
+                      <%- include('../components/buttons/default', {
+                        link: `/chat/room/${room.id}`,
+                        label: 'Abrir Chat'
+                      }) %>
+                    </div>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 
   <%- include('../partials/sidebar-script') %>
 
   <script>
+    const chamadoRows = Array.from(document.querySelectorAll('.chamado-row'));
+    const searchInput = document.getElementById('chamadoSearchInput');
+    const dateDisplay = document.getElementById('date-display');
+    const prevMonthBtn = document.getElementById('prev-month-btn');
+    const nextMonthBtn = document.getElementById('next-month-btn');
+    const resultLabel = document.getElementById('chamadosResultLabel');
+    const resetFiltersBtn = document.getElementById('reset-chamado-filters');
+    const monthFormatter = new Intl.DateTimeFormat('pt-BR', { month: 'short' });
+
+    function formatMonthYear(month, year) {
+      const label = monthFormatter.format(new Date(year, month, 1));
+      return `${label} ${year}`;
+    }
+
+    function selectedMonthYear() {
+      return {
+        month: Number(dateDisplay?.dataset.mes || new Date().getMonth()),
+        year: Number(dateDisplay?.dataset.ano || new Date().getFullYear())
+      };
+    }
+
+    function updateDateDisplay(month, year) {
+      if (!dateDisplay) return;
+      dateDisplay.dataset.mes = String(month);
+      dateDisplay.dataset.ano = String(year);
+      dateDisplay.textContent = formatMonthYear(month, year);
+    }
+
+    function matchesMonth(isoDate, month, year) {
+      if (!isoDate) return false;
+      const date = new Date(isoDate);
+      if (Number.isNaN(date.getTime())) return false;
+      return date.getMonth() === month && date.getFullYear() === year;
+    }
+
+    function applyChamadoFilters() {
+      const query = String(searchInput?.value || '').trim().toLowerCase();
+      const { month, year } = selectedMonthYear();
+      let visible = 0;
+
+      chamadoRows.forEach((row) => {
+        const search = String(row.dataset.search || '');
+        const createdAt = String(row.dataset.createdAt || '');
+        const searchOk = !query || search.includes(query);
+        const dateOk = matchesMonth(createdAt, month, year);
+        const show = searchOk && dateOk;
+        row.classList.toggle('hidden', !show);
+        if (show) visible += 1;
+      });
+
+      if (resultLabel) {
+        resultLabel.textContent = `${visible} chamado(s) encontrado(s)`;
+      }
+    }
+
+    function shiftMonth(direction) {
+      const current = selectedMonthYear();
+      const cursor = new Date(current.year, current.month, 1);
+      cursor.setMonth(cursor.getMonth() + direction);
+      updateDateDisplay(cursor.getMonth(), cursor.getFullYear());
+      applyChamadoFilters();
+    }
+
+    function resetFilters() {
+      if (searchInput) searchInput.value = '';
+      const now = new Date();
+      updateDateDisplay(now.getMonth(), now.getFullYear());
+      applyChamadoFilters();
+    }
+
     async function createChamadoRoom() {
       const chamadoId = prompt('Informe o ID do chamado:');
       if (!chamadoId) return;
@@ -81,6 +227,14 @@
         alert('Erro: ' + err.message);
       }
     }
+
+    document.getElementById('create-chamado-room-btn')?.addEventListener('click', createChamadoRoom);
+    searchInput?.addEventListener('input', applyChamadoFilters);
+    prevMonthBtn?.addEventListener('click', () => shiftMonth(-1));
+    nextMonthBtn?.addEventListener('click', () => shiftMonth(1));
+    resetFiltersBtn?.addEventListener('click', resetFilters);
+
+    applyChamadoFilters();
   </script>
 </body>
 </html>

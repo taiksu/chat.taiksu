@@ -4,6 +4,28 @@ const path = require('path');
 const fs = require('fs');
 
 class ChatController {
+
+  normalizeRoomStatus(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return null;
+    const closedValues = [
+      'fechado',
+      'closed',
+      'concluido',
+      'conclu\u00eddo',
+      'finalizado',
+      'resolved',
+      'resolvido'
+    ];
+    const openValues = ['aberto', 'open', 'ativo', 'active', 'em_andamento', 'em andamento'];
+    if (closedValues.includes(raw)) return 'fechado';
+    if (openValues.includes(raw)) return 'aberto';
+    return null;
+  }
+  isClosedStatus(value) {
+    return this.normalizeRoomStatus(value) === 'fechado';
+  }
+
   getInactivityHours() {
     const parsed = Number(process.env.CHAMADO_INACTIVITY_HOURS || 24);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
@@ -11,8 +33,7 @@ class ChatController {
 
   async getRoomClosureState(room) {
     if (!room) return { closed: false, reason: '' };
-    const normalizedStatus = String(room.status || '').trim().toLowerCase();
-    if (['concluido', 'concluído', 'closed', 'fechado', 'finalizado', 'resolved', 'resolvido'].includes(normalizedStatus)) {
+    if (this.isClosedStatus(room.status) || this.isClosedStatus(room.chamado_status)) {
       return { closed: true, reason: 'Chat encerrado' };
     }
     if (String(room.type || '').toLowerCase() !== 'support_ticket') {
@@ -233,6 +254,48 @@ class ChatController {
     } catch (error) {
       console.error('Error creating/getting chamado room:', error);
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  async updateChamadoStatus(req, res) {
+    try {
+      if (!req.session.user) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+      const { chamadoId } = req.params;
+      const requestedStatus = req.body?.status ?? req.body?.chamadoStatus ?? req.body?.chamado_status;
+      if (!chamadoId) {
+        return res.status(400).json({ error: 'chamadoId e obrigatorio' });
+      }
+      const normalizedStatus = this.normalizeRoomStatus(requestedStatus);
+      if (!normalizedStatus) {
+        return res.status(400).json({
+          error: 'status invalido',
+          allowed: ['aberto', 'fechado']
+        });
+      }
+      const updatedRoom = await ChatRoom.updateChamadoStatus(String(chamadoId), normalizedStatus);
+      if (!updatedRoom) {
+        return res.status(404).json({ error: 'Sala de chamado nao encontrada' });
+      }
+      this.broadcastRoomEvent(updatedRoom.id, {
+        type: 'room_status_changed',
+        roomId: updatedRoom.id,
+        chamadoId: String(chamadoId),
+        status: normalizedStatus,
+        closed: normalizedStatus === 'fechado',
+        changedBy: String(req.session.user.id || '')
+      });
+      return res.json({
+        success: true,
+        chamadoId: String(chamadoId),
+        roomId: updatedRoom.id,
+        status: normalizedStatus,
+        closed: normalizedStatus === 'fechado'
+      });
+    } catch (error) {
+      console.error('Error updating chamado status:', error);
+      return res.status(500).json({ error: error.message });
     }
   }
 

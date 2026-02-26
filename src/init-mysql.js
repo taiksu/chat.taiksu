@@ -77,6 +77,7 @@ async function initMySQL() {
         id VARCHAR(36) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         type VARCHAR(20) DEFAULT 'support',
+        status VARCHAR(32) DEFAULT 'aberto',
         description TEXT,
         owner_id VARCHAR(36) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

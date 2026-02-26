@@ -1,248 +1,72 @@
-# 💬 Chat Taiksu - Plataforma de Chat de Suporte
+# Chat Taiksu
 
-Aplicação completa de chat para suporte ao cliente com Dashboard, APIs REST, SSE em tempo real e widget embutível.
+Aplicacao de chat de suporte com interface web, API REST, SSE em tempo real e autenticacao via SSO.
 
-## 🚀 Funcionalidades
+## Stack
 
-### Core
-- ✅ Autenticação de usuários
-- ✅ Salas de chat em tempo real (SSE)
-- ✅ Sistema de mensagens com leitura
-- ✅ Status de digitação em tempo real
-- ✅ Suporte a múltiplos tipos de arquivo (áudio, vídeo, imagem, documento)
+- Node.js 22.x
+- Express + EJS
+- Sequelize (SQLite/MySQL)
+- SSE (Server-Sent Events)
+- Tailwind + `public/css/style.css`
 
-### Dashboard
-- 📊 Métricas de uso
-- 📈 Gráficos de atividade
-- 👥 Estatísticas de usuários
-- 💬 Contagem de mensagens
+## Inicio rapido
 
-### Widget
-- 🎨 Widget JavaScript embutível
-- 📱 Responsivo para mobile
-- 🔌 Fácil integração em qualquer site
-
-## 📋 Pré-requisitos
-
-- Node.js 14+
-- npm ou yarn
-
-## 🔧 Instalação
-
-1. Clone o repositório:
-```bash
-git clone <seu-repo>
-cd chat.taiksu
-```
-
-2. Instale as dependências:
+1. Instale dependencias:
 ```bash
 npm install
 ```
 
-3. Configure o arquivo `.env`:
-```bash
-PORT=3000
-NODE_ENV=development
-SESSION_SECRET=sua_chave_secreta
-JWT_SECRET=sua_jwt_secret
-```
+2. Configure variaveis em `.env` (ou `.env.production`).
 
-## ▶️ Execução
-
-### Desenvolvimento
+3. Rode em desenvolvimento:
 ```bash
 npm run dev
 ```
 
-### Produção
+4. Build de CSS quando necessario:
 ```bash
-npm start
+npm run build:css
 ```
 
-A aplicação estará disponível em `http://localhost:3000`
+## Scripts
 
-## 📂 Estrutura do Projeto
+- `npm run dev`: desenvolvimento com nodemon
+- `npm start`: execucao normal
+- `npm run build:css`: compila Tailwind
+- `npm run watch:css`: watch de CSS
+- `npm run seed`: seed manual
 
-```
-src/
-├── config/          # Configurações (banco de dados)
-├── controllers/     # Lógica de negócio
-├── models/          # Modelos de dados
-├── routes/          # Definição de rotas
-├── middleware/      # Middlewares Express
-├── utils/           # Funções utilitárias
-├── views/           # Templates EJS
-│   ├── auth/        # Login e Registro
-│   ├── dashboard/   # Dashboard e Métricas
-│   ├── chat/        # Interface de Chat
-│   └── index.ejs    # Página inicial
-└── server.js        # Arquivo principal
+## Rotas principais
 
-public/
-├── css/             # Estilos CSS
-├── js/              # JavaScript do cliente
-│   └── taiksu-widget.js  # Widget embutível
-└── uploads/         # Arquivos enviados
-```
+- Web:
+  - `/`
+  - `/dashboard`
+  - `/chat/rooms`
+  - `/chat/chamados`
 
-## 🔌 API REST
+- API:
+  - `/api/auth/sso/*`
+  - `/api/chat/*`
+  - `/api/messages/*`
 
-### Autenticação
-- `POST /auth/register` - Registrar novo usuário
-- `POST /auth/login` - Fazer login
-- `GET /auth/logout` - Fazer logout
+- Operacao:
+  - `/health`
 
-### Chat
-- `GET /chat/rooms` - Listar salas de chat
-- `GET /chat/room/:roomId` - Abrir sala
-- `POST /chat/create-room` - Criar nova sala
+## Documentacao oficial
 
-### Mensagens
-- `GET /api/messages/:roomId` - Obter mensagens da sala
-- `POST /api/messages/send` - Enviar mensagem
-- `POST /api/messages/mark-read` - Marcar como lido
-- `DELETE /api/messages/:messageId` - Deletar mensagem
-- `GET /api/messages/stream/:roomId` - SSE Stream
-- `POST /api/messages/typing/:roomId` - Atualizar status de digitação
+Toda a documentacao detalhada esta em [`doc/`](c:/apps/chat.taiksu/doc):
 
-### Dashboard
-- `GET /dashboard` - Página principal
-- `GET /dashboard/metrics` - Obter métricas (JSON)
+- [Indice](c:/apps/chat.taiksu/doc/README.md)
+- [Arquitetura](c:/apps/chat.taiksu/doc/ARQUITETURA.md)
+- [Rotas e APIs](c:/apps/chat.taiksu/doc/ROTAS_E_APIS.md)
+- [Fluxos de Uso](c:/apps/chat.taiksu/doc/FLUXOS_DE_USO.md)
+- [Banco de Dados](c:/apps/chat.taiksu/doc/BANCO_DE_DADOS.md)
+- [Operacao e Manutencao](c:/apps/chat.taiksu/doc/OPERACAO_E_MANUTENCAO.md)
 
-## 📦 Widget Embutível
+## Observacoes
 
-Integre o chat em seu site:
+- O fluxo principal de autenticacao e SSO.
+- `auth/login` e `auth/register` redirecionam para o SSO.
+- Para troubleshooting, use primeiro o endpoint `/health`.
 
-```html
-<!-- Incluir script -->
-<script src="https://seu-servidor.com/js/taiksu-widget.js"></script>
-
-<!-- Inicializar widget -->
-<script>
-  TaiksuChat.init({
-    serverUrl: 'https://seu-servidor.com',
-    roomId: 'id-da-sala-aqui',
-    title: 'Suporte ao Cliente',
-    position: 'bottom-right'
-  });
-</script>
-```
-
-### Opções de Configuração
-
-```javascript
-{
-  serverUrl: string,      // URL do servidor Chat Taiksu
-  roomId: string,         // ID da sala de chat
-  title: string,          // Título do widget
-  position: string,       // 'bottom-right', 'bottom-left', etc
-  autoOpen: boolean       // Abrir automaticamente
-}
-```
-
-## 🗄️ Banco de Dados
-
-Utiliza SQLite com as seguintes tabelas:
-- `users` - Usuários cadastrados
-- `chat_rooms` - Salas de chat
-- `messages` - Mensagens
-- `room_participants` - Participantes das salas
-- `metrics` - Métricas de uso
-- `typing_status` - Status de digitação
-
-## 🔐 Segurança
-
-- Senhas armazenadas com hash bcrypt
-- Sessões autenticadas
-- Validação de entrada
-- CORS configurado
-
-## 📱 Recursos
-
-### Mensagens
-- Texto simples
-- Imagens
-- Vídeos
-- Áudio
-- Documentos
-- Status de leitura (✓ Lido)
-- Hora de envio
-
-### Usuários
--  em círculo
-- Status online/offline
-- Perfil com foto
-- Nome e email
-
-### Tempo Real
-- SSE (Server-Sent Events) para updates
-- Indicador de digitação
-- Notificações de nova mensagem
-- Sincronização em tempo real
-
-## 🛠️ Desenvolvimento
-
-### Adicionar Nova Rota
-
-1. Criar controller em `src/controllers/`
-2. Adicionar rota em `src/routes/`
-3. Criar view em `src/views/`
-4. Importar rota em `src/server.js`
-
-### Adicionar Novo Modelo
-
-Criar arquivo em `src/models/` com classe estática usando promises.
-
-## 📄 Licença
-
-MIT
-
-## 🗂️ Armazenamento de Uploads (`FILES_DIR`)
-
-Por padrão os arquivos enviados podem ser gravados fora do repositório para evitar que o versionamento apague ou substitua os uploads durante deploys.
-
-- Variável de ambiente: `FILES_DIR`
-- Valor padrão (desenvolvimento): `C:\apps\uploads` (definido em `.env` neste projeto)
-- Valor sugerido (produção): `/var/www/uploads` (definido em `.env.production`)
-
-Exemplos de uso:
-
-Windows (PowerShell):
-```powershell
-# criar diretório absoluto (rodar no servidor)
-New-Item -ItemType Directory -Path C:\apps\uploads -Force
-```
-
-Linux (bash):
-```bash
-# criar diretório absoluto e ajustar permissões
-sudo mkdir -p /var/www/uploads
-sudo chown -R www-data:www-data /var/www/uploads
-sudo chmod -R 750 /var/www/uploads
-```
-
-Notas importantes:
-- Garanta que o usuário que executa o Node (ex.: `www-data`, `node`, `ubuntu`) tenha permissão de leitura e escrita no diretório `FILES_DIR`.
-- O servidor Express expõe esse diretório em runtime na rota `/uploads` (ex.: `https://seu-servidor.com/uploads/arquivo.jpg`).
-- Não adicione o diretório absoluto ao Git — ele deve ficar fora do repositório. Use backups regulares para preservar arquivos.
-- Se você já tem uploads antigos no `public/uploads/`, mova-os para o novo local antes do deploy:
-
-Linux example:
-```bash
-sudo mv /path/to/repo/public/uploads/* /var/www/uploads/
-```
-
-Teste rápido (após reiniciar o app): acesse `http://localhost:3000/uploads/` e verifique um arquivo conhecido ou envie um novo arquivo via interface do chat.
-
-## 👥 Contribuindo
-
-Faça um fork, crie uma branch, faça suas mudanças e envie um pull request!
-
-## 📞 Suporte
-
-Para problemas ou sugestões, abra uma issue no repositório.
-
----
-
-**Chat Taiksu** - Plataforma completa de chat para suporte ao cliente | 2026

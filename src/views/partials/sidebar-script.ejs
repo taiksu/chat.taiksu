@@ -7,16 +7,18 @@
     if (!sidebar || !toggleButtons.length) return;
 
     const open = () => {
-      sidebar.classList.remove('-translate-x-full');
+      sidebar.classList.remove('translate-x-full');
+      sidebar.classList.add('translate-x-0');
       if (overlay) {
         overlay.classList.remove('opacity-0', 'pointer-events-none');
         overlay.classList.add('opacity-100', 'pointer-events-auto');
       }
-      document.body.classList.add('overflow-hidden', 'lg:overflow-auto');
+      document.body.classList.add('overflow-hidden');
     };
 
     const close = (forceOnly = false) => {
-      sidebar.classList.add('-translate-x-full');
+      sidebar.classList.add('translate-x-full');
+      sidebar.classList.remove('translate-x-0');
       if (overlay) {
         overlay.classList.add('opacity-0', 'pointer-events-none');
         overlay.classList.remove('opacity-100', 'pointer-events-auto');
@@ -28,12 +30,15 @@
 
     toggleButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
-        const hidden = sidebar.classList.contains('-translate-x-full');
+        const hidden = sidebar.classList.contains('translate-x-full');
         hidden ? open() : close();
       });
     });
 
     overlay?.addEventListener('click', () => close());
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') close();
+    });
     window.addEventListener('resize', () => {
       if (window.innerWidth >= 1024) close(true);
     });

@@ -1,0 +1,48 @@
+<% switch (turno) {
+    case 'Jantar':
+        option = 'Jantar';
+        secondOption = 'Almoço';
+        break;
+    case 'Almoço':
+        option = 'Almoço';
+        secondOption = 'Jantar';
+        break;
+    default:
+        option = 'Jantar';
+        break;
+} %>
+
+
+<div class="flex flex-row items-center bg-white rounded-full px-1 py-2 md:py-1 border border-gray-200 shadow-xl hover:shadow-none transition duration-300">
+    <label for="selectTurno">
+        <img id="iconeTurno" class="h-6 ml-2" src="">
+    </label>
+    
+    <select id="selectTurno" class="gap-1 py-1 px-4 outline-none border-none text-green-800 hover:text-green-600 font-semibold text-md cursor-pointer" name="turno">
+        <option value="<%= option %>"><%= option %></option>
+        <option value="<%= secondOption %>"><%= secondOption %></option>
+    </select>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const select = document.getElementById("selectTurno");
+    const icone = document.getElementById("iconeTurno");
+
+    const icones = {
+        "Jantar": "/images/icons/jantar.png",
+        "Almoço": "/images/icons/almoco.png"
+    };
+
+    const atualizarIcone = () => {
+        const turno = select.value;
+        icone.src = icones[turno];
+    };
+
+    // Atualiza ao carregar
+    atualizarIcone();
+
+    // Atualiza ao mudar
+    select.addEventListener("change", atualizarIcone);
+});
+</script>

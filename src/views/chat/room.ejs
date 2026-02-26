@@ -4,8 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
-  <link rel="stylesheet" href="/css/tailwind.css">
-  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/style.css">
   <style>
     :root {
       --tw-emerald-600: #10b981;
@@ -186,11 +185,14 @@
     }
   </style>
 </head>
-<body class="h-dvh overflow-hidden bg-green-50 text-green-900">
-  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition lg:hidden"></div>
+<body class="h-dvh overflow-hidden text-green-900">
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
   <%- include('../partials/sidebar', { user, active: 'rooms' }) %>
-  <div class="flex h-dvh flex-col lg:pl-72">
-    <%- include('../partials/topbar', { user, pageTitle: 'Sala de Chat' }) %>
+  <div class="flex h-dvh flex-col">
+    <%- include('../partials/topbar', {
+      user,
+      pageTitle: 'Sala de Chat'
+    }) %>
 
   <% 
     const includeAudioPlayer = (url) => { 
@@ -213,6 +215,13 @@
   <div class="chat-shell flex min-h-0 px-3 py-4 sm:px-6 lg:px-10">
     <% const roomIsClosed = Boolean(initialRoomClosed); %>
     <div class="mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col overflow-hidden rounded-3xl bg-white/85 shadow-2xl ring-1 ring-emerald-100 backdrop-blur">
+      <div class="px-5 pt-4">
+        <%- include('../components/breadcrumb/index', {
+          link: '/chat/rooms',
+          paginaAnterior: 'Salas de Chat',
+          paginaAtual: 'Sala de Chat'
+        }) %>
+      </div>
       <div id="roomHeaderHost"></div>
 
       <!-- Pills bar -->

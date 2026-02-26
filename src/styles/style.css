@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  width: 100%;
+  font-family: 'Figtree', sans-serif;
+  background-color: #F3F8F3;
+}
+
+#card-auditoria {
+  display: none;
+  opacity: 0;
+  transform: translateY(40px);
+}
+
+#card-auditoria.show {
+  display: block;
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
+}

@@ -110,9 +110,7 @@
       return config.participants;
     }
     return [
-      { name: String(config.userName || "Atendente"), avatar: config.avatar || "https://i.pravatar.cc/100?u=1", status: "online" },
-      { name: "Equipe", avatar: "https://i.pravatar.cc/100?u=2", status: "online" },
-      { name: "Suporte", avatar: "https://i.pravatar.cc/100?u=3", status: "online" }
+      { name: String(config.userName || "Atendimento"), avatar: String(config.avatar || ""), status: "online" }
     ];
   }
 
@@ -227,6 +225,10 @@
       .tw-avatar-item:first-child { margin-left: 0; }
       .tw-avatar-item:hover { transform: translateY(-3px); z-index: 10; }
       .tw-avatar-item img { width: 100%; height: 100%; object-fit: cover; }
+      .tw-avatar-item span {
+        width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: 12px; font-weight: 700;
+      }
       .tw-avatar-more { background: #262d31; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; width: 38px; height: 38px; border-radius: 50%; border: 2px solid #075e54; margin-left: -12px; }
 
       .tw-head-txt { display:flex; flex-direction:column; gap:2px; min-width:0; margin-left: 4px; }
@@ -263,6 +265,15 @@
         background-blend-mode: overlay; background-color: rgba(229, 221, 213, 0.8);
         scroll-behavior: smooth;
       }
+      .tw-empty {
+        flex: 1; min-height: 100%;
+        display: flex; align-items: center; justify-content: center;
+        text-align: center; padding: 20px;
+      }
+      .tw-empty-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; color: #0f172a; }
+      .tw-empty-wrap strong { font-size: 20px; line-height: 1.2; display: block; }
+      .tw-empty-wrap p { margin: 0; font-size: 15px; color: #334155; }
+      .tw-empty-icon svg { width: 56px; height: 56px; }
       
       .tw-message {
         width: 100%; display: flex; align-items: flex-end; gap: 8px;
@@ -418,6 +429,17 @@
 
   function renderWidgetHeaderMarkup(participants) {
     const safeParticipants = Array.isArray(participants) && participants.length ? participants : getDefaultWidgetParticipants();
+    const visibleParticipants = safeParticipants.slice(0, 3);
+    const remainingCount = Math.max(0, safeParticipants.length - visibleParticipants.length);
+    const stackHtml = visibleParticipants.map((participant) => {
+      const name = String((participant && participant.name) || "Usuario");
+      const avatar = String((participant && participant.avatar) || "").trim();
+      const fallbackInitial = escapeHtml(name.charAt(0).toUpperCase());
+      if (avatar) {
+        return `<div class="tw-avatar-item"><img src="${escapeAttr(resolveMediaUrl(avatar))}" alt="${escapeAttr(name)}"></div>`;
+      }
+      return `<div class="tw-avatar-item"><span>${fallbackInitial}</span></div>`;
+    }).join("");
     const headerActionsHtml = `<div style="display:flex;gap:4px"><button class="tw-header-btn" id="tw-expand-btn" title="Expandir/Recolher"><span id="tw-expand-icon">${ICONS.expand}</span></button><button class="tw-header-btn" id="tw-close-btn" title="Fechar chat">${ICONS.close}</button></div>`;
     if (templateCore && typeof templateCore.renderConversationHeader === "function") {
       return templateCore.renderConversationHeader({
@@ -433,13 +455,12 @@
       <div class="tw-header">
         <div class="tw-head-main">
           <div class="tw-avatar-stack">
-            <div class="tw-avatar-item"><img src="${escapeAttr(config.avatar || "https://i.pravatar.cc/100?u=1")}" alt="P1"></div>
-            <div class="tw-avatar-item"><img src="https://i.pravatar.cc/100?u=2" alt="P2"></div>
-            <div class="tw-avatar-item tw-avatar-more">+2</div>
+            ${stackHtml || `<div class="tw-avatar-item"><span>A</span></div>`}
+            ${remainingCount > 0 ? `<div class="tw-avatar-item tw-avatar-more">+${remainingCount}</div>` : ""}
           </div>
           <div class="tw-head-txt">
             <h3 class="tw-title">${escapeHtml(config.title)}</h3>
-            <p class="tw-subtitle">4 participantes</p>
+            <p class="tw-subtitle">${escapeHtml(config.subtitle || `${safeParticipants.length} participante${safeParticipants.length === 1 ? "" : "s"}`)}</p>
           </div>
         </div>
         <div class="tw-header-btns">
@@ -1113,10 +1134,8 @@
       node.innerHTML = `
         <div class="tw-empty-wrap">
           <div class="tw-empty-icon">${ICONS.empty}</div>
-          <div>
-            <strong>Nenhuma mensagem ainda</strong>
-            <div>Comece a conversa abaixo!</div>
-          </div>
+          <strong>Nenhuma mensagem ainda</strong>
+          <p>Comece a conversa abaixo!</p>
         </div>
       `;
       container.appendChild(node);

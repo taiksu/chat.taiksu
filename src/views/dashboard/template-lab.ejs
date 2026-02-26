@@ -4,17 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
-  <link rel="stylesheet" href="/css/tailwind.css">
-  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/style.css">
 </head>
-<body class="min-h-dvh bg-green-50 text-green-700">
-  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition lg:hidden"></div>
+<body class="min-h-dvh text-green-700">
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
   <%- include('../partials/sidebar', { user, active: 'template' }) %>
 
-  <div class="lg:pl-72">
-    <%- include('../partials/topbar', { user, pageTitle: 'Template Lab' }) %>
+  <div>
+    <%- include('../partials/topbar', {
+      user,
+      pageTitle: 'Template Lab'
+    }) %>
 
     <main class="mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <%- include('../components/breadcrumb/index', {
+        link: '/dashboard',
+        paginaAnterior: 'Dashboard',
+        paginaAtual: 'Template Lab'
+      }) %>
       <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
         <h1 class="text-xl font-bold text-green-800">Laboratorio de template unico</h1>
         <p class="mt-1 text-sm text-gray-500">Use esta tela para validar o widget e abrir a mesma sala no chat real com usuarios diferentes.</p>
@@ -32,17 +39,12 @@
           </label>
           <label class="text-sm">
             <span class="mb-1 block font-semibold text-gray-500">Usuario do widget</span>
-            <select id="widgetUser" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-              <option value="user_alice">Alice</option>
-              <option value="user_bob">Bob</option>
-              <option value="user_carol">Carol</option>
-              <option value="user_dave">Dave</option>
-            </select>
+            <select id="widgetUser" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400"></select>
           </label>
         </div>
 
         <div class="mt-4 flex flex-wrap gap-2">
-          <button id="initWidgetBtn" type="button" class="rounded-xl bg-green-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600">Iniciar widget inline</button>
+          <button id="initWidgetBtn" type="button" class="rounded-xl0 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600">Iniciar widget inline</button>
           <button id="openRoomBtn" type="button" class="rounded-xl border border-green-300 bg-white px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50">Abrir sala real</button>
           <a href="/dashboard/qa-chat" class="rounded-xl border border-green-300 bg-white px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50">Ir para QA do Chat</a>
         </div>
@@ -51,7 +53,7 @@
       <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
         <h2 class="text-lg font-bold text-green-800">Preview do widget (template compartilhado em evolução)</h2>
         <p class="mt-1 text-sm text-gray-500">A ideia desta view e validar comportamento visual antes de integrar total com a sala admin.</p>
-        <div id="widgetMount" class="mt-4 min-h-[720px] rounded-2xl border border-green-100 bg-green-50/40 p-3"></div>
+        <div id="widgetMount" class="mt-4 min-h-[720px] rounded-2xl border border-green-100/40 p-3"></div>
       </section>
     </main>
   </div>
@@ -61,6 +63,8 @@
   <script src="/js/taiksu-widget.js"></script>
   <script>
     const defaultServerUrl = <%- JSON.stringify(appUrl || '') %> || `${window.location.protocol}//${window.location.host}`;
+    const roomsData = <%- JSON.stringify(rooms || []) %>;
+    const sessionUser = <%- JSON.stringify(user || null) %>;
     const roomSelect = document.getElementById('roomSelect');
     const widgetUser = document.getElementById('widgetUser');
     const mount = '#widgetMount';
@@ -69,8 +73,59 @@
       return roomSelect.value;
     }
 
+    function selectedUser() {
+      const selected = widgetUser.options[widgetUser.selectedIndex];
+      if (!selected) return null;
+      return {
+        id: String(selected.value || ''),
+        name: String(selected.dataset.name || selected.textContent || '')
+      };
+    }
+
+    function normalizeParticipant(participant) {
+      if (!participant || !participant.id) return null;
+      return {
+        id: String(participant.id),
+        name: String(participant.name || `Usuario ${participant.id}`)
+      };
+    }
+
+    function buildUserOptions() {
+      const room = roomsData.find((item) => String(item.id) === String(roomId()));
+      const participants = Array.isArray(room?.participants) ? room.participants : [];
+      const options = [];
+      const seen = new Set();
+
+      if (sessionUser && sessionUser.id) {
+        const me = normalizeParticipant(sessionUser);
+        if (me) {
+          seen.add(me.id);
+          options.push(me);
+        }
+      }
+
+      participants.forEach((participant) => {
+        const normalized = normalizeParticipant(participant);
+        if (!normalized || seen.has(normalized.id)) return;
+        seen.add(normalized.id);
+        options.push(normalized);
+      });
+
+      widgetUser.innerHTML = options.map((item) => (
+        `<option value="${item.id}" data-name="${item.name.replace(/"/g, '&quot;')}">${item.name} (${item.id})</option>`
+      )).join('');
+
+      if (sessionUser && sessionUser.id && seen.has(String(sessionUser.id))) {
+        widgetUser.value = String(sessionUser.id);
+      }
+    }
+
     function userId() {
-      return widgetUser.value;
+      return selectedUser()?.id || '';
+    }
+
+    function userName() {
+      return selectedUser()?.name || '';
     }
 
     function initWidget() {
@@ -78,12 +133,16 @@
         alert('Selecione uma sala/chamado.');
         return;
       }
+      if (!userId()) {
+        alert('Selecione um usuario valido para o widget.');
+        return;
+      }
       window.TaiksuChat.destroy?.();
       window.TaiksuChat.init({
         serverUrl: defaultServerUrl,
         roomId: roomId(),
         userId: userId(),
-        userName: userId(),
+        userName: userName(),
         mode: 'inline',
         mountSelector: mount,
         autoOpen: true,
@@ -100,10 +159,13 @@
     document.getElementById('initWidgetBtn').addEventListener('click', initWidget);
     document.getElementById('openRoomBtn').addEventListener('click', openRealRoom);
     roomSelect.addEventListener('change', () => {
+      buildUserOptions();
       const next = `/dashboard/template-lab?roomId=${encodeURIComponent(roomId())}`;
       window.history.replaceState({}, '', next);
     });
+    widgetUser.addEventListener('change', initWidget);
 
+    buildUserOptions();
     initWidget();
   </script>
 </body>

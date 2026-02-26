@@ -1,0 +1,20 @@
+<%
+let msg = "";
+let icon = "";
+let bgcolor = "";
+
+if (acimaMedia == true) {
+    msg = "acima da média";
+    icon = "up.png";
+    bgcolor = "bg-green-50 text-green-800";
+} else { 
+    msg = "abaixo da média";
+    icon = "down.png";
+    bgcolor = "bg-red-50 text-red-800";
+}
+%>
+
+<div class="px-3 py-1 rounded-sm flex flex-row items-center gap-2 <%= bgcolor %> text-xs">
+ <img class="h-4" src="/images/icons/<%= icon %>"/>
+ <%= msg %>
+</div>

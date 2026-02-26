@@ -208,6 +208,7 @@ async function createTables() {
         id VARCHAR(64) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         type VARCHAR(64) DEFAULT 'support',
+        status VARCHAR(32) DEFAULT 'aberto',
         description TEXT,
         owner_id VARCHAR(64) NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

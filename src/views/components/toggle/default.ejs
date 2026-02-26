@@ -1,0 +1,28 @@
+<%
+
+if (status == true) {
+    cor = 'bg-green-500 hover:bg-gray-300'
+    translate = 'translate-x-6 group-hover:translate-x-0'
+    label = 'Ativo'
+    labelInverso = 'Desativar'
+    corTexto = 'text-green-600'
+} else {
+    cor = 'bg-gray-300 hover:bg-green-500'
+    translate = 'translate-x-0 group-hover:translate-x-6'
+    label = 'Desativado'
+    labelInverso = 'Ativar'
+    corTexto = 'text-gray-500'
+}
+
+
+
+
+%>
+  
+<div class="flex flex-row items-center gap-3 group">
+  <p class="block group-hover:hidden text-sm font-semibold <%= corTexto %>"><%= label %></p>
+  <p class="hidden group-hover:block text-sm font-semibold <%= corTexto %>"><%= labelInverso %></p>
+    <a href="<%= link %>" class="cursor-pointer w-12 h-6 <%= cor %> rounded-full transition-colors duration-600 group relative">
+      <div class="absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform duration-600 <%= translate %>"></div>
+    </a>
+</div>
