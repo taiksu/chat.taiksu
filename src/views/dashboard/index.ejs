@@ -9,29 +9,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 </head>
 <body class="min-h-dvh bg-green-50 text-green-700">
-  <nav class="bg-gradient-to-r from-green-400 to-green-500 px-3 py-3 text-white shadow-sm sm:px-5">
-    <div class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2">
-      <h1 class="text-base font-bold sm:text-lg">Chat Taiksu</h1>
-      <div class="flex flex-wrap items-center justify-end gap-2 text-sm">
-        <% if (user) { %>
-          <span class="hidden text-green-50 sm:inline"><%= user.name %></span>
-          <div class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white text-xs font-bold text-green-700">
-            <% if (user.avatar) { %>
-              <img src="<%= user.avatar %>" alt="Avatar de <%= user.name %>" class="h-full w-full object-cover">
-            <% } else { %>
-              <span><%= user.name.charAt(0).toUpperCase() %></span>
-            <% } %>
-          </div>
-          <a href="/dashboard" class="rounded-lg bg-white/35 px-3 py-2 text-xs font-semibold sm:text-sm">Dashboard</a>
-          <a href="/chat/rooms" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Chat</a>
-          <a href="/auth/logout" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Sair</a>
-        <% } %>
-      </div>
-    </div>
-  </nav>
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition lg:hidden"></div>
+  <%- include('../partials/sidebar', { user, active: 'dashboard' }) %>
 
-  <main class="mx-auto w-full max-w-7xl space-y-5 px-3 py-4 sm:px-5 sm:py-6">
-    <h2 class="text-xl font-bold text-green-700 sm:text-2xl">Dashboard</h2>
+  <div class="lg:pl-72">
+    <%- include('../partials/topbar', { user, pageTitle: 'Dashboard' }) %>
+
+    <main class="mx-auto w-full max-w-6xl space-y-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <h2 class="text-xl font-bold text-green-700 sm:text-2xl">Visão Geral</h2>
 
     <section class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
       <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
@@ -56,13 +41,16 @@
       </article>
     </section>
 
-    <section class="rounded-2xl border border-green-100 bg-white p-3 shadow-sm sm:p-5">
-      <h2 class="mb-3 text-lg font-bold text-green-700 sm:text-xl">Metricas dos ultimos 30 dias</h2>
-      <div class="relative h-64 sm:h-80">
-        <canvas id="metricsChart"></canvas>
-      </div>
-    </section>
-  </main>
+      <section class="rounded-2xl border border-green-100 bg-white p-3 shadow-sm sm:p-5">
+        <h2 class="mb-3 text-lg font-bold text-green-700 sm:text-xl">Metricas dos ultimos 30 dias</h2>
+        <div class="relative h-64 sm:h-80">
+          <canvas id="metricsChart"></canvas>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <%- include('../partials/sidebar-script') %>
 
   <script>
     fetch('/dashboard/metrics')

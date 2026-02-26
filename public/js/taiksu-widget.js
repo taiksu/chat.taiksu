@@ -14,7 +14,7 @@
     autoOpen: false,
     authToken: "",
     userName: "",
-    placeholder: "Digite sua mensagem...",
+    placeholder: "sua mensagem...",
     mode: "floating",
     mountSelector: ""
   };
@@ -37,6 +37,25 @@
   let localUserName = "";
   let currentAudio = null;
   const renderedIds = new Set();
+  let templateCore = (typeof window !== "undefined" && window.ChatTemplateCore) ? window.ChatTemplateCore : null;
+  let templateCoreLoader = null;
+
+  const ICONS = {
+    expand: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>`,
+    compress: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="14" y1="10" x2="21" y2="3"></line><line x1="10" y1="14" x2="3" y2="21"></line></svg>`,
+    close: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+    smile: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>`,
+    attach: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>`,
+    mic: `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`,
+    send: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="transform: rotate(45deg); margin-left: -2px; margin-top: 2px;"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`,
+    stop: `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>`,
+    doc: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`,
+    camera: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>`,
+    micAlt: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v1a7 7 0 0 1-14 0v-1"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>`,
+    checkDouble: (read) => `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${read ? "#34b7f1" : "#bbbbbb"}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="7 13 12 18 22 8"></polyline><polyline points="2 13 7 18 17 8"></polyline></svg>`,
+    filePdf: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M9 13v-3h1.5a1.5 1.5 0 0 1 0 3H9z"></path><path d="M12 13h1a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2h-1v5z"></path></svg>`,
+    empty: `<svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`
+  };
 
   function parseJwtSub(token) {
     try {
@@ -56,6 +75,25 @@
 
   function normalizeMode(mode) {
     return mode === "inline" ? "inline" : "floating";
+  }
+
+  function ensureTemplateCoreLoaded() {
+    if (templateCore) return Promise.resolve(templateCore);
+    if (templateCoreLoader) return templateCoreLoader;
+    if (typeof document === "undefined") return Promise.resolve(null);
+
+    const script = document.createElement("script");
+    script.src = `${String(config.serverUrl || "").replace(/\/+$/, "")}/js/chat-template-core.js`;
+    script.async = true;
+    templateCoreLoader = new Promise((resolve) => {
+      script.onload = () => {
+        templateCore = (typeof window !== "undefined" && window.ChatTemplateCore) ? window.ChatTemplateCore : null;
+        resolve(templateCore);
+      };
+      script.onerror = () => resolve(null);
+    });
+    document.head.appendChild(script);
+    return templateCoreLoader;
   }
 
   function buildApiUrl(path) {
@@ -96,101 +134,198 @@
     return `
       :host { all: initial; }
       * { box-sizing: border-box; }
-      .tw-root { font-family: "Figtree","Segoe UI",Tahoma,Geneva,Verdana,sans-serif; color: #0f172a; line-height: 1.2; }
-      .tw-toggle { width: 58px; height: 58px; border: 0; border-radius: 999px; background: linear-gradient(135deg,#10b981 0%,#047857 100%); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 14px 28px rgba(6,78,59,.28); }
-      .tw-widget { width:min(${Math.max(320, Number(config.width) || 380)}px,calc(100vw - 24px)); height:min(${Math.max(460, Number(config.height) || 620)}px,calc(100vh - 24px)); background:#fff; border-radius:16px; border:1px solid #e2e8f0; box-shadow:0 22px 50px rgba(0,0,0,.22); overflow:hidden; display:flex; flex-direction:column; }
-      .tw-header { background: rgba(5, 150, 105, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color:#fff; display:flex; align-items:center; justify-content:space-between; padding:12px 14px; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid rgba(255,255,255,0.1); }
-      .tw-head-main { display:flex; align-items:center; gap:10px; min-width:0; }
-      .tw-head-icon { width:34px; height:34px; border-radius:9999px; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-      .tw-head-txt { display:flex; flex-direction:column; gap:2px; min-width:0; }
-      .tw-title { margin:0; font-size:15px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-      .tw-subtitle { font-size:11px; color:#d1fae5; display:flex; align-items:center; gap:6px; }
-      .tw-online-dot { width:7px; height:7px; border-radius:9999px; background:#34d399; display:inline-block; box-shadow:0 0 0 3px rgba(52,211,153,.18); }
-      .tw-close { width:28px; height:28px; border-radius:8px; border:0; background:rgba(255,255,255,.18); color:#fff; cursor:pointer; font-size:18px; line-height:1; }
-      .tw-messages { flex:1; overflow-y:auto; padding:16px 12px; background: #f8fafc; scroll-behavior: smooth; }
-      .tw-messages::-webkit-scrollbar { width: 5px; }
-      .tw-messages::-webkit-scrollbar-track { background: transparent; }
-      .tw-messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-      .tw-messages::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-      .tw-empty { min-height:100%; display:flex; align-items:center; justify-content:center; text-align:center; padding:24px 14px; color:#64748b; font-size:13px; }
-      .tw-empty-wrap { display:flex; flex-direction:column; align-items:center; gap:10px; max-width:230px; }
-      .tw-empty-icon { width:72px; height:72px; border-radius:9999px; background:linear-gradient(135deg,#d1fae5,#a7f3d0); color:#065f46; display:flex; align-items:center; justify-content:center; box-shadow:inset 0 0 0 1px rgba(16,185,129,.28); }
-      .tw-empty strong { color:#065f46; display:block; margin-bottom:6px; }
-      .tw-message { display:flex; margin-bottom:12px; align-items:flex-end; gap:8px; animation: twFadeUp 0.3s ease-out forwards; opacity: 0; }
-      @keyframes twFadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-      .tw-message.own { justify-content:flex-end; }
-      .tw-message-row { max-width:85%; display:flex; flex-direction:column; }
-      .tw-message.own .tw-message-row { align-items:flex-end; }
-      .tw-message.grouped { margin-top: -8px; }
-      .tw-message.grouped .tw-avatar, .tw-message.grouped .tw-name { display: none; }
-      .tw-avatar { width:28px; height:28px; border-radius:9999px; overflow:hidden; background:#059669; color:#fff; font-size:12px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-      .tw-message.own .tw-avatar { order:2; background:#047857; }
-      .tw-avatar img { width:100%; height:100%; object-fit:cover; display:block; }
-      .tw-name { font-size:12px; color:#475569; margin-bottom:4px; font-weight:600; }
-      .tw-bubble { border-radius: 14px 14px 14px 2px; border: 1px solid #e2e8f0; background: #fff; color: #1e293b; padding: 10px 14px; font-size: 14px; line-height: 1.5; word-break: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s; }
-      .tw-message.own .tw-bubble { background: #065f46; border-color: #064e3b; color: #fff; border-radius: 14px 14px 2px 14px; box-shadow: 0 4px 12px rgba(6,95,70,0.15); }
-      .tw-time { margin-top: 4px; font-size: 11px; color: #64748b; font-weight: 500; }
-      .tw-meta { margin-top: 2px; display: flex; align-items: center; gap: 6px; }
-      .tw-message.own .tw-meta { justify-content: flex-end; }
-      .tw-read { display: inline-flex; align-items: center; color: #94a3b8; }
-      .tw-read .tw-check-read { display: none; }
-      .tw-read.read { color: #0ea5e9; }
-      .tw-read.read .tw-check-sent { display: none; }
-      .tw-read.read .tw-check-read { display: inline-block; }
-      .tw-media.image { max-width:220px; width:100%; border-radius:10px; border:1px solid rgba(148,163,184,.4); display:block; cursor:pointer; transition:transform 0.2s; }
-      .tw-media.image:hover { transform: scale(1.02); }
-      .tw-lightbox { position: fixed; inset: 0; z-index: 10000; background: rgba(15, 23, 42, 0.9); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; padding: 20px; cursor: zoom-out; opacity: 0; transition: opacity 0.3s ease; }
-      .tw-lightbox.show { display: flex; opacity: 1; }
-      .tw-lightbox img { max-width: 95%; max-height: 95%; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); transform: scale(0.9); transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-      .tw-lightbox.show img { transform: scale(1); }
-      .tw-lightbox-close { position: absolute; top: 20px; right: 20px; width: 44px; height: 44px; background: rgba(255,255,255,0.1); border: 0; border-radius: 50%; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 24px; transition: background 0.2s; }
-      .tw-lightbox-close:hover { background: rgba(255,255,255,0.2); }
-      .tw-media.audio { width:230px; max-width:100%; }
-      .tw-audio-player { display:flex; align-items:center; gap:8px; width:260px; max-width:100%; background:rgba(255,255,255,.18); border-radius:999px; padding:7px 10px; }
-      .tw-audio-toggle { width:30px; height:30px; border:0; border-radius:9999px; background:#fff; color:#065f46; display:flex; align-items:center; justify-content:center; cursor:pointer; }
-      .tw-audio-main { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; }
-      .tw-audio-wave { display:flex; align-items:center; min-height:16px; }
-      .tw-audio-progress { position:relative; flex:1; height:18px; display:flex; align-items:flex-end; }
-      .tw-audio-dot { position:absolute; left:0%; bottom:8px; width:11px; height:11px; border-radius:9999px; background:#38bdf8; box-shadow:0 0 0 2px rgba(56,189,248,.2); transform:translateX(-50%); transition:left .09s linear; z-index:2; }
-      .tw-audio-bars { display:flex; flex:1; align-items:flex-end; gap:2px; height:18px; padding-left:7px; }
-      .tw-audio-bar { width:3px; border-radius:999px; background:rgba(255,255,255,.95); transform-origin:center bottom; }
-      .tw-audio-time { width:auto; text-align:left; font-size:11px; font-weight:700; color:#fff; }
-      .tw-audio-player.playing .tw-audio-bar { animation: twEq 0.9s ease-in-out infinite; }
-      .tw-audio-player.playing .tw-audio-bar:nth-child(2n) { animation-duration: 1.1s; }
-      .tw-audio-player.playing .tw-audio-bar:nth-child(3n) { animation-duration: 0.8s; }
-      @keyframes twEq { 0%,100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
-      .tw-message:not(.own) .tw-audio-player { background:#c7ded0; }
-      .tw-message:not(.own) .tw-audio-toggle { background:#f1f5f9; color:#334155; }
-      .tw-message:not(.own) .tw-audio-time { color:#475569; }
-      .tw-message:not(.own) .tw-audio-bar { background:#9ca3af; }
-      .tw-file-link { color:inherit; font-weight:600; text-decoration:underline; word-break:break-all; }
-      .tw-typing { min-height:0; margin:-10px 10px 0; padding:4px 10px; font-size:12px; color:#64748b; font-style:italic; display:flex; align-items:center; gap:6px; background:rgba(248,250,252,.9); border:1px solid rgba(226,232,240,.9); border-radius:10px; width:fit-content; max-width:calc(100% - 20px); }
-      .tw-dot { width:6px; height:6px; border-radius:9999px; background:#94a3b8; display:inline-block; animation:twTyping 1.2s infinite ease-in-out; }
-      .tw-dot:nth-child(2) { animation-delay:.15s; }
-      .tw-dot:nth-child(3) { animation-delay:.3s; }
-      @keyframes twTyping { 0%,80%,100% { opacity:.2; transform:translateY(0); } 40% { opacity:1; transform:translateY(-3px); } }
-      .tw-input-area { border-top: 1px solid rgba(219, 228, 238, 0.5); background: rgba(255, 255, 255, 0.82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: 12px; display: flex; gap: 8px; align-items: flex-end; position: relative; margin-top: -10px; border-top-left-radius: 18px; border-top-right-radius: 18px; box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06); }
-      .tw-compose { flex:1; display:flex; align-items:flex-end; gap:8px; border:1px solid #e2e8f0; border-radius:14px; padding:6px; background:#fff; box-shadow:0 2px 4px rgba(15,23,42,0.02); }
-      .tw-attach, .tw-send, .tw-mic { width:40px; height:40px; border:0; border-radius:10px; background:#059669; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-      .tw-mic.recording { background:#dc2626; }
-      .tw-send[disabled] { opacity:.45; cursor:default; }
-      .tw-attach-menu { position:absolute; left:10px; bottom:58px; min-width:156px; background:#fff; border:1px solid #dbe3ef; border-radius:10px; box-shadow:0 10px 24px rgba(15,23,42,.18); overflow:hidden; display:none; }
-      .tw-attach-menu.show { display:block; }
-      .tw-attach-opt { width:100%; border:0; background:transparent; text-align:left; padding:9px 11px; font:inherit; font-size:13px; color:#334155; cursor:pointer; display:flex; align-items:center; gap:8px; }
-      .tw-attach-opt:hover { background:#f1f5f9; }
-      .tw-input { flex:1; min-height:40px; max-height:110px; resize:none; border:0; border-radius:10px; padding:9px 10px; font:inherit; font-size:14px; outline:none; color:#065f46; }
-      .tw-input::placeholder { color:#64748b; }
-      .tw-system { min-height:0; margin:4px 10px -2px; padding:0; font-size:12px; color:#64748b; }
-      .tw-system.show { background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:7px 9px; }
-      .tw-system.error.show { color: #9f1239; border-color: #fecdd3; background: #fff1f2; }
-      .tw-system.warn.show { color: #92400e; border-color: #fde68a; background: #fffbeb; }
-      .tw-typing { min-height: 28px; margin: 0 14px 8px; padding: 6px 12px; font-size: 12px; color: #475569; font-style: normal; display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; width: fit-content; max-width: calc(100% - 28px); box-shadow: 0 2px 4px rgba(0,0,0,0.03); opacity: 0; transform: translateY(5px); transition: all 0.3s ease; pointer-events: none; }
-      .tw-typing.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
-      .tw-recording-chip { position:absolute; right:60px; bottom:62px; background:#fff1f2; border:1px solid #fecdd3; color:#be123c; font-size:12px; font-weight:600; border-radius:999px; padding:6px 10px; display:none; align-items:center; gap:6px; }
-      .tw-recording-chip.show { display:flex; }
-      .tw-recording-chip span { width:8px; height:8px; border-radius:999px; background:#ef4444; animation:twRecPulse 1s infinite; }
-      @keyframes twRecPulse { 0%,100% { transform:scale(.85); opacity:.7; } 50% { transform:scale(1.2); opacity:1; } }
-      @media (max-width:520px){ .tw-widget{ width:calc(100vw - 12px); height:calc(100vh - 12px); border-radius:14px; } }
+      .tw-root { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; line-height: 1.2; position: relative; }
+      
+      .tw-toggle { 
+        width: 58px; height: 58px; border: 0; border-radius: 999px; 
+        background: linear-gradient(135deg,#075e54 0%,#128c7e 100%); 
+        color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; 
+        box-shadow:0 10px 25px rgba(7, 94, 84, 0.3); transition: transform 0.2s; 
+      }
+      .tw-toggle:hover { transform: scale(1.05); }
+      
+      .tw-widget { 
+        width: min(${Math.max(320, Number(config.width) || 400)}px, calc(100vw - 24px)); 
+        height: min(${Math.max(460, Number(config.height) || 650)}px, calc(100vh - 24px)); 
+        background: #e5ddd5; 
+        border-radius: 16px; 
+        border: 1px solid rgba(0,0,0,0.1); 
+        box-shadow: 0 22px 50px rgba(0,0,0,0.22); 
+        overflow: hidden; 
+        display: flex; 
+        flex-direction: column; 
+        position: relative;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      
+      .tw-widget.expanded {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: min(1200px, calc(100vw - 40px));
+        height: calc(100vh - 40px);
+        border-radius: 16px;
+        z-index: 999999;
+      }
+      
+      .tw-sender-name {
+        font-size: 12px;
+        font-weight: 800;
+        color: #128c7e;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        display: block;
+      }
+
+      .tw-header { background: #075e54; color:#fff; display:flex; align-items:center; justify-content:space-between; padding:16px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+      .tw-head-main { display:flex; align-items:center; gap:12px; min-width:0; }
+      
+      /* Avatar Stack */
+      .tw-avatar-stack { display: flex; align-items: center; }
+      .tw-avatar-item {
+        width: 38px; height: 38px; border-radius: 50%; border: 2px solid #075e54;
+        background-color: #ddd; overflow: hidden; margin-left: -12px;
+        position: relative; transition: transform 0.3s ease;
+      }
+      .tw-avatar-item:first-child { margin-left: 0; }
+      .tw-avatar-item:hover { transform: translateY(-3px); z-index: 10; }
+      .tw-avatar-item img { width: 100%; height: 100%; object-fit: cover; }
+      .tw-avatar-more { background: #262d31; color: white; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; width: 38px; height: 38px; border-radius: 50%; border: 2px solid #075e54; margin-left: -12px; }
+
+      .tw-head-txt { display:flex; flex-direction:column; gap:2px; min-width:0; margin-left: 4px; }
+      .tw-title { margin:0; font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .tw-subtitle { font-size:10px; color:#d1fae5; }
+      
+      .tw-header-btns { display: flex; gap: 4px; }
+      .tw-header-btn { width:32px; height:32px; border-radius:9999px; border:0; background:transparent; color:#fff; cursor:pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+      .tw-header-btn:hover { background: rgba(255,255,255,0.1); }
+
+      .tw-main-content { flex: 1; display:flex; overflow:hidden; position: relative; }
+
+      /* Floating Attach Menu */
+      .tw-attach-menu {
+        position: absolute; bottom: 85px; left: 16px; width: 55px;
+        background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+        display: flex; flex-direction: column; align-items: center; padding: 12px 0; gap: 15px;
+        z-index: 60; border-radius: 30px; box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        opacity: 0; transform: translateY(30px) scale(0.5); pointer-events: none;
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        border: 1px solid rgba(255,255,255,0.3);
+      }
+      .tw-attach-menu.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+      .tw-attach-item { display: flex; flex-direction: column; align-items: center; cursor: pointer; transition: transform 0.2s ease; border:0; background:transparent; }
+      .tw-attach-item:active { transform: scale(0.8); }
+      .tw-attach-circle {
+        width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      }
+
+      .tw-messages { 
+        flex:1; overflow-y:auto; padding: 20px 15px; display: flex; flex-direction: column; gap: 8px;
+        background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+        background-blend-mode: overlay; background-color: rgba(229, 221, 213, 0.8);
+        scroll-behavior: smooth;
+      }
+      
+      .tw-message { 
+        max-width: 80%; padding: 10px 14px; border-radius: 16px; font-size: 14.5px; position: relative; 
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05); word-wrap: break-word; line-height: 1.4;
+        animation: twMsgIn 0.3s ease-out forwards; opacity: 0;
+      }
+      .tw-message:not(.grouped) { margin-top: 14px; }
+      .tw-message.grouped { margin-top: 2px; }
+      @keyframes twMsgIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+      
+      .tw-message.received { align-self: flex-start; background-color: #ffffff; border-bottom-left-radius: 4px; color: #111; }
+      .tw-message.sent { align-self: flex-end; background-color: #dcf8c6; border-bottom-right-radius: 4px; color: #111; }
+      
+      .tw-message.grouped.received { border-top-left-radius: 4px; }
+      .tw-message.grouped.sent { border-top-right-radius: 4px; }
+
+      .tw-meta { margin-top: 4px; display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+      .tw-time { font-size: 10px; color: #888; }
+      .tw-read { display: inline-flex; align-items: center; }
+
+      .tw-media.image { max-width: 100%; border-radius: 12px; display: block; cursor: pointer; margin: 4px 0; }
+      .tw-file-link { color: #075e54; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 8px; }
+
+      .tw-input-area { background: #ffffff; padding: 12px 16px; position: relative; border-top: 1px solid rgba(0,0,0,0.05); z-index: 20; }
+      .tw-input-row { display: flex; align-items: center; gap: 12px; }
+      .tw-input { 
+        flex: 1; background: #f0f2f5; border-radius: 22px; padding: 10px 18px; outline: none; border: none; 
+        font-size: 15px; transition: background 0.2s; resize: none; overflow: hidden;
+      }
+      .tw-input:focus { background: #e8eaed; }
+      .tw-icon-btn { color: #9ca3af; cursor: pointer; transition: all 0.2s; border:0; background:transparent; padding:4px; display:flex; align-items:center; justify-content:center; }
+      .tw-icon-btn:hover { color: #075e54; transform: scale(1.1); }
+
+      .tw-action-btn { 
+        width: 44px; height: 44px; background: #075e54; border-radius: 999px; border:0; color:#fff; cursor:pointer; 
+        display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,0.1); transition: all 0.2s;
+      }
+      .tw-action-btn:active { transform: scale(0.9); }
+      .tw-action-btn.pulse { animation: twPulseMic 1.5s infinite; }
+      @keyframes twPulseMic {
+        0% { box-shadow: 0 0 0 0 rgba(7, 94, 84, 0.4); }
+        70% { box-shadow: 0 0 0 10px rgba(7, 94, 84, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(7, 94, 84, 0); }
+      }
+
+      /* Emoji Picker v2 */
+      .tw-emoji-picker {
+        position: absolute; bottom: 85px; left: 16px; background: white; border-radius: 18px; 
+        box-shadow: 0 12px 40px rgba(0,0,0,0.2); width: 280px; max-height: 350px; overflow-y: auto; 
+        z-index: 70; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); transform-origin: bottom left; padding: 10px;
+        opacity: 0; transform: scale(0.5); pointer-events: none;
+      }
+      .tw-emoji-picker.show { opacity: 1; transform: scale(1); pointer-events: auto; }
+      .tw-emoji-section-title { font-size: 11px; font-weight: 700; color: #075e54; text-transform: uppercase; padding: 8px 8px 4px 8px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px; }
+      .tw-emoji-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+      .tw-emoji-item { font-size: 22px; padding: 6px; cursor: pointer; text-align: center; border-radius: 8px; transition: transform 0.15s, background 0.2s; }
+      .tw-emoji-item:hover { transform: scale(1.25); background: #f0f2f5; }
+
+      .tw-recording-chip { 
+        position: absolute; left: 16px; right: 16px; bottom: 12px; height: 46px; 
+        background: #fff; border-radius: 23px; display: none; align-items: center; 
+        padding: 0 20px; gap: 12px; border: 1px solid #f0f2f5; z-index: 30; 
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+      }
+      .tw-recording-chip.show { display: flex; animation: twFadeIn 0.2s; }
+      @keyframes twFadeIn { from { opacity:0; } to { opacity:1; } }
+      .tw-recording-chip strong { font-size: 13px; color: #1f2937; }
+      .tw-recording-chip span { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: twBlink 1s infinite; }
+      @keyframes twBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+      .tw-typing { font-size: 11px; color: #075e54; padding: 4px 16px; font-weight: 600; display: none; }
+      .tw-typing.show { display: flex; align-items: center; gap: 4px; }
+      .tw-dot { width: 3px; height: 3px; background: currentColor; border-radius: 50%; animation: twDot 1.4s infinite; }
+      .tw-dot:nth-child(2) { animation-delay: 0.2s; }
+      .tw-dot:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes twDot { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+      .tw-system { font-size: 11px; text-align: center; padding: 4px; display: none; }
+      .tw-system.show { display: block; }
+      .tw-system.error { color: #ef4444; }
+
+      .tw-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+      .tw-lightbox.show { display: flex; }
+      .tw-lightbox-close { position: absolute; top: 20px; right: 20px; border: 0; background: transparent; color: white; font-size: 32px; cursor: pointer; }
+      .tw-lightbox-img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+
+      .tw-audio-player { background: rgba(255,255,255,0.8); padding: 8px; border-radius: 12px; display: flex; align-items: center; gap: 10px; min-width: 200px; }
+      .tw-audio-toggle { width: 34px; height: 34px; border-radius: 50%; border: 0; background: #075e54; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+      .tw-audio-main { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+      .tw-audio-wave { height: 4px; background: #ccc; border-radius: 2px; position: relative; }
+      .tw-audio-progress { position: absolute; left: 0; top: 0; height: 100%; background: #075e54; border-radius: 2px; width: 0; }
+      .tw-audio-dot { position: absolute; right: -6px; top: -4px; width: 12px; height: 12px; background: #075e54; border-radius: 50%; border: 2px solid white; }
+      .tw-audio-time { font-size: 10px; color: #555; }
+
+      @media (max-width: 480px) {
+        .tw-widget { width: 100vw; height: 100vh; border-radius: 0; }
+        .tw-widget.expanded { width: 100vw; height: 100vh; border-radius: 0; max-width: none; }
+      }
     `;
   }
 
@@ -209,131 +344,353 @@
   function renderOpen() {
     shadow.innerHTML = `
       <style>${styles()}</style>
-      <div class="tw-root">
-        <div class="tw-widget">
+      <div class="tw-root" id="tw-root">
+        <div class="tw-widget" id="tw-widget">
           <div class="tw-header">
             <div class="tw-head-main">
-              <div class="tw-head-icon">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
+              <div class="tw-avatar-stack">
+                <div class="tw-avatar-item">
+                  <img src="${escapeAttr(config.avatar || "https://i.pravatar.cc/100?u=1")}" alt="P1">
+                </div>
+                <div class="tw-avatar-item">
+                  <img src="https://i.pravatar.cc/100?u=2" alt="P2">
+                </div>
+                <div class="tw-avatar-item tw-avatar-more">+2</div>
               </div>
               <div class="tw-head-txt">
                 <h3 class="tw-title">${escapeHtml(config.title)}</h3>
-                <div class="tw-subtitle"><span class="tw-online-dot"></span><span>Atendimento online</span></div>
+                <p class="tw-subtitle">4 participantes</p>
               </div>
             </div>
-            <button class="tw-close" id="tw-close-btn" aria-label="Fechar chat">&times;</button>
-          </div>
-          <div class="tw-messages" id="tw-messages">
-            <div class="tw-empty" id="tw-empty">
-              <div class="tw-empty-wrap">
-                <div class="tw-empty-icon">
-                  <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
-                </div>
-                <div>
-                  <strong>Nenhuma mensagem enviada</strong>
-                  Envie a primeira mensagem para iniciar o atendimento.
-                </div>
-              </div>
+            <div class="tw-header-btns">
+              <button class="tw-header-btn" id="tw-expand-btn" title="Expandir/Recolher">
+                <span id="tw-expand-icon">${ICONS.expand}</span>
+              </button>
+              <button class="tw-header-btn" id="tw-close-btn" title="Fechar chat">${ICONS.close}</button>
             </div>
           </div>
-          <div class="tw-typing" id="tw-typing"></div>
+          
+          <div class="tw-main-content">
+            <!-- Menu de Anexo Flutuante -->
+            <div class="tw-attach-menu" id="tw-attach-menu">
+              <button class="tw-attach-item" data-type="document" title="Documento">
+                <div class="tw-attach-circle" style="background: #6366f1;">${ICONS.doc}</div>
+              </button>
+              <button class="tw-attach-item" data-type="image" title="Mídia">
+                <div class="tw-attach-circle" style="background: #ec4899;">${ICONS.camera}</div>
+              </button>
+              <button class="tw-attach-item" data-type="audio" title="Áudio">
+                <div class="tw-attach-circle" style="background: #f97316;">${ICONS.micAlt}</div>
+              </button>
+            </div>
+
+            <!-- Area de Mensagens -->
+            <div class="tw-messages" id="tw-messages">
+              <!-- Mensagens serao injetadas aqui -->
+            </div>
+          </div>
+
+          <!-- Emoji Picker -->
+          <div class="tw-emoji-picker" id="tw-emoji-picker">
+             <!-- Seção de Recentes (via JS) -->
+             <div id="tw-emoji-recent"></div>
+             <div class="tw-emoji-section-title">Todos Emojis</div>
+             <div class="tw-emoji-grid" id="tw-emoji-all-grid"></div>
+          </div>
+
+          <!-- Digitando... -->
+          <div class="tw-typing" id="tw-typing">
+            <span>Digitando</span>
+            <div class="tw-dot"></div><div class="tw-dot"></div><div class="tw-dot"></div>
+          </div>
+
+          <!-- Mensagens de Sistema -->
           <div class="tw-system" id="tw-system-msg"></div>
-          <div class="tw-input-area">
-            <div class="tw-compose">
-              <button class="tw-attach" id="tw-attach-btn" aria-label="Anexar arquivo" title="Anexar arquivo">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"></path></svg>
-              </button>
-              <div class="tw-attach-menu" id="tw-attach-menu">
-                <button class="tw-attach-opt" data-type="image">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 15l-5-5L5 20"/></svg>
-                  <span>Foto</span>
-                </button>
-                <button class="tw-attach-opt" data-type="audio">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
-                  <span>Audio</span>
-                </button>
-                <button class="tw-attach-opt" data-type="document">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-                  <span>Documento</span>
-                </button>
-              </div>
-              <input type="file" id="tw-file-input" hidden />
-              <textarea class="tw-input" id="tw-input" placeholder="${escapeHtml(config.placeholder)}"></textarea>
-              <button class="tw-send" id="tw-send-btn" aria-label="Enviar mensagem" disabled>
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M3 11.5L21 3l-5.8 18-3.4-6.5L3 11.5zM10.8 13.8l2.2 4.3 3.3-10.1-8.6 4.1 3.1 1.7z"/></svg>
-              </button>
-              <button class="tw-mic" id="tw-mic-btn" aria-label="Gravar audio" title="Gravar audio">
-                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="3.5" width="6" height="11" rx="3"></rect><path d="M6.5 11.5a5.5 5.5 0 0 0 11 0"></path><path d="M12 17v3"></path><path d="M9 20h6"></path></svg>
+
+          <!-- Area de Input -->
+          <div class="tw-input-area" id="tw-input-area">
+            <div class="tw-input-row">
+              <button class="tw-icon-btn" id="tw-emoji-btn" title="Emojis">${ICONS.smile}</button>
+              <button class="tw-icon-btn" id="tw-attach-btn" title="Anexar">${ICONS.attach}</button>
+              <textarea class="tw-input" id="tw-input" placeholder="${escapeAttr(config.placeholder)}" rows="1" autocomplete="off"></textarea>
+              <button class="tw-action-btn pulse" id="tw-action-btn" title="Enviar">
+                <span id="tw-action-icon">${ICONS.mic}</span>
               </button>
             </div>
-            <div class="tw-recording-chip" id="tw-recording-chip"><span></span><strong>Gravando audio...</strong></div>
+            
+            <div class="tw-recording-chip" id="tw-recording-chip">
+              <span class="tw-recording-dot"></span>
+              <strong>Gravando áudio...</strong>
+            </div>
           </div>
+          <input type="file" id="tw-file-input" style="display:none;" />
         </div>
-      </div>
-      <div id="tw-lightbox" class="tw-lightbox">
-        <button class="tw-lightbox-close" id="tw-lightbox-close">&times;</button>
-        <img id="tw-lightbox-img" src="" alt="Zoom" />
+        
+        <div class="tw-lightbox" id="tw-lightbox">
+          <button class="tw-lightbox-close" id="tw-lightbox-close">&times;</button>
+          <img src="" id="tw-lightbox-img" alt="Zoom">
+        </div>
       </div>
     `;
 
-    shadow.getElementById("tw-close-btn").addEventListener("click", closeWidget);
-    shadow.getElementById("tw-send-btn").addEventListener("click", sendMessage);
-    shadow.getElementById("tw-mic-btn").addEventListener("click", toggleRecording);
-    shadow.getElementById("tw-attach-btn").addEventListener("click", toggleAttachMenu);
-    shadow.getElementById("tw-file-input").addEventListener("change", onFileSelected);
-    shadow.querySelectorAll(".tw-attach-opt").forEach((btn) => btn.addEventListener("click", onAttachOptionClick));
+    setupEventListeners();
+  }
 
-    shadow.addEventListener("click", (event) => {
-      const menu = shadow.getElementById("tw-attach-menu");
-      const attachBtn = shadow.getElementById("tw-attach-btn");
-      if (!menu || !attachBtn) return;
-      const path = event.composedPath ? event.composedPath() : [];
-      if (!path.includes(menu) && !path.includes(attachBtn)) menu.classList.remove("show");
-    });
+  function setupEventListeners() {
+    const closeBtn = shadow.getElementById("tw-close-btn");
+    if (closeBtn) closeBtn.addEventListener("click", closeWidget);
+
+    const expandBtn = shadow.getElementById("tw-expand-btn");
+    if (expandBtn) expandBtn.addEventListener("click", toggleExpand);
+
+    const actionBtn = shadow.getElementById("tw-action-btn");
+    if (actionBtn) actionBtn.addEventListener("click", handleAction);
+
+    const emojiBtn = shadow.getElementById("tw-emoji-btn");
+    if (emojiBtn) emojiBtn.addEventListener("click", toggleEmojiPicker);
+
+    const attachBtn = shadow.getElementById("tw-attach-btn");
+    if (attachBtn) attachBtn.addEventListener("click", toggleAttachMenu);
 
     const input = shadow.getElementById("tw-input");
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        sendMessage();
-      }
-    });
-    input.addEventListener("input", onInputTyping);
-    onInputTyping();
-    setComposerDisabled(false);
-
-    const lightbox = shadow.getElementById("tw-lightbox");
-    const lightboxImg = shadow.getElementById("tw-lightbox-img");
-    const lightboxClose = shadow.getElementById("tw-lightbox-close");
-    const msgContainer = shadow.getElementById("tw-messages");
-
-    if (lightbox && lightboxImg && lightboxClose && msgContainer) {
-      const openLightbox = (src) => {
-        lightboxImg.src = src;
-        lightbox.classList.add("show");
-        document.body.style.overflow = "hidden";
-      };
-      const closeLightbox = () => {
-        lightbox.classList.remove("show");
-        document.body.style.overflow = "";
-        setTimeout(() => { if (!lightbox.classList.contains("show")) lightboxImg.src = ""; }, 300);
-      };
-
-      msgContainer.addEventListener("click", (e) => {
-        const img = e.target.closest(".tw-media.image");
-        if (img && img.src) {
-          openLightbox(img.src);
+    if (input) {
+      input.addEventListener("input", onInputUpdate);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          handleAction();
         }
       });
-
-      lightbox.addEventListener("click", (e) => {
-        if (e.target === lightbox || e.target === lightboxClose) {
-          closeLightbox();
-        }
-      });
-
-      lightboxClose.addEventListener("click", closeLightbox);
     }
+
+    const attachItems = shadow.querySelectorAll(".tw-attach-item");
+    attachItems.forEach(item => {
+      item.addEventListener("click", () => {
+        const type = item.getAttribute("data-type");
+        onAttachOptionClick(type);
+      });
+    });
+
+    const fileInput = shadow.getElementById("tw-file-input");
+    if (fileInput) fileInput.addEventListener("change", onFileSelected);
+
+    const messagesArea = shadow.getElementById("tw-messages");
+    if (messagesArea) messagesArea.addEventListener("click", closeUIExtras);
+
+    // Inicializar Emoji Picker
+    initEmojiPicker();
+    
+    // Auto-scroll e outros mimos
+    scrollToBottom();
+  }
+
+  function toggleExpand() {
+    const widget = shadow.getElementById("tw-widget");
+    const icon = shadow.getElementById("tw-expand-icon");
+    if (!widget || !icon) return;
+    
+    widget.classList.toggle("expanded");
+    if (widget.classList.contains("expanded")) {
+      icon.innerHTML = ICONS.compress;
+    } else {
+      icon.innerHTML = ICONS.expand;
+    }
+    setTimeout(scrollToBottom, 450); // Ajusta scroll apos animacao
+  }
+
+  function toggleEmojiPicker(e) {
+    if (e) e.stopPropagation();
+    const picker = shadow.getElementById("tw-emoji-picker");
+    const menu = shadow.getElementById("tw-side-menu");
+    if (!picker) return;
+    
+    picker.classList.toggle("show");
+    if (menu) menu.classList.remove("open");
+  }
+
+  function toggleAttachMenu(e) {
+    if (e) e.stopPropagation();
+    const menu = shadow.getElementById("tw-attach-menu");
+    const picker = shadow.getElementById("tw-emoji-picker");
+    if (!menu) return;
+    
+    menu.classList.toggle("open");
+    if (picker) picker.classList.remove("show");
+  }
+
+  function closeUIExtras() {
+    const picker = shadow.getElementById("tw-emoji-picker");
+    const menu = shadow.getElementById("tw-attach-menu");
+    if (picker) picker.classList.remove("show");
+    if (menu) menu.classList.remove("open");
+  }
+
+  const EMOJI_STORAGE_KEY = "taiksu_widget_recent_emojis_v1";
+  const EMOJI_LIST = (templateCore && Array.isArray(templateCore.EMOJI_LIST) && templateCore.EMOJI_LIST.length)
+    ? templateCore.EMOJI_LIST
+    : ["\u{1f44b}","\u{1f4ac}","\u{1f4e9}","\u{1f4e8}","\u{1f4de}","\u{1f4f1}","\u{1f4cc}","\u{1f4ce}","\u{1f5c2}\u{fe0f}","\u{1f4c1}","\u{1f4dd}","\u{1f9fe}","\u{1f4ca}","\u{1f4c8}","\u{1f4c9}","\u{1f4b0}","\u{1f4b3}","\u{1f3e6}","\u{1f9ee}","\u{1f4c5}","\u{1f5d3}\u{fe0f}","\u{23f0}","\u{1f50d}","\u{1f50e}","\u{2699}\u{fe0f}","\u{1f6e0}\u{fe0f}","\u{1f5a5}\u{fe0f}","\u{2328}\u{fe0f}","\u{1f5a8}\u{fe0f}","\u{1f310}","\u{1f517}","\u{1f512}","\u{1f510}","\u{1f6e1}\u{fe0f}","\u{1f511}","\u{26a0}\u{fe0f}","\u{1f6a8}","\u{2757}","\u{2753}","\u{2139}\u{fe0f}","\u{23f3}","\u{1f552}","\u{1f680}","\u{1f504}","\u{267b}\u{fe0f}","\u{1f4e4}","\u{1f4e5}","\u{1f4e6}","\u{1f3f7}\u{fe0f}","\u{1f4cb}","\u{1f4c4}","\u{1f4d1}","\u{1f91d}","\u{1f465}","\u{1f3e2}","\u{1f1e7}\u{1f1f7}","\u{1f64f}","\u{2705}","\u{2714}\u{fe0f}","\u{2611}\u{fe0f}","\u{274c}","\u{1f363}","\u{1f371}","\u{1f962}","\u{1f359}","\u{1f364}","\u{1f35c}","\u{1f35b}","\u{1f35a}","\u{1f358}","\u{1f365}","\u{1f991}","\u{1f41f}","\u{1f420}","\u{1f990}","\u{1f95f}","\u{1f362}","\u{1f361}","\u{1f375}","\u{1fad6}","\u{1f961}","\u{1f960}","\u{1f376}","\u{1f957}","\u{1f34b}","\u{1f336}\u{fe0f}","\u{1f9c2}","\u{1f525}","\u{1f468}\u{200d}\u{1f373}","\u{1f3ee}","\u{1f1ef}\u{1f1f5}"];
+  let recentEmojis = [];
+
+  function loadRecentEmojis() {
+    if (templateCore && typeof templateCore.loadRecentEmojis === "function") {
+      return templateCore.loadRecentEmojis(EMOJI_STORAGE_KEY, EMOJI_LIST, 24);
+    }
+    try {
+      const raw = localStorage.getItem(EMOJI_STORAGE_KEY);
+      const parsed = JSON.parse(raw || "[]");
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((item) => EMOJI_LIST.includes(item)).slice(0, 24);
+    } catch (_err) {
+      return [];
+    }
+  }
+
+  function saveRecentEmojis() {
+    if (templateCore && typeof templateCore.saveRecentEmojis === "function") {
+      templateCore.saveRecentEmojis(EMOJI_STORAGE_KEY, recentEmojis, 24);
+      return;
+    }
+    try {
+      localStorage.setItem(EMOJI_STORAGE_KEY, JSON.stringify(recentEmojis.slice(0, 24)));
+    } catch (_err) {
+      // noop
+    }
+  }
+
+  function initEmojiPicker() {
+    const allGrid = shadow.getElementById("tw-emoji-all-grid");
+    if (!allGrid) return;
+
+    recentEmojis = loadRecentEmojis();
+    allGrid.innerHTML = "";
+
+    EMOJI_LIST.forEach(e => {
+      const span = createEmojiSpan(e);
+      allGrid.appendChild(span);
+    });
+    updateRecentEmojiGrid();
+  }
+
+  function createEmojiSpan(e) {
+    const span = document.createElement("span");
+    span.className = "tw-emoji-item";
+    span.innerText = e;
+    span.onclick = (event) => {
+      event.stopPropagation();
+      const input = shadow.getElementById("tw-input");
+      if (input) {
+        if (templateCore && typeof templateCore.insertTextAtCursor === "function") {
+          templateCore.insertTextAtCursor(input, e);
+        } else {
+          const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+          const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : input.value.length;
+          input.value = `${input.value.slice(0, start)}${e}${input.value.slice(end)}`;
+          const nextPos = start + e.length;
+          input.selectionStart = nextPos;
+          input.selectionEnd = nextPos;
+          input.focus();
+        }
+        onInputUpdate();
+        addToRecent(e);
+      }
+    };
+    return span;
+  }
+
+  function addToRecent(emoji) {
+    if (templateCore && typeof templateCore.rememberRecentEmoji === "function") {
+      recentEmojis = templateCore.rememberRecentEmoji(EMOJI_STORAGE_KEY, emoji, EMOJI_LIST, 24);
+      updateRecentEmojiGrid();
+      return;
+    }
+    recentEmojis = recentEmojis.filter(item => item !== emoji);
+    recentEmojis.unshift(emoji);
+    if (recentEmojis.length > 24) recentEmojis = recentEmojis.slice(0, 24);
+    saveRecentEmojis();
+    updateRecentEmojiGrid();
+  }
+
+  function updateRecentEmojiGrid() {
+    const recentDiv = shadow.getElementById("tw-emoji-recent");
+    if (!recentDiv) return;
+    if (recentEmojis.length === 0) {
+      recentDiv.innerHTML = "";
+      return;
+    }
+    recentDiv.innerHTML = `
+      <div class="tw-emoji-section-title">Recentes</div>
+      <div class="tw-emoji-grid"></div>
+    `;
+    const grid = recentDiv.querySelector(".tw-emoji-grid");
+    recentEmojis.forEach(e => {
+      grid.appendChild(createEmojiSpan(e));
+    });
+  }
+
+  function onInputUpdate() {
+    const input = shadow.getElementById("tw-input");
+    const icon = shadow.getElementById("tw-action-icon");
+    if (!input || !icon) return;
+    
+    // Auto resize
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 100) + "px";
+    
+    const val = input.value.trim();
+    if (val.length > 0) {
+      icon.innerHTML = ICONS.send;
+      const actionBtn = shadow.getElementById("tw-action-btn");
+      if (actionBtn) actionBtn.classList.remove("pulse");
+      
+      if (!typingActive) {
+        typingActive = true;
+        postTyping(true, "typing");
+      }
+      if (typingTimer) clearTimeout(typingTimer);
+      typingTimer = setTimeout(() => {
+        typingActive = false;
+        postTyping(false, "idle");
+      }, 1500);
+    } else {
+      icon.innerHTML = ICONS.mic;
+      const actionBtn = shadow.getElementById("tw-action-btn");
+      if (actionBtn) actionBtn.classList.add("pulse");
+      
+      if (typingActive) {
+        typingActive = true;
+        postTyping(false, "idle");
+      }
+    }
+  }
+
+  function handleAction() {
+    if (chatClosed) return;
+    const input = shadow.getElementById("tw-input");
+    if (!input) return;
+    
+    const val = input.value.trim();
+    if (val.length > 0) {
+      sendMessage();
+      closeUIExtras();
+    } else {
+      toggleRecording();
+    }
+  }
+
+  function onAttachOptionClick(type) {
+    selectedUploadType = type || "";
+    const fileInput = shadow.getElementById("tw-file-input");
+    if (!fileInput) return;
+    
+    const acceptMap = {
+      image: "image/*",
+      audio: "audio/*",
+      document: ".pdf,.doc,.docx,.xls,.xlsx,.txt,.zip"
+    };
+    
+    fileInput.accept = acceptMap[type] || "*/*";
+    fileInput.click();
+    closeUIExtras();
   }
   function init(options) {
     config = { ...DEFAULTS, ...(options || {}) };
@@ -347,6 +704,7 @@
       console.error("TaiksuChat: roomId é obrigatório.");
       return;
     }
+    ensureTemplateCoreLoaded().catch(() => {});
     setupHost();
     if (config.autoOpen) openWidget();
     else renderClosed();
@@ -456,30 +814,34 @@
   }
 
   function renderMessageBody(message) {
-    if (message.type === "text") return `<div class="tw-bubble">${escapeHtml(message.content)}</div>`;
+    if (message.type === "text") return `${escapeHtml(message.content)}`;
     const mediaUrl = resolveMediaUrl(message.file_url);
-    if (!mediaUrl) return `<div class="tw-bubble">Arquivo sem URL</div>`;
-    if (message.type === "image") return `<div class="tw-bubble"><img class="tw-media image" src="${escapeAttr(mediaUrl)}" alt="Imagem"></div>`;
-    if (message.type === "audio") return `<div class="tw-bubble">${buildAudioPlayerHtml(mediaUrl)}</div>`;
-    return `<div class="tw-bubble"><a class="tw-file-link" href="${escapeAttr(mediaUrl)}" download>Documento</a></div>`;
+    if (!mediaUrl) return `Arquivo sem URL`;
+    if (message.type === "image") return `<img class="tw-media image" src="${escapeAttr(mediaUrl)}" alt="Imagem" loading="lazy">`;
+    if (message.type === "audio") return buildAudioPlayerHtml(mediaUrl);
+    if (message.type === "document") {
+        return `<a class="tw-file-link" href="${escapeAttr(mediaUrl)}" download>
+                  ${ICONS.filePdf} ${escapeHtml(message.filename || "documento.pdf")}
+                </a>`;
+    }
+    return escapeHtml(message.content);
   }
 
   function buildAudioPlayerHtml(mediaUrl) {
-    let bars = "";
-    for (let i = 0; i < 26; i += 1) {
-      bars += `<span class="tw-audio-bar" style="height:${18 + ((i * 7) % 62)}%"></span>`;
-    }
     return `
       <div class="tw-audio-player" data-audio-url="${escapeAttr(mediaUrl)}">
         <button type="button" class="tw-audio-toggle" aria-label="Reproduzir audio">
-          <svg class="tw-audio-icon-play" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v13.72a1 1 0 0 0 1.55.83l10-6.86a1 1 0 0 0 0-1.66l-10-6.86A1 1 0 0 0 8 5.14z"/></svg>
-          <svg class="tw-audio-icon-pause" style="display:none" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5h3v14H8zm5 0h3v14h-3z"/></svg>
+          <span class="tw-audio-icon-play" style="display: flex; align-items: center; justify-content: center;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
+          </span>
+          <span class="tw-audio-icon-pause" style="display:none; align-items: center; justify-content: center;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
+          </span>
         </button>
         <div class="tw-audio-main">
           <div class="tw-audio-wave">
             <div class="tw-audio-progress">
               <span class="tw-audio-dot"></span>
-              <div class="tw-audio-bars">${bars}</div>
             </div>
           </div>
           <span class="tw-audio-time">00:00</span>
@@ -513,55 +875,49 @@
     if (own && !config.userId && msgUserId) {
       config.userId = msgUserId;
     }
-    const senderFull = own ? "Voce" : (message.name || "Usuario");
-    const sender = senderFull.split(" ")[0];
-    const time = new Date(message.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    const readClass = own && Number(message.is_read) === 1 ? "tw-read read" : "tw-read";
-    const readLabel = Number(message.is_read) === 1 ? "Lido" : "Enviado";
-    const readIconHtml = `
-      <span class="tw-check-sent" aria-hidden="true">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l2.2 2.2L9.8 6.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </span>
-      <span class="tw-check-read" aria-hidden="true">
-        <svg width="16" height="14" viewBox="0 0 20 16" fill="none"><path d="M1.6 8.6l2.4 2.4 4.8-4.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.2 8.6l2.4 2.4 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </span>
-    `;
-
+    
+    const time = (templateCore && typeof templateCore.formatTimePtBr === "function") ? templateCore.formatTimePtBr(message.created_at) : new Date(message.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const isRead = Number(message.is_read) === 1;
+    
+    // Grouping logic for Gemini v2
     const messages = container.querySelectorAll(".tw-message");
     const previousMessage = messages.length > 0 ? messages[messages.length - 1] : null;
     let isGrouped = false;
 
     if (previousMessage) {
       const prevId = previousMessage.getAttribute("data-sender-id");
-      const currentId = String(message.user_id || message.name);
+      const currentId = msgUserId || msgName;
       if (prevId === currentId) {
         isGrouped = true;
       }
     }
 
-    const row = document.createElement("div");
-    row.className = `tw-message ${own ? "own" : ""} ${isGrouped ? "grouped" : ""}`;
-    row.setAttribute("data-sender-id", msgUserId || msgName);
-    if (message.id) row.setAttribute("data-message-id", String(message.id));
-    
-    const avatarHtml = isGrouped ? "" : `<div class="tw-avatar">${renderAvatar(message.avatar, message.name)}</div>`;
-    const nameHtml = isGrouped ? "" : `<div class="tw-name">${escapeHtml(sender)}</div>`;
-
-    row.innerHTML = `
-      ${avatarHtml}
-      <div class="tw-message-row">
-        ${nameHtml}
-        ${renderMessageBody(message)}
-        <div class="tw-meta">
-          <div class="tw-time">${time}</div>
-          ${own ? `<div class="${readClass}" data-read-for="${escapeAttr(String(message.id || ""))}" title="${readLabel}" aria-label="${readLabel}">${readIconHtml}</div>` : ""}
+    const bubbleHtml = renderMessageBody(message);
+    const rowHtml = (templateCore && typeof templateCore.renderWidgetMessageRow === "function")
+      ? templateCore.renderWidgetMessageRow({
+          own,
+          grouped: isGrouped,
+          senderName: String(message.name || ""),
+          timeStr: time,
+          bubbleHtml,
+          checkHtml: ICONS.checkDouble(isRead),
+          messageId: String(message.id || ""),
+          senderId: msgUserId || msgName
+        })
+      : `
+        <div class="tw-message ${own ? "sent" : "received"} ${isGrouped ? "grouped" : ""}" data-sender-id="${escapeAttr(msgUserId || msgName)}" ${message.id ? `data-message-id="${escapeAttr(String(message.id))}"` : ""}>
+          ${(!isGrouped && !own) ? `<div class="tw-sender-name">${escapeHtml(message.name)}</div>` : ""}
+          <div class="tw-bubble">${bubbleHtml}</div>
+          <div class="tw-meta">
+            <span class="tw-time">${time}</span>
+            ${own ? `<span class="tw-read" data-read-for="${escapeAttr(String(message.id || ""))}">${ICONS.checkDouble(isRead)}</span>` : ""}
+          </div>
         </div>
-      </div>
-    `;
-    container.appendChild(row);
+      `;
+    container.insertAdjacentHTML("beforeend", rowHtml);
     syncEmptyState();
-    // Pequeno delay para garantir que o DOM e os recursos iniciais estao prontos
     setTimeout(() => initAudioPlayers(container), 50);
+    scrollToBottom();
   }
 
   function applyReadReceipts(messageIds) {
@@ -570,8 +926,8 @@
       const receiptEl = shadow && shadow.querySelector(`[data-read-for="${String(id)}"]`);
       if (!receiptEl) return;
       receiptEl.classList.add("read");
+      receiptEl.innerHTML = ICONS.checkDouble(true);
       receiptEl.setAttribute("title", "Lido");
-      receiptEl.setAttribute("aria-label", "Lido");
     });
   }
 
@@ -600,12 +956,10 @@
       node.id = "tw-empty";
       node.innerHTML = `
         <div class="tw-empty-wrap">
-          <div class="tw-empty-icon">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
-          </div>
+          <div class="tw-empty-icon">${ICONS.empty}</div>
           <div>
-            <strong>Nenhuma mensagem enviada</strong>
-            Envie a primeira mensagem para iniciar o atendimento.
+            <strong>Nenhuma mensagem ainda</strong>
+            <div>Comece a conversa abaixo!</div>
           </div>
         </div>
       `;
@@ -667,62 +1021,63 @@
     form.append("content", content);
     form.append("type", "text");
 
+    // Desativa temporariamente para evitar double-click
+    const actionBtn = shadow.getElementById("tw-action-btn");
+    if (actionBtn) actionBtn.disabled = true;
+
     fetch(buildApiUrl("/api/messages/send"), { method: "POST", credentials: "include", body: form })
       .then((res) => res.json())
       .then((data) => {
         if (!data || !data.success) {
           if (handleChatClosedResponse(data)) return;
-          showSystemMessage("Nao foi possivel enviar a mensagem agora.", "error");
+          showSystemMessage("Não foi possível enviar a mensagem agora.", "error");
           return;
         }
         input.value = "";
+        input.style.height = "auto";
+        onInputUpdate(); // Reseta o ícone para microfone
+        
         if (!config.userId && data.message && (data.message.user_id || data.message.userId)) {
           config.userId = String(data.message.user_id || data.message.userId);
         }
-        if (!localUserName && data.message && data.message.name) {
-          localUserName = String(data.message.name);
-        }
-        const sendBtn = shadow.getElementById("tw-send-btn");
-        if (sendBtn) sendBtn.disabled = true;
         showSystemMessage("");
-        if (typingTimer) clearTimeout(typingTimer);
-        typingActive = false;
-        postTyping(false, "idle");
-        onInputTyping();
       })
-      .catch((err) => console.error("TaiksuChat: erro ao enviar mensagem:", err));
+      .catch((err) => {
+        console.error("TaiksuChat: erro ao enviar:", err);
+        showSystemMessage("Erro de conexão.", "error");
+      })
+      .finally(() => {
+        if (actionBtn) actionBtn.disabled = false;
+      });
   }
 
   function sendFile(file, type) {
-    if (!file) return;
-    if (chatClosed) return;
+    if (!file || chatClosed) return;
+    showSystemMessage("Enviando arquivo...");
+    
     const form = new FormData();
     form.append("roomId", config.roomId);
     form.append("file", file);
     form.append("type", type || inferFileType(file.type));
+    form.append("filename", file.name);
+    form.append("filesize", file.size);
+
     fetch(buildApiUrl("/api/messages/send"), { method: "POST", credentials: "include", body: form })
       .then((res) => res.json())
       .then((data) => {
         if (!data || !data.success) {
           if (handleChatClosedResponse(data)) return;
-          showSystemMessage("Nao foi possivel enviar o arquivo.", "error");
+          showSystemMessage("Não foi possível enviar o arquivo.", "error");
           return;
-        }
-        if (!config.userId && data.message && (data.message.user_id || data.message.userId)) {
-          config.userId = String(data.message.user_id || data.message.userId);
-        }
-        if (!localUserName && data.message && data.message.name) {
-          localUserName = String(data.message.name);
         }
         showSystemMessage("");
       })
-      .catch((err) => console.error("TaiksuChat: erro ao enviar arquivo:", err));
+      .catch((err) => {
+        console.error("TaiksuChat: erro ao enviar arquivo:", err);
+        showSystemMessage("Erro ao enviar arquivo.", "error");
+      });
   }
 
-  function toggleAttachMenu() {
-    const menu = shadow.getElementById("tw-attach-menu");
-    if (menu) menu.classList.toggle("show");
-  }
 
   function onAttachOptionClick(event) {
     const type = event.currentTarget.getAttribute("data-type");
@@ -797,44 +1152,42 @@
     const typingEl = shadow.getElementById("tw-typing");
     if (!typingEl) return;
     
-    const msgUserId = String(data.userId || "").trim().toLowerCase();
-    const cfgUserId = String(config.userId || "").trim().toLowerCase();
-    const msgUserName = String(data.userName || "").trim().toLowerCase();
-    const cfgUserName = localUserName.trim().toLowerCase();
-
-    // Nao mostrar para si mesmo (com mais robustez)
-    if ((cfgUserId && msgUserId && cfgUserId === msgUserId) || 
-        (cfgUserName && msgUserName && cfgUserName === msgUserName)) {
+    // Nao mostrar para si mesmo
+    const msgUserId = String(data.userId || "").trim();
+    const cfgUserId = String(config.userId || "").trim();
+    if (cfgUserId && msgUserId && cfgUserId === msgUserId) {
       typingEl.classList.remove("show");
       return;
     }
 
     if (!data.isTyping) {
       typingEl.classList.remove("show");
-      setTimeout(() => { if (!typingEl.classList.contains("show")) typingEl.innerHTML = ""; }, 300);
       return;
     }
     
-    const userFull = String(data.userName || "Usuario").trim();
-    const user = escapeHtml(userFull.split(" ")[0]);
-    const activity = String(data.activity || "typing");
-    const icon = activity === "recording" 
-      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:#ef4444"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>`
-      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:#10b981"><path d="M17 6.1H3c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V8.1c0-1.1-.9-2-2-2z"/><path d="M7 10.1v4"/><path d="M11 10.1v4"/><path d="M15 10.1v4"/></svg>`;
-
-    typingEl.innerHTML = `
-      ${icon}
-      <span><strong>${user}</strong> ${activity === "recording" ? "está gravando áudio" : "está digitando"}</span>
-      <div style="display:flex;gap:3px;margin-left:2px">
-        <span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>
-      </div>
-    `;
+    const dots = `<span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`;
+    const activity = data.activity === "recording" ? "está gravando áudio" : "está digitando";
+    typingEl.innerHTML = `<strong>${escapeHtml(data.userName || "Alguém")}</strong> ${activity}... ${dots}`;
     typingEl.classList.add("show");
+  }
+
+  function postTyping(isTyping, activity = "typing") {
+    if (chatClosed) return;
+    fetch(buildApiUrl(`/api/messages/typing/${encodeURIComponent(config.roomId)}`), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isTyping, activity })
+    }).catch(() => {});
   }
 
   function scrollToBottom() {
     const container = shadow.getElementById("tw-messages");
-    if (container) container.scrollTop = container.scrollHeight;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+      // Scroll extra for safety
+      setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+    }
   }
 
   function formatAudioTime(seconds) {
@@ -859,165 +1212,125 @@
       if (!audio || !toggle) return;
 
       const sync = () => {
-        const hasDuration = Number.isFinite(audio.duration) && audio.duration > 0;
-        const ratio = hasDuration ? Math.max(0, Math.min(1, (audio.currentTime || 0) / audio.duration)) : 0;
-        if (progressDot) {
-          progressDot.style.left = `${ratio * 100}%`;
-        }
+        const duration = audio.duration;
+        const hasDuration = Number.isFinite(duration) && duration > 0;
+        const ratio = hasDuration ? Math.max(0, Math.min(1, audio.currentTime / duration)) : 0;
+        
+        if (progressDot) progressDot.style.left = `${ratio * 100}%`;
+        
         if (timeEl) {
-          if (!audio.paused && audio.currentTime > 0) timeEl.textContent = formatAudioTime(audio.currentTime);
-          else if (Number.isFinite(audio.duration) && audio.duration > 0) timeEl.textContent = formatAudioTime(audio.duration);
-          else timeEl.textContent = "00:00";
+          const displayTime = (!audio.paused && audio.currentTime > 0) ? audio.currentTime : (hasDuration ? duration : 0);
+          timeEl.textContent = formatAudioTime(displayTime);
         }
+
         if (audio.paused) {
-          player.classList.remove("playing");
+          if (playIcon) playIcon.style.display = "inline-block";
           if (pauseIcon) pauseIcon.style.display = "none";
-          if (playIcon) playIcon.style.display = "block";
         } else {
-          player.classList.add("playing");
           if (playIcon) playIcon.style.display = "none";
-          if (pauseIcon) pauseIcon.style.display = "block";
+          if (pauseIcon) pauseIcon.style.display = "inline-block";
         }
       };
 
-      toggle.addEventListener("click", async () => {
-        if (currentAudio && currentAudio !== audio) currentAudio.pause();
-        try {
-          if (audio.paused) {
-            await audio.play();
-            currentAudio = audio;
-          } else {
-            audio.pause();
-          }
-        } catch (_) {}
+      toggle.addEventListener("click", () => {
+        if (currentAudio && currentAudio !== audio) {
+          currentAudio.pause();
+        }
+        if (audio.paused) {
+          audio.play();
+          currentAudio = audio;
+        } else {
+          audio.pause();
+        }
       });
 
       audio.addEventListener("loadedmetadata", sync);
       audio.addEventListener("timeupdate", sync);
       audio.addEventListener("play", sync);
       audio.addEventListener("pause", sync);
-      audio.addEventListener("ended", sync);
+      audio.addEventListener("ended", () => { sync(); currentAudio = null; });
       sync();
     });
   }
 
-  async function toggleRecording() {
-    const micBtn = shadow.getElementById("tw-mic-btn");
-    const recordingChip = shadow.getElementById("tw-recording-chip");
-    if (!micBtn) return;
-    if (chatClosed) return;
-
-    const setRecordingUI = (active) => {
-      recording = Boolean(active);
-      micBtn.classList.toggle("recording", recording);
-      if (recordingChip) recordingChip.classList.toggle("show", recording);
-    };
-
-    if (!recording) {
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(mediaStream);
+  function startRecording() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showSystemMessage("Seu navegador não suporta gravação de áudio.", "error");
+      return;
+    }
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then((stream) => {
+        mediaStream = stream;
+        mediaRecorder = new MediaRecorder(stream);
         audioChunks = [];
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data && event.data.size > 0) audioChunks.push(event.data);
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
         };
         mediaRecorder.onstop = () => {
-          const blob = new Blob(audioChunks, { type: "audio/webm" });
-          if (blob.size > 0) {
-            sendAudioBlob(blob);
-          }
+          const blob = new Blob(audioChunks, { type: "audio/ogg; codecs=opus" });
+          const file = new File([blob], "audio_message.ogg", { type: "audio/ogg" });
+          sendFile(file, "audio");
           if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
           mediaStream = null;
           mediaRecorder = null;
           audioChunks = [];
+          updateRecordingUI(false);
           postTyping(false, "idle");
-          setRecordingUI(false);
-        };
-        mediaRecorder.onerror = () => {
-          if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
-          mediaStream = null;
-          mediaRecorder = null;
-          audioChunks = [];
-          postTyping(false, "idle");
-          setRecordingUI(false);
         };
         mediaRecorder.start();
+        recording = true;
+        updateRecordingUI(true);
         postTyping(true, "recording");
-        setRecordingUI(true);
-      } catch (err) {
-        console.error("TaiksuChat: erro ao iniciar gravacao:", err);
-        postTyping(false, "idle");
-        setRecordingUI(false);
-      }
-      return;
-    }
-
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      mediaRecorder.stop();
-      return;
-    }
-    postTyping(false, "idle");
-    setRecordingUI(false);
-  }
-
-  function sendAudioBlob(blob) {
-    if (!blob || !blob.size) return;
-    if (chatClosed) return;
-    const form = new FormData();
-    form.append("roomId", config.roomId);
-    form.append("file", blob, "audio.webm");
-    form.append("type", "audio");
-    fetch(buildApiUrl("/api/messages/send"), { method: "POST", credentials: "include", body: form })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!data || !data.success) {
-          if (handleChatClosedResponse(data)) return;
-          showSystemMessage("Nao foi possivel enviar o audio.", "error");
-          console.error("TaiksuChat: falha ao enviar audio", data);
-          return;
-        }
-        if (!config.userId && data.message && (data.message.user_id || data.message.userId)) {
-          config.userId = String(data.message.user_id || data.message.userId);
-        }
-        if (!localUserName && data.message && data.message.name) {
-          localUserName = String(data.message.name);
-        }
-        showSystemMessage("");
       })
-      .catch((err) => console.error("TaiksuChat: erro ao enviar audio:", err));
+      .catch((err) => {
+        console.error("TaiksuChat: erro ao acessar microfone:", err);
+        showSystemMessage("Acesso ao microfone negado.", "error");
+      });
   }
 
   function stopRecording() {
-    recording = false;
-    const micBtn = shadow && shadow.getElementById("tw-mic-btn");
-    const recordingChip = shadow && shadow.getElementById("tw-recording-chip");
-    if (micBtn) micBtn.classList.remove("recording");
-    if (recordingChip) recordingChip.classList.remove("show");
-    postTyping(false, "idle");
+    if (!recording) return;
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
+    } else {
+      recording = false;
+      updateRecordingUI(false);
+      postTyping(false, "idle");
     }
-    if (mediaStream) {
-      mediaStream.getTracks().forEach((t) => t.stop());
-      mediaStream = null;
-    }
+  }
+
+  function updateRecordingUI(active) {
+    const chip = shadow.getElementById("tw-recording-chip");
+    const btn = shadow.getElementById("tw-action-btn");
+    const icon = shadow.getElementById("tw-action-icon");
+    if (chip) chip.classList.toggle("show", active);
+    if (btn) btn.classList.toggle("recording", active);
+    if (icon) icon.innerHTML = active ? ICONS.stop : ICONS.mic;
+    if (!active) onInputUpdate(); // Restore icon if needed
   }
 
   function renderAvatar(avatarUrl, name) {
     if (avatarUrl) {
-      return `<img src="${escapeAttr(resolveMediaUrl(avatarUrl))}" alt="Avatar de ${escapeAttr(name || "Usuario")}">`;
+      return `<img src="${escapeAttr(resolveMediaUrl(avatarUrl))}" alt="Avatar">`;
     }
-    const initial = String(name || "U").trim().charAt(0).toUpperCase() || "U";
+    const initial = String(name || "U").trim().charAt(0).toUpperCase();
     return escapeHtml(initial);
   }
 
   function escapeHtml(text) {
+    if (templateCore && typeof templateCore.escapeHtml === "function") {
+      return templateCore.escapeHtml(text);
+    }
     const div = document.createElement("div");
     div.textContent = String(text || "");
     return div.innerHTML;
   }
 
   function escapeAttr(value) {
+    if (templateCore && typeof templateCore.escapeAttr === "function") {
+      return templateCore.escapeAttr(value);
+    }
     return String(value || "")
       .replace(/&/g, "&amp;")
       .replace(/"/g, "&quot;")
@@ -1037,16 +1350,12 @@
 
   if (typeof document !== "undefined") {
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-        markRoomAsRead();
-      }
+      if (document.visibilityState === "visible") markRoomAsRead();
     });
   }
 
   if (typeof window !== "undefined") {
-    window.addEventListener("focus", () => {
-      markRoomAsRead();
-    });
+    window.addEventListener("focus", markRoomAsRead);
   }
 
   const api = { init, open: openWidget, close: closeWidget, sendMessage, destroy };

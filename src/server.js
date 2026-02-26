@@ -232,40 +232,17 @@ app.get('/health', (_req, res) => {
   });
 });
 
-function renderWidgetTest(req, res) {
-  res.render('widget-test', {
-    title: 'Widget Test - Chat Taiksu',
-    defaults: {
-      serverUrl: process.env.APP_URL || `http://${HOST}:${PORT}`,
-      roomId: req.query.roomId || '',
-      userId: req.query.userId || '',
-      authToken: req.query.token || ''
-    }
+[
+  '/widget-test',
+  '/widget-test/',
+  '/chat/widget-test',
+  '/dashboard/widget-test',
+  '/widget/test',
+  '/test/widget'
+].forEach((legacyPath) => {
+  app.get(legacyPath, (_req, res) => {
+    res.redirect('/dashboard/qa-chat');
   });
-}
-
-app.get('/widget-test', (req, res) => {
-  renderWidgetTest(req, res);
-});
-
-app.get('/chat/widget-test', (req, res) => {
-  renderWidgetTest(req, res);
-});
-
-app.get('/dashboard/widget-test', (req, res) => {
-  renderWidgetTest(req, res);
-});
-
-app.get('/widget/test', (req, res) => {
-  renderWidgetTest(req, res);
-});
-
-app.get('/test/widget', (req, res) => {
-  renderWidgetTest(req, res);
-});
-
-app.get('/widget-test/', (req, res) => {
-  renderWidgetTest(req, res);
 });
 
 app.use((req, res) => {
@@ -273,7 +250,7 @@ app.use((req, res) => {
 });
 
 const PORT = Number(process.env.PORT || 3000);
-const HOST = '0.0.0.0';
+const HOST = process.env.HOST || '0.0.0.0';
 
 (async () => {
   try {

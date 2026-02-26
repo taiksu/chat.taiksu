@@ -1,0 +1,58 @@
+<% const navItems = [
+  { key: 'dashboard', label: 'Dashboard', href: '/dashboard' },
+  { key: 'rooms', label: 'Salas de Chat', href: '/chat/rooms' },
+  { key: 'chamados', label: 'Chamados', href: '/chat/chamados' },
+  { key: 'qa', label: 'QA do Chat', href: '/dashboard/qa-chat' },
+  { key: 'template', label: 'Template Lab', href: '/dashboard/template-lab' }
+]; %>
+
+<aside id="appSidebar" class="fixed inset-y-0 left-0 z-30 w-72 -translate-x-full border-r border-green-100 bg-white/95 shadow-xl backdrop-blur transition duration-300 lg:translate-x-0">
+  <div class="flex h-16 items-center gap-3 bg-gradient-to-r from-green-400 to-green-500 px-5 text-white">
+    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/20 text-lg font-black">
+      CT
+    </div>
+    <div class="leading-tight">
+      <p class="text-[10px] uppercase tracking-[0.32em] text-green-50">Taiksu</p>
+      <p class="text-sm font-semibold">Chat Suite</p>
+    </div>
+  </div>
+
+  <div class="space-y-4 px-4 py-4">
+    <% if (user) { %>
+      <div class="flex items-center gap-3 rounded-xl border border-green-100 bg-green-50 px-3 py-2">
+        <div class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-green-400 to-green-500 text-sm font-bold text-white">
+          <% if (user.avatar) { %>
+            <img src="<%= user.avatar %>" alt="Avatar de <%= user.name %>" class="h-full w-full object-cover">
+          <% } else { %>
+            <span><%= user.name.charAt(0).toUpperCase() %></span>
+          <% } %>
+        </div>
+        <div>
+          <p class="text-xs uppercase tracking-wide text-green-500">Logado</p>
+          <p class="text-sm font-semibold text-green-800"><%= user.name %></p>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="rounded-xl border border-green-100 bg-green-50 px-3 py-2">
+        <p class="text-xs uppercase tracking-wide text-green-500">Acesso</p>
+        <p class="text-sm font-semibold text-green-800">Conecte-se para continuar</p>
+        <a href="/auth/login" class="mt-2 inline-flex items-center justify-center rounded-lg bg-green-500 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-green-600">Entrar</a>
+      </div>
+    <% } %>
+
+    <nav class="space-y-1">
+      <% navItems.forEach((item) => { const isActive = active === item.key; %>
+        <a href="<%= item.href %>" class="flex items-center justify-between rounded-xl border border-transparent px-3 py-2 text-sm font-semibold transition <%= isActive ? 'bg-green-100 text-green-800 shadow-sm border-green-200' : 'text-gray-600 hover:bg-green-50 hover:text-green-700' %>">
+          <span><%= item.label %></span>
+          <span class="h-2 w-2 rounded-full <%= isActive ? 'bg-green-500' : 'bg-green-200' %>"></span>
+        </a>
+      <% }); %>
+    </nav>
+  </div>
+
+  <% if (user) { %>
+    <div class="mt-auto px-4 pb-6">
+      <a href="/auth/logout" class="inline-flex w-full items-center justify-center rounded-lg border border-green-200 bg-white px-3 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-50">Sair</a>
+    </div>
+  <% } %>
+</aside>

@@ -112,18 +112,10 @@ class ChatController {
       }
 
       if (req.session.user) {
-        const isAdmin = this.isRoomAdmin(req.session.user, room);
         const isParticipant = await ChatRoom.hasActiveParticipant(roomId, req.session.user.id);
 
-        if (!isAdmin && !isParticipant) {
-          return res.status(403).render('error', {
-            title: 'Acesso negado',
-            message: 'Voce nao participa desta sala',
-            user: req.session.user
-          });
-        }
-
-        if (isAdmin && !isParticipant) {
+        // Em fluxo web/QA, entrar na sala deve ser transparente para usuarios autenticados.
+        if (!isParticipant) {
           await ChatRoom.addParticipant(roomId, req.session.user.id);
         }
       }

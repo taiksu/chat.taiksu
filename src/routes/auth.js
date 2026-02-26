@@ -9,5 +9,7 @@ router.get('/register', AuthController.showRegister.bind(AuthController));
 router.post('/register', AuthController.register.bind(AuthController));
 router.post('/login', AuthController.login.bind(AuthController));
 router.get('/logout', AuthController.logout.bind(AuthController));
+router.get('/dev-login', AuthController.devLogin.bind(AuthController));
+router.get('/dev-login/:userId', AuthController.devLogin.bind(AuthController));
 
 module.exports = router;

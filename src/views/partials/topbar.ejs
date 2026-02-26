@@ -1,0 +1,38 @@
+<header class="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-green-100 bg-white/90 px-4 shadow-sm backdrop-blur lg:px-8">
+  <div class="flex items-center gap-3">
+    <button type="button" data-sidebar-toggle class="flex h-10 w-10 items-center justify-center rounded-xl border border-green-200 bg-white text-green-700 shadow-sm transition hover:-translate-y-0.5 hover:border-green-300 hover:text-green-800 lg:hidden">
+      <span class="sr-only">Abrir menu</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+    </button>
+    <div class="flex items-center gap-2">
+      <a href="https://login.taiksu.com.br" class="flex items-center gap-2">
+        <img src="https://login.taiksu.com.br/frontend/img/menu_service.png" class="h-6" alt="Taiksu apps">
+        <img src="https://login.taiksu.com.br/frontend/img/logo.png" class="h-6" alt="Taiksu">
+      </a>
+      <div class="hidden sm:block border-l border-green-100 pl-3">
+        <p class="text-[10px] uppercase tracking-[0.32em] text-green-500">Chat Taiksu</p>
+        <p class="text-sm font-semibold text-green-800"><%= pageTitle || 'Painel' %></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="flex items-center gap-3">
+    <% if (user) { %>
+      <div class="hidden text-right sm:block">
+        <p class="text-xs text-gray-500">Bem-vindo</p>
+        <p class="text-sm font-semibold text-green-700"><%= user.name %></p>
+      </div>
+      <div class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-green-400 to-green-500 text-sm font-bold text-white shadow-sm">
+        <% if (user.avatar) { %>
+          <img src="<%= user.avatar %>" alt="Avatar de <%= user.name %>" class="h-full w-full object-cover">
+        <% } else { %>
+          <span><%= user.name.charAt(0).toUpperCase() %></span>
+        <% } %>
+      </div>
+    <% } else { %>
+      <a href="/auth/login" class="rounded-lg bg-green-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-green-600">Entrar</a>
+    <% } %>
+  </div>
+</header>

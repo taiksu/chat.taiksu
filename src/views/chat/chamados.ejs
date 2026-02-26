@@ -8,35 +8,19 @@
   <link rel="stylesheet" href="/css/theme.css">
 </head>
 <body class="min-h-dvh bg-green-50 text-green-700">
-  <nav class="bg-gradient-to-r from-green-400 to-green-500 px-3 py-3 text-white shadow-sm sm:px-5">
-    <div class="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-2">
-      <h1 class="text-base font-bold sm:text-lg">Chat Taiksu</h1>
-      <div class="flex flex-wrap items-center justify-end gap-2 text-sm">
-        <% if (user) { %>
-          <span class="hidden text-green-50 sm:inline"><%= user.name %></span>
-          <div class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white text-xs font-bold text-green-700">
-            <% if (user.avatar) { %>
-              <img src="<%= user.avatar %>" alt="Avatar de <%= user.name %>" class="h-full w-full object-cover">
-            <% } else { %>
-              <span><%= user.name.charAt(0).toUpperCase() %></span>
-            <% } %>
-          </div>
-          <a href="/dashboard" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Dashboard</a>
-          <a href="/chat/rooms" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Salas</a>
-          <a href="/chat/chamados" class="rounded-lg bg-white/35 px-3 py-2 text-xs font-semibold sm:text-sm">Chamados</a>
-          <a href="/auth/logout" class="rounded-lg bg-white/20 px-3 py-2 text-xs font-semibold transition hover:bg-white/30 sm:text-sm">Sair</a>
-        <% } %>
-      </div>
-    </div>
-  </nav>
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition lg:hidden"></div>
+  <%- include('../partials/sidebar', { user, active: 'chamados' }) %>
 
-  <main class="mx-auto w-full max-w-7xl px-3 py-4 sm:px-5 sm:py-6">
-    <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
-      <h2 class="text-xl font-bold text-green-700 sm:text-2xl">Chats Criados por Chamado</h2>
-      <button class="rounded-xl bg-green-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-green-500" onclick="createChamadoRoom()" type="button">
-        + Criar Chat por Chamado
-      </button>
-    </div>
+  <div class="lg:pl-72">
+    <%- include('../partials/topbar', { user, pageTitle: 'Chamados' }) %>
+
+    <main class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-xl font-bold text-green-700 sm:text-2xl">Chats Criados por Chamado</h2>
+        <button class="rounded-xl bg-green-400 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-green-500" onclick="createChamadoRoom()" type="button">
+          + Criar Chat por Chamado
+        </button>
+      </div>
 
     <% if (!rooms || rooms.length === 0) { %>
       <div class="rounded-2xl border border-green-100 bg-white px-4 py-6 text-gray-500 shadow-sm">
@@ -67,7 +51,10 @@
         </article>
       <% }); %>
     </div>
-  </main>
+    </main>
+  </div>
+
+  <%- include('../partials/sidebar-script') %>
 
   <script>
     async function createChamadoRoom() {

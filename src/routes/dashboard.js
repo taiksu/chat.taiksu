@@ -4,7 +4,9 @@ const { requireWebAuth } = require('../middleware/requireAuth');
 
 const router = express.Router();
 
-router.get('/', requireWebAuth, DashboardController.index);
-router.get('/metrics', requireWebAuth, DashboardController.metrics);
+router.get('/', requireWebAuth, DashboardController.index.bind(DashboardController));
+router.get('/metrics', requireWebAuth, DashboardController.metrics.bind(DashboardController));
+router.get('/qa-chat', requireWebAuth, DashboardController.qaChat.bind(DashboardController));
+router.get('/template-lab', requireWebAuth, DashboardController.templateLab.bind(DashboardController));
 
 module.exports = router;
