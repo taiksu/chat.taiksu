@@ -1384,17 +1384,9 @@
       const stamp = `play_retry=${Date.now()}_${attempt}`;
       const trialUrl = originalSrc.includes("?") ? `${originalSrc}&${stamp}` : `${originalSrc}?${stamp}`;
       try {
-        const response = await fetch(trialUrl, {
-          method: "GET",
-          cache: "no-store",
-          credentials: "include"
-        });
-        if (!response.ok) {
-          throw new Error(`status ${response.status}`);
-        }
-        const blob = await response.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        audio.src = objectUrl;
+        // Avoid fetch() for cross-origin media to prevent CORS blocking in embeds.
+        audio.src = trialUrl;
+        audio.load();
         audio.dataset.resolved = "1";
         return;
       } catch (_err) {
