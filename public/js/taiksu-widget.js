@@ -380,7 +380,14 @@
       .tw-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
       .tw-lightbox.show { display: flex; }
       .tw-lightbox-close { position: absolute; top: 20px; right: 20px; border: 0; background: transparent; color: white; font-size: 32px; cursor: pointer; }
-      .tw-lightbox-img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+      .tw-lightbox-img {
+        width: auto;
+        max-width: min(78vw, 980px);
+        max-height: 82vh;
+        object-fit: contain;
+        border-radius: 12px;
+        box-shadow: 0 16px 48px rgba(0,0,0,0.45);
+      }
 
       .tw-audio-player { background: rgba(255,255,255,0.8); padding: 8px; border-radius: 12px; display: flex; align-items: center; gap: 10px; min-width: 200px; }
       .tw-audio-toggle { width: 34px; height: 34px; border-radius: 50%; border: 0; background: #075e54; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; }
@@ -1366,6 +1373,37 @@
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
   }
 
+  async function resolveAudioForPlayback(audio, player) {
+    if (!audio) return;
+    if (audio.dataset.resolved === "1") return;
+    const originalSrc = player?.getAttribute("data-audio-url") || audio.getAttribute("src") || "";
+    if (!originalSrc) return;
+
+    const maxAttempts = 8;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const stamp = `play_retry=${Date.now()}_${attempt}`;
+      const trialUrl = originalSrc.includes("?") ? `${originalSrc}&${stamp}` : `${originalSrc}?${stamp}`;
+      try {
+        const response = await fetch(trialUrl, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "include"
+        });
+        if (!response.ok) {
+          throw new Error(`status ${response.status}`);
+        }
+        const blob = await response.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        audio.src = objectUrl;
+        audio.dataset.resolved = "1";
+        return;
+      } catch (_err) {
+        await new Promise((resolve) => setTimeout(resolve, 350 + (attempt * 300)));
+      }
+    }
+    throw new Error("audio_unavailable");
+  }
+
   function initAudioPlayers(root) {
     const container = root || shadow;
     if (!container) return;
@@ -1408,10 +1446,17 @@
           currentAudio.pause();
         }
         if (audio.paused) {
-          audio.play().catch(() => {
-            if (timeEl) timeEl.textContent = "00:00";
-          });
-          currentAudio = audio;
+          if (timeEl) timeEl.textContent = "carregando...";
+          resolveAudioForPlayback(audio, player)
+            .then(() => audio.play())
+            .then(() => {
+              currentAudio = audio;
+            })
+            .catch(() => {
+              if (timeEl) timeEl.textContent = "mensagem apagada";
+              const bubble = player.closest(".tw-bubble");
+              if (bubble) bubble.innerHTML = `<span class="tw-missing-msg">mensagem apagada</span>`;
+            });
         } else {
           audio.pause();
         }
