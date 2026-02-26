@@ -7,6 +7,7 @@
     "node": "22.x"
   },
   "scripts": {
+    "build": "npm run build:css",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "build:css": "node ./node_modules/tailwindcss/lib/cli.js -i ./src/styles/tailwind.css -o ./public/css/tailwind.css --minify",
