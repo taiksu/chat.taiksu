@@ -4,6 +4,30 @@ const path = require('path');
 const fs = require('fs');
 
 class ChatController {
+  getInactivityHours() {
+    const parsed = Number(process.env.CHAMADO_INACTIVITY_HOURS || 24);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
+  }
+
+  async getRoomClosureState(room) {
+    if (!room) return { closed: false, reason: '' };
+    const normalizedStatus = String(room.status || '').trim().toLowerCase();
+    if (['concluido', 'concluído', 'closed', 'fechado', 'finalizado', 'resolved', 'resolvido'].includes(normalizedStatus)) {
+      return { closed: true, reason: 'Chat encerrado' };
+    }
+    if (String(room.type || '').toLowerCase() !== 'support_ticket') {
+      return { closed: false, reason: '' };
+    }
+    const lastMessageAt = await Message.getLastMessageAt(room.id);
+    const activityAt = lastMessageAt || room.updated_at || room.created_at;
+    if (!activityAt) return { closed: false, reason: '' };
+    const inactivityMs = this.getInactivityHours() * 60 * 60 * 1000;
+    const closed = (Date.now() - new Date(activityAt).getTime()) >= inactivityMs;
+    return closed
+      ? { closed: true, reason: `Chat encerrado por ${this.getInactivityHours()}h de inatividade` }
+      : { closed: false, reason: '' };
+  }
+
   isRoomAdmin(user, room) {
     if (!user || !room) return false;
     return String(room.owner_id) === String(user.id) || user.role === 'admin';
@@ -122,6 +146,7 @@ class ChatController {
 
       const participants = await ChatRoom.getParticipants(roomId);
       const messages = await Message.findByRoomId(roomId, 100);
+      const closureState = await this.getRoomClosureState(room);
 
       res.render('chat/room', {
         title: `${room.name} - Chat Taiksu`,
@@ -129,7 +154,9 @@ class ChatController {
         participants,
         messages,
         user: req.session.user,
-        canManageRoom: this.isRoomAdmin(req.session.user, room)
+        canManageRoom: this.isRoomAdmin(req.session.user, room),
+        initialRoomClosed: closureState.closed,
+        roomClosedReason: closureState.reason
       });
     } catch (error) {
       console.error('Error opening room:', error);

@@ -36,6 +36,9 @@
   let currentActivity = "idle";
   let localUserName = "";
   let currentAudio = null;
+  let headerParticipants = [];
+  const selfAliases = new Set();
+  let localTypingEchoUntil = 0;
   const renderedIds = new Set();
   let templateCore = (typeof window !== "undefined" && window.ChatTemplateCore) ? window.ChatTemplateCore : null;
   let templateCoreLoader = null;
@@ -100,6 +103,38 @@
     const base = String(config.serverUrl || "").replace(/\/+$/, "");
     const token = config.authToken ? `?token=${encodeURIComponent(config.authToken)}` : "";
     return `${base}${path}${token}`;
+  }
+
+  function getDefaultWidgetParticipants() {
+    if (Array.isArray(config.participants) && config.participants.length) {
+      return config.participants;
+    }
+    return [
+      { name: String(config.userName || "Atendente"), avatar: config.avatar || "https://i.pravatar.cc/100?u=1", status: "online" },
+      { name: "Equipe", avatar: "https://i.pravatar.cc/100?u=2", status: "online" },
+      { name: "Suporte", avatar: "https://i.pravatar.cc/100?u=3", status: "online" }
+    ];
+  }
+
+  function collectParticipantsFromMessages(messages) {
+    const source = Array.isArray(messages) ? messages : [];
+    const map = new Map();
+    source.forEach((raw) => {
+      const msg = normalizeMessage(raw);
+      if (!msg) return;
+      const key = String(msg.user_id || msg.userId || msg.name || "").trim();
+      if (!key) return;
+      if (!map.has(key)) {
+        map.set(key, {
+          name: String(msg.name || "Usuario"),
+          avatar: String(msg.avatar || ""),
+          status: "online"
+        });
+      } else if (!map.get(key).avatar && msg.avatar) {
+        map.get(key).avatar = String(msg.avatar);
+      }
+    });
+    return Array.from(map.values());
   }
 
   function setupHost() {
@@ -229,42 +264,68 @@
         scroll-behavior: smooth;
       }
       
-      .tw-message { 
-        max-width: 80%; padding: 10px 14px; border-radius: 16px; font-size: 14.5px; position: relative; 
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05); word-wrap: break-word; line-height: 1.4;
+      .tw-message {
+        width: 100%; display: flex; align-items: flex-end; gap: 8px;
+        font-size: 15px; position: relative; word-wrap: break-word; line-height: 1.45;
         animation: twMsgIn 0.3s ease-out forwards; opacity: 0;
       }
       .tw-message:not(.grouped) { margin-top: 14px; }
       .tw-message.grouped { margin-top: 2px; }
       @keyframes twMsgIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-      
-      .tw-message.received { align-self: flex-start; background-color: #ffffff; border-bottom-left-radius: 4px; color: #111; }
-      .tw-message.sent { align-self: flex-end; background-color: #dcf8c6; border-bottom-right-radius: 4px; color: #111; }
-      
-      .tw-message.grouped.received { border-top-left-radius: 4px; }
-      .tw-message.grouped.sent { border-top-right-radius: 4px; }
 
-      .tw-meta { margin-top: 4px; display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
-      .tw-time { font-size: 10px; color: #888; }
+      .tw-message.sent { justify-content: flex-end; }
+      .tw-message-content { display: flex; flex-direction: column; min-width: 0; max-width: 75%; }
+      .tw-message.sent .tw-message-content { align-items: flex-end; }
+      .tw-message.received .tw-message-content { align-items: flex-start; }
+      .tw-bubble {
+        border-radius: 16px; padding: 10px 14px; box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+        background: #fff; color: #111; border-bottom-left-radius: 4px;
+      }
+      .tw-message.sent .tw-bubble { background: #dcf8c6; border-bottom-left-radius: 16px; border-bottom-right-radius: 4px; }
+      .tw-message.grouped.received .tw-bubble { border-top-left-radius: 4px; }
+      .tw-message.grouped.sent .tw-bubble { border-top-right-radius: 4px; }
+      .tw-avatar {
+        width: 32px; height: 32px; border-radius: 999px; overflow: hidden; flex-shrink: 0;
+        border: 2px solid #fff; background: #059669; display: flex; align-items: center; justify-content: center;
+      }
+      .tw-avatar img { width: 100%; height: 100%; object-fit: cover; }
+      .tw-avatar-initial { font-size: 10px; font-weight: 700; color: #fff; }
+      .tw-avatar-spacer { width: 32px; flex-shrink: 0; }
+
+      .tw-meta { margin-top: 4px; display: flex; align-items: center; gap: 4px; justify-content: flex-end; padding: 0 4px; }
+      .tw-time { font-size: 11px; color: #6b7280; }
       .tw-read { display: inline-flex; align-items: center; }
+      .tw-sender-name { font-size: 10px; font-weight: 700; color: #047857; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .35px; }
 
       .tw-media.image { max-width: 100%; border-radius: 12px; display: block; cursor: pointer; margin: 4px 0; }
       .tw-file-link { color: #075e54; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 8px; }
-
-      .tw-input-area { background: #ffffff; padding: 12px 16px; position: relative; border-top: 1px solid rgba(0,0,0,0.05); z-index: 20; }
-      .tw-input-row { display: flex; align-items: center; gap: 12px; }
-      .tw-input { 
-        flex: 1; background: #f0f2f5; border-radius: 22px; padding: 10px 18px; outline: none; border: none; 
-        font-size: 15px; transition: background 0.2s; resize: none; overflow: hidden;
+      .tw-missing-msg {
+        display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 10px;
+        background: #f3f4f6; color: #6b7280; font-size: 12px; font-weight: 700; text-transform: lowercase;
       }
-      .tw-input:focus { background: #e8eaed; }
-      .tw-icon-btn { color: #9ca3af; cursor: pointer; transition: all 0.2s; border:0; background:transparent; padding:4px; display:flex; align-items:center; justify-content:center; }
-      .tw-icon-btn:hover { color: #075e54; transform: scale(1.1); }
 
-      .tw-action-btn { 
-        width: 44px; height: 44px; background: #075e54; border-radius: 999px; border:0; color:#fff; cursor:pointer; 
+      .tw-input-area { background: #f3f4f6; padding: 14px 16px; position: relative; border-top: 1px solid rgba(0,0,0,0.05); z-index: 20; }
+      .tw-input-area.hidden { display: none; }
+      .tw-input-row { display: flex; align-items: center; gap: 10px; }
+      .tw-input {
+        flex: 1; background: #e5e7eb; border-radius: 20px; padding: 13px 16px; outline: none; border: none;
+        font-size: 15px; transition: background 0.2s, box-shadow 0.2s; resize: none; overflow: hidden; line-height: 1.35; color: #374151;
+      }
+      .tw-input::placeholder { color: #6b7280; }
+      .tw-input:focus { background: #eef2f7; box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
+      .tw-icon-btn {
+        width: 48px; height: 48px; border-radius: 999px; border:0; cursor:pointer; transition: all 0.2s;
+        background:#ecfdf5; color:#059669; padding:0; display:flex; align-items:center; justify-content:center;
+      }
+      .tw-icon-btn:hover { background:#d1fae5; transform: translateY(-1px); }
+      #tw-emoji-btn { background: #ecfdf5; color: #059669; }
+      #tw-attach-btn { background: #d1fae5; color: #059669; }
+
+      .tw-action-btn {
+        width: 45px; height: 45px; background: #059669; border-radius: 999px; border:0; color:#fff; cursor:pointer;
         display:flex; align-items:center; justify-content:center; box-shadow:0 4px 10px rgba(0,0,0,0.1); transition: all 0.2s;
       }
+      .tw-action-btn:hover { background: #065f46; }
       .tw-action-btn:active { transform: scale(0.9); }
       .tw-action-btn.pulse { animation: twPulseMic 1.5s infinite; }
       @keyframes twPulseMic {
@@ -286,11 +347,11 @@
       .tw-emoji-item { font-size: 22px; padding: 6px; cursor: pointer; text-align: center; border-radius: 8px; transition: transform 0.15s, background 0.2s; }
       .tw-emoji-item:hover { transform: scale(1.25); background: #f0f2f5; }
 
-      .tw-recording-chip { 
-        position: absolute; left: 16px; right: 16px; bottom: 12px; height: 46px; 
+      .tw-recording-chip {
+        position: static; margin-top: 10px; height: 46px;
         background: #fff; border-radius: 23px; display: none; align-items: center; 
-        padding: 0 20px; gap: 12px; border: 1px solid #f0f2f5; z-index: 30; 
-        box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+        padding: 0 20px; gap: 12px; border: 1px solid #f0f2f5;
+        box-shadow: 0 1px 6px rgba(0,0,0,0.05);
       }
       .tw-recording-chip.show { display: flex; animation: twFadeIn 0.2s; }
       @keyframes twFadeIn { from { opacity:0; } to { opacity:1; } }
@@ -298,8 +359,11 @@
       .tw-recording-chip span { width: 10px; height: 10px; border-radius: 50%; background: #ef4444; animation: twBlink 1s infinite; }
       @keyframes twBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-      .tw-typing { font-size: 11px; color: #075e54; padding: 4px 16px; font-weight: 600; display: none; }
-      .tw-typing.show { display: flex; align-items: center; gap: 4px; }
+      .tw-typing {
+        font-size: 12px; color: #065f46; padding: 6px 14px; font-weight: 700; display: none;
+        align-items: center; gap: 4px; background: #ecfdf5; border-top: 1px solid #d1fae5;
+      }
+      .tw-typing.show { display: flex; }
       .tw-dot { width: 3px; height: 3px; background: currentColor; border-radius: 50%; animation: twDot 1.4s infinite; }
       .tw-dot:nth-child(2) { animation-delay: 0.2s; }
       .tw-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -308,6 +372,10 @@
       .tw-system { font-size: 11px; text-align: center; padding: 4px; display: none; }
       .tw-system.show { display: block; }
       .tw-system.error { color: #ef4444; }
+      .tw-closed-footer { background: #fff; border-top: 1px solid rgba(0,0,0,0.05); padding: 12px 14px; }
+      .tw-closed-inner { display:flex; align-items:center; gap:10px; border:1px solid #fde68a; background:#fffbeb; color:#78350f; border-radius:14px; padding:10px 12px; }
+      .tw-closed-text { display:flex; flex-direction:column; gap:2px; font-size:12px; }
+      .tw-closed-text strong { text-transform: uppercase; font-size:11px; letter-spacing:.4px; }
 
       .tw-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 2000; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
       .tw-lightbox.show { display: flex; }
@@ -341,91 +409,79 @@
     shadow.getElementById("tw-toggle-btn").addEventListener("click", openWidget);
   }
 
+  function renderWidgetHeaderMarkup(participants) {
+    const safeParticipants = Array.isArray(participants) && participants.length ? participants : getDefaultWidgetParticipants();
+    const headerActionsHtml = `<div style="display:flex;gap:4px"><button class="tw-header-btn" id="tw-expand-btn" title="Expandir/Recolher"><span id="tw-expand-icon">${ICONS.expand}</span></button><button class="tw-header-btn" id="tw-close-btn" title="Fechar chat">${ICONS.close}</button></div>`;
+    if (templateCore && typeof templateCore.renderConversationHeader === "function") {
+      return templateCore.renderConversationHeader({
+        title: config.title,
+        subtitle: config.subtitle || `${safeParticipants.length} participantes`,
+        participants: safeParticipants,
+        actionsHtml: headerActionsHtml,
+        avatarLimit: 3,
+        titleSize: 18
+      });
+    }
+    return `
+      <div class="tw-header">
+        <div class="tw-head-main">
+          <div class="tw-avatar-stack">
+            <div class="tw-avatar-item"><img src="${escapeAttr(config.avatar || "https://i.pravatar.cc/100?u=1")}" alt="P1"></div>
+            <div class="tw-avatar-item"><img src="https://i.pravatar.cc/100?u=2" alt="P2"></div>
+            <div class="tw-avatar-item tw-avatar-more">+2</div>
+          </div>
+          <div class="tw-head-txt">
+            <h3 class="tw-title">${escapeHtml(config.title)}</h3>
+            <p class="tw-subtitle">4 participantes</p>
+          </div>
+        </div>
+        <div class="tw-header-btns">
+          <button class="tw-header-btn" id="tw-expand-btn" title="Expandir/Recolher"><span id="tw-expand-icon">${ICONS.expand}</span></button>
+          <button class="tw-header-btn" id="tw-close-btn" title="Fechar chat">${ICONS.close}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function bindHeaderButtons() {
+    const closeBtn = shadow.getElementById("tw-close-btn");
+    if (closeBtn) closeBtn.onclick = closeWidget;
+    const expandBtn = shadow.getElementById("tw-expand-btn");
+    if (expandBtn) expandBtn.onclick = toggleExpand;
+  }
+
+  function updateWidgetHeader(participants) {
+    headerParticipants = Array.isArray(participants) && participants.length ? participants : getDefaultWidgetParticipants();
+    const host = shadow.getElementById("tw-header-host");
+    if (!host) return;
+    host.innerHTML = renderWidgetHeaderMarkup(headerParticipants);
+    bindHeaderButtons();
+  }
+
   function renderOpen() {
+    headerParticipants = getDefaultWidgetParticipants();
+    const headerMarkup = renderWidgetHeaderMarkup(headerParticipants);
+
+    const composerMarkup = (templateCore && typeof templateCore.renderWidgetComposer === "function")
+      ? templateCore.renderWidgetComposer({ placeholder: config.placeholder })
+      : `
+          <div class="tw-attach-menu" id="tw-attach-menu"></div>
+          <div class="tw-emoji-picker" id="tw-emoji-picker"><div id="tw-emoji-recent"></div><div class="tw-emoji-section-title">Todos Emojis</div><div class="tw-emoji-grid" id="tw-emoji-all-grid"></div></div>
+          <div class="tw-typing" id="tw-typing"><span>Digitando</span><div class="tw-dot"></div><div class="tw-dot"></div><div class="tw-dot"></div></div>
+          <div class="tw-system" id="tw-system-msg"></div>
+          <div class="tw-input-area" id="tw-input-area"><div class="tw-input-row"><button class="tw-icon-btn" id="tw-emoji-btn" title="Emojis">${ICONS.smile}</button><button class="tw-icon-btn" id="tw-attach-btn" title="Anexar">${ICONS.attach}</button><textarea class="tw-input" id="tw-input" placeholder="${escapeAttr(config.placeholder)}" rows="1" autocomplete="off"></textarea><button class="tw-action-btn pulse" id="tw-action-btn" title="Enviar"><span id="tw-action-icon">${ICONS.mic}</span></button></div><div class="tw-recording-chip" id="tw-recording-chip"><span class="tw-recording-dot"></span><strong>Gravando audio...</strong></div></div>
+          <input type="file" id="tw-file-input" style="display:none;" />
+      `;
     shadow.innerHTML = `
       <style>${styles()}</style>
       <div class="tw-root" id="tw-root">
         <div class="tw-widget" id="tw-widget">
-          <div class="tw-header">
-            <div class="tw-head-main">
-              <div class="tw-avatar-stack">
-                <div class="tw-avatar-item">
-                  <img src="${escapeAttr(config.avatar || "https://i.pravatar.cc/100?u=1")}" alt="P1">
-                </div>
-                <div class="tw-avatar-item">
-                  <img src="https://i.pravatar.cc/100?u=2" alt="P2">
-                </div>
-                <div class="tw-avatar-item tw-avatar-more">+2</div>
-              </div>
-              <div class="tw-head-txt">
-                <h3 class="tw-title">${escapeHtml(config.title)}</h3>
-                <p class="tw-subtitle">4 participantes</p>
-              </div>
-            </div>
-            <div class="tw-header-btns">
-              <button class="tw-header-btn" id="tw-expand-btn" title="Expandir/Recolher">
-                <span id="tw-expand-icon">${ICONS.expand}</span>
-              </button>
-              <button class="tw-header-btn" id="tw-close-btn" title="Fechar chat">${ICONS.close}</button>
-            </div>
-          </div>
-          
+          <div id="tw-header-host">${headerMarkup}</div>
           <div class="tw-main-content">
-            <!-- Menu de Anexo Flutuante -->
-            <div class="tw-attach-menu" id="tw-attach-menu">
-              <button class="tw-attach-item" data-type="document" title="Documento">
-                <div class="tw-attach-circle" style="background: #6366f1;">${ICONS.doc}</div>
-              </button>
-              <button class="tw-attach-item" data-type="image" title="Mídia">
-                <div class="tw-attach-circle" style="background: #ec4899;">${ICONS.camera}</div>
-              </button>
-              <button class="tw-attach-item" data-type="audio" title="Áudio">
-                <div class="tw-attach-circle" style="background: #f97316;">${ICONS.micAlt}</div>
-              </button>
-            </div>
-
-            <!-- Area de Mensagens -->
-            <div class="tw-messages" id="tw-messages">
-              <!-- Mensagens serao injetadas aqui -->
-            </div>
+            <div class="tw-messages" id="tw-messages"></div>
           </div>
-
-          <!-- Emoji Picker -->
-          <div class="tw-emoji-picker" id="tw-emoji-picker">
-             <!-- Seção de Recentes (via JS) -->
-             <div id="tw-emoji-recent"></div>
-             <div class="tw-emoji-section-title">Todos Emojis</div>
-             <div class="tw-emoji-grid" id="tw-emoji-all-grid"></div>
-          </div>
-
-          <!-- Digitando... -->
-          <div class="tw-typing" id="tw-typing">
-            <span>Digitando</span>
-            <div class="tw-dot"></div><div class="tw-dot"></div><div class="tw-dot"></div>
-          </div>
-
-          <!-- Mensagens de Sistema -->
-          <div class="tw-system" id="tw-system-msg"></div>
-
-          <!-- Area de Input -->
-          <div class="tw-input-area" id="tw-input-area">
-            <div class="tw-input-row">
-              <button class="tw-icon-btn" id="tw-emoji-btn" title="Emojis">${ICONS.smile}</button>
-              <button class="tw-icon-btn" id="tw-attach-btn" title="Anexar">${ICONS.attach}</button>
-              <textarea class="tw-input" id="tw-input" placeholder="${escapeAttr(config.placeholder)}" rows="1" autocomplete="off"></textarea>
-              <button class="tw-action-btn pulse" id="tw-action-btn" title="Enviar">
-                <span id="tw-action-icon">${ICONS.mic}</span>
-              </button>
-            </div>
-            
-            <div class="tw-recording-chip" id="tw-recording-chip">
-              <span class="tw-recording-dot"></span>
-              <strong>Gravando áudio...</strong>
-            </div>
-          </div>
-          <input type="file" id="tw-file-input" style="display:none;" />
+          ${composerMarkup}
         </div>
-        
         <div class="tw-lightbox" id="tw-lightbox">
           <button class="tw-lightbox-close" id="tw-lightbox-close">&times;</button>
           <img src="" id="tw-lightbox-img" alt="Zoom">
@@ -437,11 +493,7 @@
   }
 
   function setupEventListeners() {
-    const closeBtn = shadow.getElementById("tw-close-btn");
-    if (closeBtn) closeBtn.addEventListener("click", closeWidget);
-
-    const expandBtn = shadow.getElementById("tw-expand-btn");
-    if (expandBtn) expandBtn.addEventListener("click", toggleExpand);
+    bindHeaderButtons();
 
     const actionBtn = shadow.getElementById("tw-action-btn");
     if (actionBtn) actionBtn.addEventListener("click", handleAction);
@@ -630,6 +682,7 @@
   function onInputUpdate() {
     const input = shadow.getElementById("tw-input");
     const icon = shadow.getElementById("tw-action-icon");
+    const chip = shadow.getElementById("tw-recording-chip");
     if (!input || !icon) return;
     
     // Auto resize
@@ -637,6 +690,7 @@
     input.style.height = Math.min(input.scrollHeight, 100) + "px";
     
     const val = input.value.trim();
+    if (!recording && chip) chip.classList.remove("show");
     if (val.length > 0) {
       icon.innerHTML = ICONS.send;
       const actionBtn = shadow.getElementById("tw-action-btn");
@@ -673,7 +727,8 @@
       sendMessage();
       closeUIExtras();
     } else {
-      toggleRecording();
+      if (recording) stopRecording();
+      else startRecording();
     }
   }
 
@@ -697,8 +752,13 @@
     config.position = normalizePosition(config.position);
     config.mode = normalizeMode(config.mode);
     localUserName = String(config.userName || "").trim();
+    selfAliases.clear();
+    addSelfAlias(config.userId);
+    addSelfAlias(config.userName);
+    addSelfAlias(localUserName);
     if (!config.userId && config.authToken) {
       config.userId = parseJwtSub(config.authToken);
+      addSelfAlias(config.userId);
     }
     if (!config.roomId) {
       console.error("TaiksuChat: roomId é obrigatório.");
@@ -710,11 +770,29 @@
     else renderClosed();
   }
 
-  function openWidget() {
+  async function openWidget() {
     widgetOpen = true;
+    await ensureTemplateCoreLoaded().catch(() => null);
     renderOpen();
+    fetchRoomState();
     loadMessages();
     connectSSE();
+  }
+
+  function fetchRoomState() {
+    fetch(buildApiUrl(`/api/messages/room-state/${encodeURIComponent(config.roomId)}`), {
+      method: "GET",
+      credentials: "include"
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.closed) {
+          setComposerDisabled(true, data.reason || "Chat encerrado");
+        } else {
+          setComposerDisabled(false);
+        }
+      })
+      .catch(() => {});
   }
 
   function closeWidget() {
@@ -748,6 +826,17 @@
       if (!payload) return;
       if (payload.type === "new_message") {
         const normalized = normalizeMessage(payload.message);
+        if (normalized) {
+          const merged = headerParticipants
+            .concat(collectParticipantsFromMessages([normalized]))
+            .reduce((acc, item) => {
+              const key = String((item && item.name) || "").trim().toLowerCase();
+              if (!key) return acc;
+              if (!acc.some((p) => String((p && p.name) || "").trim().toLowerCase() === key)) acc.push(item);
+              return acc;
+            }, []);
+          updateWidgetHeader(merged);
+        }
         addMessage(normalized);
         const isOwnIncoming = normalized && config.userId && String(normalized.user_id) === String(config.userId);
         if (!isOwnIncoming) {
@@ -774,7 +863,14 @@
         const container = shadow.getElementById("tw-messages");
         if (!container) return;
         container.innerHTML = "";
+        const participantsFromMessages = collectParticipantsFromMessages(messages || []);
+        if (participantsFromMessages.length) {
+          updateWidgetHeader(participantsFromMessages);
+        } else {
+          updateWidgetHeader(getDefaultWidgetParticipants());
+        }
         (messages || []).forEach(addMessage);
+        bindBrokenMediaFallback(container);
         syncEmptyState();
         initAudioPlayers(container);
         markRoomAsRead();
@@ -814,17 +910,22 @@
   }
 
   function renderMessageBody(message) {
+    if (templateCore && typeof templateCore.renderMessageContent === "function") {
+      return templateCore.renderMessageContent({
+        message,
+        resolveMediaUrl,
+        audioRenderer: buildAudioPlayerHtml,
+        imageClass: "tw-media image",
+        docClass: "tw-file-link",
+        docIconHtml: `${ICONS.filePdf} `
+      });
+    }
     if (message.type === "text") return `${escapeHtml(message.content)}`;
     const mediaUrl = resolveMediaUrl(message.file_url);
     if (!mediaUrl) return `Arquivo sem URL`;
     if (message.type === "image") return `<img class="tw-media image" src="${escapeAttr(mediaUrl)}" alt="Imagem" loading="lazy">`;
     if (message.type === "audio") return buildAudioPlayerHtml(mediaUrl);
-    if (message.type === "document") {
-        return `<a class="tw-file-link" href="${escapeAttr(mediaUrl)}" download>
-                  ${ICONS.filePdf} ${escapeHtml(message.filename || "documento.pdf")}
-                </a>`;
-    }
-    return escapeHtml(message.content);
+    return `<a class="tw-file-link" href="${escapeAttr(mediaUrl)}" download>${ICONS.filePdf} ${escapeHtml(message.filename || "documento.pdf")}</a>`;
   }
 
   function buildAudioPlayerHtml(mediaUrl) {
@@ -875,6 +976,11 @@
     if (own && !config.userId && msgUserId) {
       config.userId = msgUserId;
     }
+    if (own) {
+      addSelfAlias(msgUserId);
+      addSelfAlias(msgName);
+      if (msgName) localUserName = msgName;
+    }
     
     const time = (templateCore && typeof templateCore.formatTimePtBr === "function") ? templateCore.formatTimePtBr(message.created_at) : new Date(message.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const isRead = Number(message.is_read) === 1;
@@ -892,12 +998,19 @@
       }
     }
 
+    const avatarHtml = (!own && !isGrouped)
+      ? `<div class="tw-avatar" title="${escapeAttr(msgName)}">${message.avatar ? `<img src="${escapeAttr(resolveMediaUrl(message.avatar))}" alt="${escapeAttr(msgName)}">` : `<span class="tw-avatar-initial">${escapeHtml((msgName || "U").charAt(0).toUpperCase())}</span>`}</div>`
+      : (!own ? '<div class="tw-avatar-spacer"></div>' : '');
+
     const bubbleHtml = renderMessageBody(message);
     const rowHtml = (templateCore && typeof templateCore.renderWidgetMessageRow === "function")
       ? templateCore.renderWidgetMessageRow({
           own,
           grouped: isGrouped,
-          senderName: String(message.name || ""),
+          senderName: firstName(message.name),
+          ownLabel: "VOCÊ",
+          showOwnName: true,
+          avatarHtml,
           timeStr: time,
           bubbleHtml,
           checkHtml: ICONS.checkDouble(isRead),
@@ -906,15 +1019,19 @@
         })
       : `
         <div class="tw-message ${own ? "sent" : "received"} ${isGrouped ? "grouped" : ""}" data-sender-id="${escapeAttr(msgUserId || msgName)}" ${message.id ? `data-message-id="${escapeAttr(String(message.id))}"` : ""}>
-          ${(!isGrouped && !own) ? `<div class="tw-sender-name">${escapeHtml(message.name)}</div>` : ""}
-          <div class="tw-bubble">${bubbleHtml}</div>
-          <div class="tw-meta">
-            <span class="tw-time">${time}</span>
-            ${own ? `<span class="tw-read" data-read-for="${escapeAttr(String(message.id || ""))}">${ICONS.checkDouble(isRead)}</span>` : ""}
+          ${avatarHtml}
+          <div class="tw-message-content">
+            ${(!isGrouped && !own) ? `<div class="tw-sender-name">${escapeHtml(firstName(message.name))}</div>` : ""}
+            <div class="tw-bubble">${bubbleHtml}</div>
+            <div class="tw-meta">
+              <span class="tw-time">${time}</span>
+              ${own ? `<span class="tw-read" data-read-for="${escapeAttr(String(message.id || ""))}">${ICONS.checkDouble(isRead)}</span>` : ""}
+            </div>
           </div>
         </div>
       `;
     container.insertAdjacentHTML("beforeend", rowHtml);
+    bindBrokenMediaFallback(container);
     syncEmptyState();
     setTimeout(() => initAudioPlayers(container), 50);
     scrollToBottom();
@@ -982,8 +1099,11 @@
   function setComposerDisabled(disabled, reason = "") {
     const input = shadow && shadow.getElementById("tw-input");
     const attachBtn = shadow && shadow.getElementById("tw-attach-btn");
-    const sendBtn = shadow && shadow.getElementById("tw-send-btn");
-    const micBtn = shadow && shadow.getElementById("tw-mic-btn");
+    const emojiBtn = shadow && shadow.getElementById("tw-emoji-btn");
+    const actionBtn = shadow && shadow.getElementById("tw-action-btn");
+    const inputArea = shadow && shadow.getElementById("tw-input-area");
+    const closedFooter = shadow && shadow.getElementById("tw-closed-footer");
+    const closedReason = shadow && shadow.getElementById("tw-closed-reason");
     const disabledState = Boolean(disabled);
 
     if (input) {
@@ -993,19 +1113,24 @@
         : String(config.placeholder || DEFAULTS.placeholder);
     }
     if (attachBtn) attachBtn.disabled = disabledState;
-    if (sendBtn) sendBtn.disabled = disabledState || !(input && input.value.trim());
-    if (micBtn) micBtn.disabled = disabledState;
+    if (emojiBtn) emojiBtn.disabled = disabledState;
+    if (actionBtn) actionBtn.disabled = disabledState;
+    if (inputArea) inputArea.classList.toggle("hidden", disabledState);
+    if (closedFooter) closedFooter.style.display = disabledState ? "block" : "none";
+    if (closedReason && disabledState) {
+      closedReason.textContent = reason || "Apenas leitura do historico";
+    }
     if (disabledState && recording) {
       stopRecording();
     }
     chatClosed = disabledState;
-    showSystemMessage(reason || "", disabledState ? "warn" : "warn");
+    showSystemMessage(disabledState ? "" : reason || "", disabledState ? "warn" : "warn");
   }
 
   function handleChatClosedResponse(data) {
     const code = data && data.code ? String(data.code) : "";
     if (code !== "chat_closed") return false;
-    setComposerDisabled(true, "Este chamado foi fechado. Voce pode visualizar o historico, mas nao pode enviar novas mensagens.");
+    setComposerDisabled(true, data?.error || "Este chamado foi fechado. Voce pode visualizar o historico, mas nao pode enviar novas mensagens.");
     return true;
   }
 
@@ -1079,8 +1204,12 @@
   }
 
 
-  function onAttachOptionClick(event) {
-    const type = event.currentTarget.getAttribute("data-type");
+  function onAttachOptionClick(inputValue) {
+    const type = (typeof inputValue === "string")
+      ? inputValue
+      : inputValue && inputValue.currentTarget
+        ? inputValue.currentTarget.getAttribute("data-type")
+        : "";
     selectedUploadType = type || "";
     const input = shadow.getElementById("tw-file-input");
     const menu = shadow.getElementById("tw-attach-menu");
@@ -1092,7 +1221,7 @@
     };
     input.value = "";
     input.accept = acceptByType[selectedUploadType] || "*/*";
-    if (menu) menu.classList.remove("show");
+    if (menu) menu.classList.remove("open");
     input.click();
   }
 
@@ -1139,6 +1268,9 @@
 
   function postTyping(isTyping, activity = "typing") {
     if (chatClosed) return;
+    if (isTyping) {
+      localTypingEchoUntil = Date.now() + 2200;
+    }
     currentActivity = isTyping ? activity : "idle";
     fetch(buildApiUrl(`/api/messages/typing/${encodeURIComponent(config.roomId)}`), {
       method: "POST",
@@ -1150,35 +1282,40 @@
 
   function renderTyping(data) {
     const typingEl = shadow.getElementById("tw-typing");
+    const chip = shadow.getElementById("tw-recording-chip");
     if (!typingEl) return;
-    
-    // Nao mostrar para si mesmo
-    const msgUserId = String(data.userId || "").trim();
-    const cfgUserId = String(config.userId || "").trim();
-    if (cfgUserId && msgUserId && cfgUserId === msgUserId) {
+    if (data && data.isTyping && Date.now() < localTypingEchoUntil) {
+      typingEl.classList.remove("show");
+      return;
+    }
+    if (recording) {
+      typingEl.classList.remove("show");
+      return;
+    }
+
+    // Nao mostrar para si mesmo (id ou nome)
+    const msgUserId = normalizeAlias(data.userId);
+    const msgUserName = normalizeAlias(data.userName);
+    if (
+      (msgUserId && selfAliases.has(msgUserId)) ||
+      (msgUserName && selfAliases.has(msgUserName)) ||
+      (msgUserName && normalizeAlias(localUserName) === msgUserName)
+    ) {
       typingEl.classList.remove("show");
       return;
     }
 
     if (!data.isTyping) {
       typingEl.classList.remove("show");
+      if (!recording && chip) chip.classList.remove("show");
       return;
     }
-    
-    const dots = `<span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`;
-    const activity = data.activity === "recording" ? "está gravando áudio" : "está digitando";
-    typingEl.innerHTML = `<strong>${escapeHtml(data.userName || "Alguém")}</strong> ${activity}... ${dots}`;
-    typingEl.classList.add("show");
-  }
 
-  function postTyping(isTyping, activity = "typing") {
-    if (chatClosed) return;
-    fetch(buildApiUrl(`/api/messages/typing/${encodeURIComponent(config.roomId)}`), {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isTyping, activity })
-    }).catch(() => {});
+    const dots = `<span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`;
+    const activity = data.activity === "recording" ? "esta gravando audio" : "esta digitando";
+    if (!recording && chip) chip.classList.remove("show");
+    typingEl.innerHTML = `<strong>${escapeHtml(data.userName || "Alguem")}</strong> ${activity}... ${dots}`;
+    typingEl.classList.add("show");
   }
 
   function scrollToBottom() {
@@ -1208,6 +1345,7 @@
       const playIcon = player.querySelector(".tw-audio-icon-play");
       const pauseIcon = player.querySelector(".tw-audio-icon-pause");
       const timeEl = player.querySelector(".tw-audio-time");
+      const progressEl = player.querySelector(".tw-audio-progress");
       const progressDot = player.querySelector(".tw-audio-dot");
       if (!audio || !toggle) return;
 
@@ -1216,7 +1354,8 @@
         const hasDuration = Number.isFinite(duration) && duration > 0;
         const ratio = hasDuration ? Math.max(0, Math.min(1, audio.currentTime / duration)) : 0;
         
-        if (progressDot) progressDot.style.left = `${ratio * 100}%`;
+        if (progressEl) progressEl.style.width = `${ratio * 100}%`;
+        if (progressDot) progressDot.style.left = "auto";
         
         if (timeEl) {
           const displayTime = (!audio.paused && audio.currentTime > 0) ? audio.currentTime : (hasDuration ? duration : 0);
@@ -1237,7 +1376,9 @@
           currentAudio.pause();
         }
         if (audio.paused) {
-          audio.play();
+          audio.play().catch(() => {
+            if (timeEl) timeEl.textContent = "00:00";
+          });
           currentAudio = audio;
         } else {
           audio.pause();
@@ -1245,11 +1386,43 @@
       });
 
       audio.addEventListener("loadedmetadata", sync);
+      audio.addEventListener("error", () => {
+        const baseUrl = player.getAttribute("data-audio-url") || audio.getAttribute("src") || "";
+        const retryCount = Number(player.getAttribute("data-audio-retry") || "0");
+        if (retryCount < 6 && baseUrl) {
+          player.setAttribute("data-audio-retry", String(retryCount + 1));
+          if (timeEl) timeEl.textContent = "processando...";
+          const delayMs = 700 + (retryCount * 500);
+          setTimeout(() => {
+            const bust = `retry=${Date.now()}`;
+            const nextUrl = baseUrl.includes("?") ? `${baseUrl}&${bust}` : `${baseUrl}?${bust}`;
+            audio.src = nextUrl;
+            audio.load();
+          }, delayMs);
+          return;
+        }
+        const bubble = player.closest(".tw-bubble");
+        if (!bubble) return;
+        bubble.innerHTML = `<span class="tw-missing-msg">Aquivo não disponível</span>`;
+      });
       audio.addEventListener("timeupdate", sync);
       audio.addEventListener("play", sync);
       audio.addEventListener("pause", sync);
       audio.addEventListener("ended", () => { sync(); currentAudio = null; });
       sync();
+    });
+  }
+
+  function bindBrokenMediaFallback(root) {
+    const container = root || shadow;
+    if (!container) return;
+    container.querySelectorAll("img.tw-media.image:not([data-missing-bound='1'])").forEach((img) => {
+      img.setAttribute("data-missing-bound", "1");
+      img.addEventListener("error", () => {
+        const bubble = img.closest(".tw-bubble");
+        if (!bubble) return;
+        bubble.innerHTML = `<span class="tw-missing-msg">mensagem apagada</span>`;
+      });
     });
   }
 
@@ -1304,10 +1477,28 @@
     const chip = shadow.getElementById("tw-recording-chip");
     const btn = shadow.getElementById("tw-action-btn");
     const icon = shadow.getElementById("tw-action-icon");
+    const typingEl = shadow.getElementById("tw-typing");
     if (chip) chip.classList.toggle("show", active);
     if (btn) btn.classList.toggle("recording", active);
     if (icon) icon.innerHTML = active ? ICONS.stop : ICONS.mic;
+    if (active && typingEl) typingEl.classList.remove("show");
     if (!active) onInputUpdate(); // Restore icon if needed
+  }
+
+  function normalizeAlias(value) {
+    return String(value || "").trim().toLowerCase();
+  }
+
+  function firstName(value) {
+    const full = String(value || "").trim();
+    if (!full) return "Usuario";
+    return full.split(/\s+/)[0] || full;
+  }
+
+  function addSelfAlias(value) {
+    const alias = normalizeAlias(value);
+    if (!alias) return;
+    selfAliases.add(alias);
   }
 
   function renderAvatar(avatarUrl, name) {

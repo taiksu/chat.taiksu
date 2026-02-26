@@ -79,6 +79,31 @@ class MessageController {
     return false;
   }
 
+  getInactivityHours() {
+    const parsed = Number(process.env.CHAMADO_INACTIVITY_HOURS || 24);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
+  }
+
+  async getRoomClosureState(room) {
+    if (!room) return { closed: false, reason: '' };
+    if (this.isClosedStatus(room.status) || this.isClosedStatus(room.chamado_status)) {
+      return { closed: true, reason: 'Chat encerrado' };
+    }
+    if (String(room.type || '').toLowerCase() !== 'support_ticket') {
+      return { closed: false, reason: '' };
+    }
+
+    const lastMessageAt = await Message.getLastMessageAt(room.id);
+    const activityAt = lastMessageAt || room.updated_at || room.created_at;
+    if (!activityAt) return { closed: false, reason: '' };
+
+    const inactivityMs = this.getInactivityHours() * 60 * 60 * 1000;
+    const isClosed = (Date.now() - new Date(activityAt).getTime()) >= inactivityMs;
+    return isClosed
+      ? { closed: true, reason: `Chat encerrado por ${this.getInactivityHours()}h de inatividade` }
+      : { closed: false, reason: '' };
+  }
+
   ensureSSEStore() {
     if (!global.sseClients) {
       global.sseClients = {};
@@ -137,9 +162,10 @@ class MessageController {
           return res.status(404).json({ error: 'Sala nao encontrada para envio da mensagem' });
         }
 
-        if (this.isRoomOrChamadoClosed(finalRoom, req)) {
+        const closureState = await this.getRoomClosureState(finalRoom);
+        if (this.isRoomOrChamadoClosed(finalRoom, req) || closureState.closed) {
           return res.status(409).json({
-            error: 'Chat fechado para novas mensagens',
+            error: closureState.reason || 'Chat fechado para novas mensagens',
             code: 'chat_closed',
             roomId
           });
@@ -286,6 +312,25 @@ class MessageController {
     }
   }
 
+  async getRoomState(req, res) {
+    try {
+      const { roomId } = req.params;
+      const room = await ChatRoom.findById(roomId);
+      if (!room) {
+        return res.status(404).json({ error: 'Sala nao encontrada' });
+      }
+      const closureState = await this.getRoomClosureState(room);
+      return res.json({
+        success: true,
+        roomId,
+        closed: closureState.closed,
+        reason: closureState.reason
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   sendSSE(req, res) {
     const { roomId } = req.params;
     this.ensureSSEStore();
@@ -324,22 +369,37 @@ class MessageController {
       const userId = req.session.user?.id;
 
       if (!userId) {
-        return res.status(401).json({ error: 'Não autenticado' });
+        return res.status(401).json({ error: 'Nao autenticado' });
       }
 
-      // Notificar outros usuários
-      const clients = this.getRoomClients(roomId);
-      clients.forEach(client => {
-        client.write(`data: ${JSON.stringify({
-          type: 'typing_status',
-          userId,
-          isTyping,
-          activity: ['typing', 'recording'].includes(activity) ? activity : (isTyping ? 'typing' : 'idle'),
-          userName: req.session.user.name
-        })}\n\n`);
-      });
+      ChatRoom.findById(roomId)
+        .then((room) => this.getRoomClosureState(room))
+        .then((closureState) => {
+          if (closureState.closed) {
+            return res.status(409).json({
+              error: closureState.reason || 'Chat fechado para novas mensagens',
+              code: 'chat_closed',
+              roomId
+            });
+          }
 
-      res.json({ success: true });
+          const clients = this.getRoomClients(roomId);
+          clients.forEach(client => {
+            client.write(`data: ${JSON.stringify({
+              type: 'typing_status',
+              userId,
+              isTyping,
+              activity: ['typing', 'recording'].includes(activity) ? activity : (isTyping ? 'typing' : 'idle'),
+              userName: req.session.user.name
+            })}
+
+`);
+          });
+
+          return res.json({ success: true });
+        })
+        .catch((error) => res.status(500).json({ error: error.message }));
+      return;
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

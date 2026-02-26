@@ -110,6 +110,16 @@ class Message {
   static async delete(messageId) {
     return MessageModel.destroy({ where: { id: messageId } });
   }
+
+  static async getLastMessageAt(roomId) {
+    const row = await MessageModel.findOne({
+      where: { room_id: roomId },
+      attributes: ['created_at'],
+      order: [['created_at', 'DESC']],
+      raw: true
+    });
+    return row?.created_at || null;
+  }
 }
 
 module.exports = Message;
