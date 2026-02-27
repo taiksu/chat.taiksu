@@ -51,7 +51,7 @@ class AIController {
   }
 
   getOllamaModel() {
-    return String(process.env.OLLAMA_MODEL || 'gemma3:1b').trim();
+    return String(process.env.OLLAMA_MODEL || process.env.ollama_MODEL || 'gemma3:1b').trim();
   }
 
   getOllamaApiToken() {

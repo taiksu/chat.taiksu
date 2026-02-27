@@ -32,7 +32,7 @@ class AIModuleController {
         aiBetaModeEnabled: Boolean(settings.aiBetaModeEnabled),
         betaAllowlistCount: Array.isArray(settings.aiBetaAllowlist) ? settings.aiBetaAllowlist.length : 0,
         providerOrder,
-        ollamaModel: String(process.env.OLLAMA_MODEL || '').trim() || 'n/a',
+        ollamaModel: String(process.env.OLLAMA_MODEL || process.env.ollama_MODEL || '').trim() || 'n/a',
         geminiModel: String(process.env.GEMINI_MODEL || '').trim() || 'n/a',
         apiAiUrl: String(process.env.API_AI_URL || '').trim() || 'n/a',
         memoryTtlMinutes: Number(process.env.AI_MEMORY_TTL_MINUTES || 30)
