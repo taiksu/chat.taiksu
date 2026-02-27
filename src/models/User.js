@@ -1,7 +1,12 @@
 const { v4: uuidv4 } = require('uuid');
+const { Op } = require('sequelize');
 const { UserModel } = require('./sequelize-models');
 
 class User {
+  static supportRoles() {
+    return ['admin', 'atendente', 'support', 'suporte', 'agent'];
+  }
+
   static async create(userData) {
     const id = uuidv4();
     const created = await UserModel.create({
@@ -37,6 +42,14 @@ class User {
     return changes;
   }
 
+  static async updateAttendanceState(userId, attendanceState) {
+    const [changes] = await UserModel.update(
+      { attendance_state: attendanceState || 'livre' },
+      { where: { id: userId } }
+    );
+    return changes;
+  }
+
   static async updateAvatar(userId, avatarUrl) {
     const [changes] = await UserModel.update(
       { avatar: avatarUrl || null },
@@ -60,6 +73,29 @@ class User {
 
   static async findBySSOId(ssoId) {
     return UserModel.findOne({ where: { sso_id: ssoId }, raw: true });
+  }
+
+  static async findOnlineAgents() {
+    return UserModel.findAll({
+      where: {
+        role: { [Op.in]: this.supportRoles() },
+        status: 'online'
+      },
+      order: [['updated_at', 'ASC']],
+      raw: true
+    });
+  }
+
+  static async findAvailableAgents() {
+    return UserModel.findAll({
+      where: {
+        role: { [Op.in]: this.supportRoles() },
+        status: 'online',
+        attendance_state: { [Op.ne]: 'ocupado' }
+      },
+      order: [['updated_at', 'ASC']],
+      raw: true
+    });
   }
 }
 

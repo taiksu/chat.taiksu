@@ -7,18 +7,17 @@ const mysql = require('mysql2/promise');
 require('dotenv').config();
 
 async function initMySQL() {
-  console.log('🚀 Inicializando MySQL para Chat Taiksu');
-  console.log('═'.repeat(50));
+  console.log('Inicializando MySQL para Chat Taiksu');
+  console.log('='.repeat(50));
 
   const dbName = process.env.DB_NAME || 'chat_taiksu';
   const dbUser = process.env.DB_USER || 'root';
   const dbPassword = process.env.DB_PASSWORD || '';
   const dbHost = process.env.DB_HOST || 'localhost';
-  const dbPort = process.env.DB_PORT || 3306;
+  const dbPort = Number(process.env.DB_PORT || 3306);
 
   try {
-    // Conectar sem especificar banco de dados
-    console.log(`\n📡 Conectando ao MySQL em ${dbHost}:${dbPort}...`);
+    console.log(`Conectando ao MySQL em ${dbHost}:${dbPort}...`);
     const connection = await mysql.createConnection({
       host: dbHost,
       port: dbPort,
@@ -26,21 +25,10 @@ async function initMySQL() {
       password: dbPassword || undefined
     });
 
-    console.log('✅ Conectado ao MySQL!');
-
-    // Criar banco de dados
-    console.log(`\n📁 Criando banco de dados '${dbName}'...`);
-    try {
-      await connection.execute(`DROP DATABASE IF EXISTS ${dbName}`);
-      console.log('🗑️  Banco anterior removido');
-    } catch (e) {
-      // Ignorar se não existir
-    }
-
+    await connection.execute(`DROP DATABASE IF EXISTS ${dbName}`);
     await connection.execute(`CREATE DATABASE ${dbName} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-    console.log(`✅ Banco de dados '${dbName}' criado!`);
+    console.log(`Banco '${dbName}' pronto`);
 
-    // Conectar ao novo banco
     const db = await mysql.createConnection({
       host: dbHost,
       port: dbPort,
@@ -49,9 +37,6 @@ async function initMySQL() {
       database: dbName
     });
 
-    console.log(`\n📊 Criando tabelas...`);
-
-    // Tabela de usuários
     await db.execute(`
       CREATE TABLE users (
         id VARCHAR(36) PRIMARY KEY,
@@ -61,6 +46,7 @@ async function initMySQL() {
         avatar LONGTEXT,
         status VARCHAR(20) DEFAULT 'offline',
         role VARCHAR(20) DEFAULT 'user',
+        attendance_state VARCHAR(32) DEFAULT 'livre',
         sso_id INT,
         sso_data LONGTEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -69,15 +55,15 @@ async function initMySQL() {
         INDEX idx_status (status)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('  ✅ Tabela: users');
 
-    // Tabela de salas de chat
     await db.execute(`
       CREATE TABLE chat_rooms (
         id VARCHAR(36) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         type VARCHAR(20) DEFAULT 'support',
         status VARCHAR(32) DEFAULT 'aberto',
+        chat_state VARCHAR(32) DEFAULT 'NEW',
+        assigned_agent_id VARCHAR(36),
         description TEXT,
         owner_id VARCHAR(36) NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -86,9 +72,7 @@ async function initMySQL() {
         INDEX idx_owner (owner_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('  ✅ Tabela: chat_rooms');
 
-    // Tabela de mensagens
     await db.execute(`
       CREATE TABLE messages (
         id VARCHAR(36) PRIMARY KEY,
@@ -98,6 +82,7 @@ async function initMySQL() {
         type VARCHAR(20) DEFAULT 'text',
         file_url LONGTEXT,
         file_type VARCHAR(50),
+        actions LONGTEXT,
         is_read TINYINT DEFAULT 0,
         read_at DATETIME,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -108,9 +93,7 @@ async function initMySQL() {
         INDEX idx_created (created_at)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('  ✅ Tabela: messages');
 
-    // Tabela de participantes
     await db.execute(`
       CREATE TABLE room_participants (
         id VARCHAR(36) PRIMARY KEY,
@@ -124,9 +107,7 @@ async function initMySQL() {
         INDEX idx_user (user_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('  ✅ Tabela: room_participants');
 
-    // Tabela de métricas
     await db.execute(`
       CREATE TABLE metrics (
         id VARCHAR(36) PRIMARY KEY,
@@ -142,9 +123,19 @@ async function initMySQL() {
         INDEX idx_room (room_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('  ✅ Tabela: metrics');
 
-    // Tabela de status de digitação
+    await db.execute(`
+      CREATE TABLE support_chamados_rooms (
+        id VARCHAR(36) PRIMARY KEY,
+        chamado_id VARCHAR(64) NOT NULL UNIQUE,
+        room_id VARCHAR(36) NOT NULL UNIQUE,
+        created_by VARCHAR(36) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
+
     await db.execute(`
       CREATE TABLE typing_status (
         id VARCHAR(36) PRIMARY KEY,
@@ -158,21 +149,30 @@ async function initMySQL() {
         INDEX idx_room (room_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
-    console.log('  ✅ Tabela: typing_status');
 
-    console.log('\n' + '═'.repeat(50));
-    console.log('✅ MySQL inicializado com sucesso!');
-    console.log('\n📝 Próximos passos:');
-    console.log('  1. Atualizar .env com: DB_TYPE=mysql');
-    console.log('  2. Executar: npm run seed (para popular dados de teste)');
-    console.log('  3. Iniciar servidor: npm start');
+    await db.execute(`
+      CREATE TABLE chat_queue (
+        id VARCHAR(36) PRIMARY KEY,
+        room_id VARCHAR(36) NOT NULL,
+        user_id VARCHAR(36) NOT NULL,
+        status VARCHAR(32) DEFAULT 'waiting',
+        position INT DEFAULT 1,
+        assigned_agent_id VARCHAR(36),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        assigned_at DATETIME,
+        FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (assigned_agent_id) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_queue_status_position (status, position)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    `);
 
+    console.log('Tabelas criadas com sucesso');
     await connection.end();
     await db.end();
     process.exit(0);
   } catch (error) {
-    console.error('\n❌ Erro ao inicializar MySQL:');
-    console.error(`   ${error.message}`);
+    console.error('Erro ao inicializar MySQL:', error.message);
     process.exit(1);
   }
 }

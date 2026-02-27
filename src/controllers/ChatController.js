@@ -1,29 +1,40 @@
 const ChatRoom = require('../models/ChatRoom');
 const Message = require('../models/Message');
+const User = require('../models/User');
+const ChatQueue = require('../models/ChatQueue');
 const path = require('path');
 const fs = require('fs');
 
 class ChatController {
-
   normalizeRoomStatus(value) {
     const raw = String(value || '').trim().toLowerCase();
     if (!raw) return null;
-    const closedValues = [
-      'fechado',
-      'closed',
-      'concluido',
-      'conclu\u00eddo',
-      'finalizado',
-      'resolved',
-      'resolvido'
-    ];
+
+    const closedValues = ['fechado', 'closed', 'concluido', 'concluído', 'finalizado', 'resolved', 'resolvido'];
     const openValues = ['aberto', 'open', 'ativo', 'active', 'em_andamento', 'em andamento'];
+
     if (closedValues.includes(raw)) return 'fechado';
     if (openValues.includes(raw)) return 'aberto';
     return null;
   }
+
   isClosedStatus(value) {
     return this.normalizeRoomStatus(value) === 'fechado';
+  }
+
+  isAdmin(user) {
+    return String(user?.role || '').toLowerCase() === 'admin';
+  }
+
+  isSupportAgent(user) {
+    const role = String(user?.role || '').toLowerCase();
+    return User.supportRoles().includes(role);
+  }
+
+  normalizeAttendanceState(value) {
+    const state = String(value || '').trim().toLowerCase();
+    if (state === 'ocupado' || state === 'busy') return 'ocupado';
+    return 'livre';
   }
 
   getInactivityHours() {
@@ -51,7 +62,7 @@ class ChatController {
 
   isRoomAdmin(user, room) {
     if (!user || !room) return false;
-    return String(room.owner_id) === String(user.id) || user.role === 'admin';
+    return String(room.owner_id) === String(user.id) || this.isAdmin(user);
   }
 
   removePhysicalFiles(fileUrls) {
@@ -90,6 +101,36 @@ class ChatController {
         unreadCount
       };
     }));
+  }
+
+  async assignAgentToRoom(roomId, agentId, chamadoId = '') {
+    await ChatRoom.addParticipant(roomId, agentId);
+    await ChatRoom.updateStatus(roomId, 'aberto');
+    await ChatRoom.updateChatState(roomId, 'HUMANO');
+    await ChatRoom.setAssignedAgent(roomId, agentId);
+    await User.updateAttendanceState(agentId, 'ocupado');
+    await ChatQueue.cancelWaitingByRoom(roomId);
+
+    this.broadcastRoomEvent(roomId, {
+      type: 'human_assigned',
+      roomId,
+      chamadoId: chamadoId ? String(chamadoId) : null,
+      agentId: String(agentId),
+      chatState: 'HUMANO'
+    });
+  }
+
+  async dispatchNextWaitingForAgent(agentId) {
+    if (!agentId) return null;
+    const next = await ChatQueue.getNextWaiting();
+    if (!next) {
+      await User.updateAttendanceState(agentId, 'livre');
+      return null;
+    }
+
+    await this.assignAgentToRoom(next.room_id, agentId);
+    await ChatQueue.markAssigned(next.id, agentId);
+    return next;
   }
 
   async listRooms(req, res) {
@@ -158,8 +199,6 @@ class ChatController {
 
       if (req.session.user) {
         const isParticipant = await ChatRoom.hasActiveParticipant(roomId, req.session.user.id);
-
-        // Em fluxo web/QA, entrar na sala deve ser transparente para usuarios autenticados.
         if (!isParticipant) {
           await ChatRoom.addParticipant(roomId, req.session.user.id);
         }
@@ -257,16 +296,99 @@ class ChatController {
     }
   }
 
+  async requestHumanForChamado(req, res) {
+    try {
+      const user = req.session.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const { chamadoId } = req.params;
+      if (!chamadoId) {
+        return res.status(400).json({ error: 'chamadoId e obrigatorio' });
+      }
+
+      const result = await ChatRoom.createOrGetChamadoRoom({
+        chamadoId: String(chamadoId),
+        ownerId: user.id,
+        name: `Chamado #${chamadoId}`,
+        description: `Conversa de suporte para o chamado ${chamadoId}`
+      });
+      const room = result.room;
+      await ChatRoom.addParticipant(room.id, user.id);
+
+      const availableAgents = await User.findAvailableAgents();
+      if (availableAgents.length > 0) {
+        const selectedAgent = availableAgents[0];
+        await this.assignAgentToRoom(room.id, selectedAgent.id, String(chamadoId));
+
+        return res.json({
+          success: true,
+          mode: 'human_assigned',
+          chamadoId: String(chamadoId),
+          roomId: room.id,
+          agent: {
+            id: String(selectedAgent.id),
+            name: selectedAgent.name
+          },
+          chatState: 'HUMANO'
+        });
+      }
+
+      const onlineAgents = await User.findOnlineAgents();
+      if (onlineAgents.length > 0) {
+        const queueItem = await ChatQueue.enqueue({
+          roomId: room.id,
+          userId: user.id
+        });
+        await ChatRoom.updateChatState(room.id, 'FILA');
+
+        this.broadcastRoomEvent(room.id, {
+          type: 'queue_joined',
+          roomId: room.id,
+          chamadoId: String(chamadoId),
+          position: queueItem.position,
+          chatState: 'FILA'
+        });
+
+        return res.json({
+          success: true,
+          mode: 'queued',
+          chamadoId: String(chamadoId),
+          roomId: room.id,
+          position: queueItem.position,
+          chatState: 'FILA'
+        });
+      }
+
+      await ChatRoom.updateChatState(room.id, 'AGUARDANDO_HUMANO');
+      return res.json({
+        success: true,
+        mode: 'offline',
+        chamadoId: String(chamadoId),
+        roomId: room.id,
+        chatState: 'AGUARDANDO_HUMANO',
+        message: 'No momento nao ha atendentes disponiveis. Deseja abrir um chamado?'
+      });
+    } catch (error) {
+      console.error('Error requesting human for chamado:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   async updateChamadoStatus(req, res) {
     try {
       if (!req.session.user) {
         return res.status(401).json({ error: 'Nao autenticado' });
       }
+
       const { chamadoId } = req.params;
       const requestedStatus = req.body?.status ?? req.body?.chamadoStatus ?? req.body?.chamado_status;
+
       if (!chamadoId) {
         return res.status(400).json({ error: 'chamadoId e obrigatorio' });
       }
+
       const normalizedStatus = this.normalizeRoomStatus(requestedStatus);
       if (!normalizedStatus) {
         return res.status(400).json({
@@ -274,10 +396,24 @@ class ChatController {
           allowed: ['aberto', 'fechado']
         });
       }
+
       const updatedRoom = await ChatRoom.updateChamadoStatus(String(chamadoId), normalizedStatus);
       if (!updatedRoom) {
         return res.status(404).json({ error: 'Sala de chamado nao encontrada' });
       }
+
+      if (normalizedStatus === 'fechado') {
+        await ChatRoom.updateChatState(updatedRoom.id, 'FECHADO');
+        await ChatQueue.cancelWaitingByRoom(updatedRoom.id);
+        if (updatedRoom.assigned_agent_id) {
+          await this.dispatchNextWaitingForAgent(String(updatedRoom.assigned_agent_id));
+          await ChatRoom.setAssignedAgent(updatedRoom.id, null);
+        }
+      } else {
+        await ChatRoom.updateChatState(updatedRoom.id, 'NEW');
+        await ChatRoom.setAssignedAgent(updatedRoom.id, null);
+      }
+
       this.broadcastRoomEvent(updatedRoom.id, {
         type: 'room_status_changed',
         roomId: updatedRoom.id,
@@ -286,6 +422,7 @@ class ChatController {
         closed: normalizedStatus === 'fechado',
         changedBy: String(req.session.user.id || '')
       });
+
       return res.json({
         success: true,
         chamadoId: String(chamadoId),
@@ -295,6 +432,80 @@ class ChatController {
       });
     } catch (error) {
       console.error('Error updating chamado status:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  async updateAgentAvailability(req, res) {
+    try {
+      const actor = req.session.user;
+      if (!actor) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const targetAgentId = String(req.params.agentId || actor.id);
+      const isSelf = String(actor.id) === targetAgentId;
+      if (!isSelf && !this.isAdmin(actor)) {
+        return res.status(403).json({ error: 'Sem permissao para atualizar outro agente' });
+      }
+
+      const nextState = this.normalizeAttendanceState(req.body?.attendanceState || req.body?.state);
+      await User.updateAttendanceState(targetAgentId, nextState);
+
+      if (nextState === 'livre') {
+        await this.dispatchNextWaitingForAgent(targetAgentId);
+      }
+
+      return res.json({
+        success: true,
+        agentId: targetAgentId,
+        attendanceState: nextState
+      });
+    } catch (error) {
+      console.error('Error updating agent availability:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  async finishHumanChat(req, res) {
+    try {
+      const actor = req.session.user;
+      if (!actor) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const { roomId } = req.params;
+      const room = await ChatRoom.findById(roomId);
+      if (!room) {
+        return res.status(404).json({ error: 'Sala nao encontrada' });
+      }
+      if (!this.isSupportAgent(actor) && !this.isRoomAdmin(actor, room)) {
+        return res.status(403).json({ error: 'Sem permissao para finalizar atendimento' });
+      }
+
+      await ChatRoom.updateStatus(roomId, 'fechado');
+      await ChatRoom.updateChatState(roomId, 'FECHADO');
+      await ChatQueue.cancelWaitingByRoom(roomId);
+
+      const agentId = String(room.assigned_agent_id || actor.id || '');
+      await ChatRoom.setAssignedAgent(roomId, null);
+      if (agentId) {
+        await this.dispatchNextWaitingForAgent(agentId);
+      }
+
+      this.broadcastRoomEvent(roomId, {
+        type: 'human_finished',
+        roomId,
+        chatState: 'FECHADO'
+      });
+
+      return res.json({
+        success: true,
+        roomId,
+        chatState: 'FECHADO'
+      });
+    } catch (error) {
+      console.error('Error finishing human chat:', error);
       return res.status(500).json({ error: error.message });
     }
   }

@@ -3,6 +3,25 @@ const { Op } = require('sequelize');
 const { MessageModel, UserModel } = require('./sequelize-models');
 
 class Message {
+  static parseActions(value) {
+    if (!value) return [];
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_err) {
+        return [];
+      }
+    }
+    return [];
+  }
+
+  static serializeActions(actions) {
+    if (!Array.isArray(actions) || !actions.length) return null;
+    return JSON.stringify(actions);
+  }
+
   static async create(messageData) {
     const id = uuidv4();
     const created = await MessageModel.create({
@@ -13,6 +32,7 @@ class Message {
       type: messageData.type || 'text',
       file_url: messageData.fileUrl || null,
       file_type: messageData.fileType || null,
+      actions: this.serializeActions(messageData.actions),
       is_read: 0
     });
 
@@ -23,7 +43,8 @@ class Message {
       content: created.content,
       type: created.type,
       fileUrl: created.file_url,
-      fileType: created.file_type
+      fileType: created.file_type,
+      actions: this.parseActions(created.actions)
     };
   }
 
@@ -45,7 +66,8 @@ class Message {
         return {
           ...plain,
           name: plain.sender?.name || null,
-          avatar: plain.sender?.avatar || null
+          avatar: plain.sender?.avatar || null,
+          actions: this.parseActions(plain.actions)
         };
       })
       .reverse();

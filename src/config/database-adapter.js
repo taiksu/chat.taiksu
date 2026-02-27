@@ -197,6 +197,7 @@ async function createTables() {
         avatar TEXT,
         status VARCHAR(32) DEFAULT 'offline',
         role VARCHAR(32) DEFAULT 'user',
+        attendance_state VARCHAR(32) DEFAULT 'livre',
         sso_id BIGINT,
         sso_data TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -209,11 +210,28 @@ async function createTables() {
         name VARCHAR(255) NOT NULL,
         type VARCHAR(64) DEFAULT 'support',
         status VARCHAR(32) DEFAULT 'aberto',
+        chat_state VARCHAR(32) DEFAULT 'NEW',
+        assigned_agent_id VARCHAR(64),
         description TEXT,
         owner_id VARCHAR(64) NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (owner_id) REFERENCES users(id)
+      )
+    `,
+    `
+      CREATE TABLE IF NOT EXISTS chat_queue (
+        id VARCHAR(64) PRIMARY KEY,
+        room_id VARCHAR(64) NOT NULL,
+        user_id VARCHAR(64) NOT NULL,
+        status VARCHAR(32) DEFAULT 'waiting',
+        position INTEGER DEFAULT 1,
+        assigned_agent_id VARCHAR(64),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        assigned_at DATETIME,
+        FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (assigned_agent_id) REFERENCES users(id)
       )
     `,
     `
@@ -225,6 +243,7 @@ async function createTables() {
         type VARCHAR(32) DEFAULT 'text',
         file_url TEXT,
         file_type VARCHAR(255),
+        actions TEXT,
         is_read INTEGER DEFAULT 0,
         read_at DATETIME,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

@@ -307,6 +307,19 @@
       .tw-time { font-size: 11px; color: #6b7280; }
       .tw-read { display: inline-flex; align-items: center; }
       .tw-sender-name { font-size: 10px; font-weight: 700; color: #047857; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .35px; }
+      .tw-msg-actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+      .tw-msg-action {
+        border: 1px solid #10b981;
+        background: #ecfdf5;
+        color: #047857;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .tw-msg-action:hover { background: #d1fae5; }
 
       .tw-media.image { max-width: 100%; border-radius: 12px; display: block; cursor: pointer; margin: 4px 0; }
       .tw-file-link { color: #075e54; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 8px; }
@@ -558,6 +571,16 @@
     if (messagesArea) messagesArea.addEventListener("click", closeUIExtras);
     if (messagesArea) {
       messagesArea.addEventListener("click", (event) => {
+        const actionButton = event.target && event.target.closest(".tw-msg-action");
+        if (actionButton) {
+          const actionType = String(actionButton.getAttribute("data-action-type") || "");
+          const actionUrl = String(actionButton.getAttribute("data-action-url") || "");
+          const actionTarget = String(actionButton.getAttribute("data-action-target") || "_blank");
+          if (actionType === "open_url" && actionUrl) {
+            window.open(actionUrl, actionTarget);
+          }
+          return;
+        }
         const image = event.target && event.target.closest("img.tw-media.image");
         if (!image) return;
         openLightbox(image.getAttribute("src"));
@@ -835,8 +858,22 @@
     await ensureTemplateCoreLoaded().catch(() => null);
     renderOpen();
     fetchRoomState();
-    loadMessages();
     connectSSE();
+    await bootstrapInitialGreeting();
+    loadMessages();
+  }
+
+  async function bootstrapInitialGreeting() {
+    try {
+      await fetch(buildApiUrl(`/api/messages/bootstrap/${encodeURIComponent(config.roomId)}`), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      });
+    } catch (_err) {
+      // no-op: falha no bootstrap nao deve quebrar abertura do chat
+    }
   }
 
   function fetchRoomState() {
@@ -941,6 +978,17 @@
 
   function normalizeMessage(message) {
     if (!message) return null;
+    let normalizedActions = [];
+    if (Array.isArray(message.actions)) {
+      normalizedActions = message.actions;
+    } else if (typeof message.actions === "string" && message.actions.trim()) {
+      try {
+        const parsed = JSON.parse(message.actions);
+        normalizedActions = Array.isArray(parsed) ? parsed : [];
+      } catch (_err) {
+        normalizedActions = [];
+      }
+    }
     return {
       ...message,
       id: message.id,
@@ -951,8 +999,27 @@
       avatar: message.avatar || "",
       type: message.type || "text",
       file_url: message.file_url ?? message.fileUrl ?? "",
-      file_type: message.file_type ?? message.fileType ?? ""
+      file_type: message.file_type ?? message.fileType ?? "",
+      actions: normalizedActions
     };
+  }
+
+  function renderMessageActions(message) {
+    const actions = Array.isArray(message?.actions) ? message.actions : [];
+    if (!actions.length) return "";
+    const buttons = actions
+      .map((action) => {
+        const id = String(action?.id || "").trim();
+        const label = String(action?.label || "").trim();
+        const type = String(action?.type || "open_url").trim();
+        const url = String(action?.url || "").trim();
+        const target = String(action?.target || "_blank").trim();
+        if (!id || !label) return "";
+        return `<button type="button" class="tw-msg-action" data-action-id="${escapeAttr(id)}" data-action-type="${escapeAttr(type)}" data-action-url="${escapeAttr(url)}" data-action-target="${escapeAttr(target)}">${escapeHtml(label)}</button>`;
+      })
+      .filter(Boolean)
+      .join("");
+    return buttons ? `<div class="tw-msg-actions">${buttons}</div>` : "";
   }
 
   function inferFileType(mime) {
@@ -1062,7 +1129,7 @@
       ? `<div class="tw-avatar" title="${escapeAttr(msgName)}">${message.avatar ? `<img src="${escapeAttr(resolveMediaUrl(message.avatar))}" alt="${escapeAttr(msgName)}">` : `<span class="tw-avatar-initial">${escapeHtml((msgName || "U").charAt(0).toUpperCase())}</span>`}</div>`
       : (!own ? '<div class="tw-avatar-spacer"></div>' : '');
 
-    const bubbleHtml = renderMessageBody(message);
+    const bubbleHtml = `${renderMessageBody(message)}${renderMessageActions(message)}`;
     const rowHtml = (templateCore && typeof templateCore.renderWidgetMessageRow === "function")
       ? templateCore.renderWidgetMessageRow({
           own,

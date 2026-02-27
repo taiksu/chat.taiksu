@@ -17,6 +17,8 @@ class ChatRoom {
       name: roomData.name,
       type: roomData.type || 'support',
       status: roomData.status || 'aberto',
+      chat_state: roomData.chatState || 'NEW',
+      assigned_agent_id: roomData.assignedAgentId || null,
       description: roomData.description || '',
       owner_id: roomData.ownerId
     });
@@ -26,6 +28,8 @@ class ChatRoom {
       name: created.name,
       type: created.type,
       status: created.status,
+      chat_state: created.chat_state,
+      assigned_agent_id: created.assigned_agent_id,
       description: created.description,
       owner_id: created.owner_id,
       created_at: created.created_at,
@@ -188,6 +192,22 @@ class ChatRoom {
     if (!room) return null;
     await this.updateStatus(room.id, status);
     return this.findByChamadoId(chamadoId);
+  }
+
+  static async updateChatState(roomId, chatState) {
+    const [changes] = await ChatRoomModel.update(
+      { chat_state: String(chatState || '').trim() || 'NEW' },
+      { where: { id: roomId } }
+    );
+    return changes;
+  }
+
+  static async setAssignedAgent(roomId, agentId) {
+    const [changes] = await ChatRoomModel.update(
+      { assigned_agent_id: agentId ? String(agentId) : null },
+      { where: { id: roomId } }
+    );
+    return changes;
   }
 }
 

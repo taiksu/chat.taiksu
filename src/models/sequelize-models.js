@@ -14,6 +14,7 @@ const UserModel = sequelize.define('users', {
   avatar: { type: DataTypes.TEXT, allowNull: true },
   status: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'offline' },
   role: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'user' },
+  attendance_state: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'livre' },
   sso_id: { type: DataTypes.BIGINT, allowNull: true },
   sso_data: { type: DataTypes.TEXT, allowNull: true }
 }, {
@@ -28,6 +29,8 @@ const ChatRoomModel = sequelize.define('chat_rooms', {
   name: { type: DataTypes.STRING(255), allowNull: false },
   type: { type: DataTypes.STRING(64), allowNull: false, defaultValue: 'support' },
   status: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'aberto' },
+  chat_state: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'NEW' },
+  assigned_agent_id: { type: DataTypes.STRING(64), allowNull: true },
   description: { type: DataTypes.TEXT, allowNull: true },
   owner_id: { type: DataTypes.STRING(64), allowNull: false }
 }, {
@@ -45,6 +48,7 @@ const MessageModel = sequelize.define('messages', {
   type: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'text' },
   file_url: { type: DataTypes.TEXT, allowNull: true },
   file_type: { type: DataTypes.STRING(255), allowNull: true },
+  actions: { type: DataTypes.TEXT, allowNull: true },
   is_read: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   read_at: { type: DataTypes.DATE, allowNull: true },
   created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
@@ -100,6 +104,20 @@ const TypingStatusModel = sequelize.define('typing_status', {
   timestamps: false
 });
 
+const ChatQueueModel = sequelize.define('chat_queue', {
+  id: { type: DataTypes.STRING(64), primaryKey: true },
+  room_id: { type: DataTypes.STRING(64), allowNull: false },
+  user_id: { type: DataTypes.STRING(64), allowNull: false },
+  status: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'waiting' },
+  position: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+  assigned_agent_id: { type: DataTypes.STRING(64), allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  assigned_at: { type: DataTypes.DATE, allowNull: true }
+}, {
+  ...common,
+  timestamps: false
+});
+
 ChatRoomModel.belongsTo(UserModel, { foreignKey: 'owner_id', as: 'owner' });
 MessageModel.belongsTo(UserModel, { foreignKey: 'user_id', as: 'sender' });
 MessageModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
@@ -107,6 +125,9 @@ RoomParticipantModel.belongsTo(UserModel, { foreignKey: 'user_id' });
 RoomParticipantModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
 SupportChamadoRoomModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
 SupportChamadoRoomModel.belongsTo(UserModel, { foreignKey: 'created_by', as: 'creator' });
+ChatQueueModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
+ChatQueueModel.belongsTo(UserModel, { foreignKey: 'user_id' });
+ChatQueueModel.belongsTo(UserModel, { foreignKey: 'assigned_agent_id', as: 'assignedAgent' });
 
 let synced = false;
 
@@ -124,6 +145,13 @@ async function ensureUsersColumns() {
   }
   if (!columns.sso_data) {
     await qi.addColumn('users', 'sso_data', { type: DataTypes.TEXT, allowNull: true });
+  }
+  if (!columns.attendance_state) {
+    await qi.addColumn('users', 'attendance_state', {
+      type: DataTypes.STRING(32),
+      allowNull: false,
+      defaultValue: 'livre'
+    });
   }
 }
 
@@ -143,6 +171,37 @@ async function ensureChatRoomsColumns() {
       defaultValue: 'aberto'
     });
   }
+
+  if (!columns.chat_state) {
+    await qi.addColumn('chat_rooms', 'chat_state', {
+      type: DataTypes.STRING(32),
+      allowNull: false,
+      defaultValue: 'NEW'
+    });
+  }
+  if (!columns.assigned_agent_id) {
+    await qi.addColumn('chat_rooms', 'assigned_agent_id', {
+      type: DataTypes.STRING(64),
+      allowNull: true
+    });
+  }
+}
+
+async function ensureMessagesColumns() {
+  const qi = sequelize.getQueryInterface();
+  let columns;
+  try {
+    columns = await qi.describeTable('messages');
+  } catch (_err) {
+    return;
+  }
+
+  if (!columns.actions) {
+    await qi.addColumn('messages', 'actions', {
+      type: DataTypes.TEXT,
+      allowNull: true
+    });
+  }
 }
 
 async function syncDatabase() {
@@ -151,6 +210,7 @@ async function syncDatabase() {
   await sequelize.sync();
   await ensureUsersColumns();
   await ensureChatRoomsColumns();
+  await ensureMessagesColumns();
   synced = true;
 }
 
@@ -163,5 +223,6 @@ module.exports = {
   SupportChamadoRoomModel,
   MetricModel,
   TypingStatusModel,
+  ChatQueueModel,
   syncDatabase
 };

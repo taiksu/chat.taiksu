@@ -147,6 +147,8 @@ const dashboardRoutes = require('./routes/dashboard');
 const chatRoutes = require('./routes/chat');
 const chatApiRoutes = require('./routes/chat-api');
 const messageRoutes = require('./routes/messages');
+const aiRoutes = require('./routes/ai');
+const kbApiRoutes = require('./routes/kb-api');
 const ssoRoutes = require('./routes/sso');
 const SSOController = require('./controllers/SSOController');
 
@@ -157,6 +159,8 @@ app.use('/dashboard', dashboardRoutes);
 app.use('/chat', chatRoutes);
 app.use('/api/chat', chatApiRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/kb', kbApiRoutes);
 
 app.get('/', (req, res) => {
   if (isDev && startupError) {
