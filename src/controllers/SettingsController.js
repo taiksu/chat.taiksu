@@ -19,10 +19,13 @@ class SettingsController {
       });
     }
 
+    const aiTab = 'agent';
     return res.render('dashboard/settings', {
       title: 'Configuracoes - Chat Taiksu',
       user: req.session.user,
-      settings: settingsService.safeForClient()
+      settings: settingsService.safeForClient(),
+      activeNav: 'ai',
+      aiTab
     });
   }
 

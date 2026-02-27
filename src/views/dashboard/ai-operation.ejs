@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="min-h-dvh text-green-700">
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
+  <%- include('../partials/sidebar', { user, active: typeof activeNav !== 'undefined' ? activeNav : 'ai' }) %>
+
+  <div>
+    <%- include('../partials/topbar', { user, pageTitle: 'IA - Operacao' }) %>
+
+    <main class="mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <%- include('../components/breadcrumb/index', {
+        link: '/dashboard',
+        paginaAnterior: 'Dashboard',
+        paginaAtual: 'IA'
+      }) %>
+
+      <%- include('./partials/ai-tabs', { aiTab: typeof aiTab !== 'undefined' ? aiTab : 'operation' }) %>
+
+      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h1 class="text-xl font-bold text-green-800">Operacao da IA</h1>
+        <p class="mt-1 text-sm text-gray-500">Visao consolidada para operacao do atendimento automatico e navegacao para as abas do modulo IA.</p>
+      </section>
+
+      <section class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+          <p class="text-xs font-semibold uppercase text-gray-500">Modo IA</p>
+          <p class="mt-2 text-lg font-bold <%= info.aiAttendantEnabled ? 'text-emerald-700' : 'text-red-700' %>">
+            <%= info.aiAttendantEnabled ? 'Ativo' : 'Desligado' %>
+          </p>
+          <p class="mt-1 text-xs text-gray-500">Controlado na aba Agente.</p>
+        </article>
+        <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+          <p class="text-xs font-semibold uppercase text-gray-500">Modo Beta</p>
+          <p class="mt-2 text-lg font-bold <%= info.aiBetaModeEnabled ? 'text-amber-700' : 'text-gray-700' %>">
+            <%= info.aiBetaModeEnabled ? 'Ativo' : 'Desligado' %>
+          </p>
+          <p class="mt-1 text-xs text-gray-500"><%= info.betaAllowlistCount %> usuario(s) na allowlist.</p>
+        </article>
+        <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+          <p class="text-xs font-semibold uppercase text-gray-500">TTL Memoria</p>
+          <p class="mt-2 text-lg font-bold text-green-700"><%= Number(info.memoryTtlMinutes || 30) %> min</p>
+          <p class="mt-1 text-xs text-gray-500">Ajuste por ambiente com `AI_MEMORY_TTL_MINUTES`.</p>
+        </article>
+      </section>
+
+      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h2 class="text-base font-bold text-green-800">Provedores e modelos</h2>
+        <div class="mt-3 grid gap-3 md:grid-cols-2">
+          <div class="rounded-xl border border-green-100 bg-green-50 p-3">
+            <p class="text-xs font-semibold text-green-700">Ordem de provedores</p>
+            <p class="mt-1 text-sm font-semibold text-slate-700"><%= Array.isArray(info.providerOrder) ? info.providerOrder.join(' -> ') : 'n/a' %></p>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <p class="text-xs font-semibold text-gray-600">API IA URL</p>
+            <p class="mt-1 break-all text-xs font-semibold text-slate-700"><%= info.apiAiUrl %></p>
+          </div>
+          <div class="rounded-xl border border-green-100 bg-green-50 p-3">
+            <p class="text-xs font-semibold text-green-700">Modelo Ollama</p>
+            <p class="mt-1 text-sm font-semibold text-slate-700"><%= info.ollamaModel %></p>
+          </div>
+          <div class="rounded-xl border border-blue-100 bg-blue-50 p-3">
+            <p class="text-xs font-semibold text-blue-700">Modelo Gemini</p>
+            <p class="mt-1 text-sm font-semibold text-slate-700"><%= info.geminiModel %></p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <%- include('../partials/sidebar-script') %>
+</body>
+</html>

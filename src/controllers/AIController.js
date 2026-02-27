@@ -1,4 +1,5 @@
 const settingsService = require('../services/settingsService');
+const aiToolService = require('../services/aiToolService');
 
 class AIController {
   logAiMetric(event, data = {}) {
@@ -85,6 +86,199 @@ class AIController {
     return unique.length ? unique : ['ollama', 'gemini'];
   }
 
+  isAutoToolEnabled() {
+    return String(process.env.AI_TOOLS_AUTO_ENABLED || 'true').trim().toLowerCase() !== 'false';
+  }
+
+  normalizeText(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
+  tokenize(value) {
+    const normalized = this.normalizeText(value);
+    if (!normalized) return [];
+    return normalized
+      .split(/[^a-z0-9]+/g)
+      .map((token) => String(token || '').trim())
+      .filter((token) => token.length >= 3);
+  }
+
+  buildAutoToolKeywords(payload, tool) {
+    const text = [
+      tool?.name || '',
+      tool?.slug || '',
+      tool?.description || ''
+    ].join(' ');
+    const keywords = new Set(this.tokenize(text));
+    const slug = this.normalizeText(tool?.slug || '');
+
+    if (/(chamado|ticket|suporte)/.test(slug)) {
+      ['chamado', 'ticket', 'atendente', 'suporte', 'abrir', 'criar'].forEach((item) => keywords.add(item));
+    }
+    if (/(fechar|encerrar|close)/.test(slug)) {
+      ['fechar', 'encerrar', 'finalizar', 'resolver'].forEach((item) => keywords.add(item));
+    }
+    if (/(status)/.test(slug)) {
+      ['status', 'situacao', 'andamento'].forEach((item) => keywords.add(item));
+    }
+    if (/(auditoria|modo-estrito|modo-restrito)/.test(slug)) {
+      ['auditoria', 'restrito', 'estrito', 'caixa'].forEach((item) => keywords.add(item));
+    }
+
+    const message = this.normalizeText(payload?.message || '');
+    if (/(abrir chamado|criar chamado|abrir ticket|criar ticket)/.test(message) && /(chamado|ticket)/.test(slug)) {
+      keywords.add('abrir');
+      keywords.add('criar');
+      keywords.add('chamado');
+    }
+
+    return Array.from(keywords);
+  }
+
+  scoreToolForMessage(payload, tool) {
+    if (!tool || !tool.enabled) return 0;
+    const message = this.normalizeText(payload?.message || '');
+    if (!message) return 0;
+
+    const messageTokens = new Set(this.tokenize(message));
+    if (!messageTokens.size) return 0;
+
+    const keywords = this.buildAutoToolKeywords(payload, tool);
+    let score = 0;
+    keywords.forEach((keyword) => {
+      if (messageTokens.has(keyword)) score += 1;
+    });
+
+    if (/(abrir chamado|criar chamado|abrir ticket|criar ticket)/.test(message) && /(chamado|ticket)/.test(this.normalizeText(tool.slug || ''))) {
+      score += 3;
+    }
+
+    return score;
+  }
+
+  coerceValueBySchema(value, schema = {}) {
+    const type = String(schema?.type || '').toLowerCase();
+    if (!type) return value;
+    if (type === 'string') return value == null ? '' : String(value);
+    if (type === 'number') {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : 0;
+    }
+    if (type === 'integer') {
+      const n = Number(value);
+      return Number.isFinite(n) ? Math.trunc(n) : 0;
+    }
+    if (type === 'boolean') return Boolean(value);
+    if (type === 'array') return Array.isArray(value) ? value : (value == null ? [] : [value]);
+    if (type === 'object') return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    return value;
+  }
+
+  buildToolArguments(payload, tool) {
+    const message = String(payload?.message || '').trim();
+    const user = payload?.user && typeof payload.user === 'object' ? payload.user : {};
+    const base = {
+      message,
+      content: message,
+      texto: message,
+      query: message,
+      question: message,
+      roomId: String(payload?.roomId || ''),
+      chamadoId: payload?.chamadoId ? String(payload.chamadoId) : '',
+      chatState: String(payload?.chatState || 'IA'),
+      userId: String(user?.id || ''),
+      userName: String(user?.name || ''),
+      userRole: String(user?.role || ''),
+      userEmail: String(user?.email || '')
+    };
+
+    const args = { ...base };
+    const schema = tool?.inputSchema && typeof tool.inputSchema === 'object' ? tool.inputSchema : {};
+    const properties = schema?.properties && typeof schema.properties === 'object' ? schema.properties : {};
+    const required = Array.isArray(schema?.required) ? schema.required.map((item) => String(item)) : [];
+
+    required.forEach((field) => {
+      if (args[field] !== undefined) return;
+      const normalized = this.normalizeText(field);
+      if (/(mensagem|message|texto|descricao|description|detalhe|detalhes|pergunta|query|question)/.test(normalized)) {
+        args[field] = message;
+      } else if (/(usuario|user|cliente|author)_?id/.test(normalized)) {
+        args[field] = String(user?.id || '');
+      } else if (/(usuario|user|cliente|author)_?(nome|name)/.test(normalized)) {
+        args[field] = String(user?.name || '');
+      } else if (/(email)/.test(normalized)) {
+        args[field] = String(user?.email || '');
+      } else if (/(sala|room)_?id/.test(normalized)) {
+        args[field] = String(payload?.roomId || '');
+      } else if (/(chamado|ticket)_?id/.test(normalized)) {
+        args[field] = payload?.chamadoId ? String(payload.chamadoId) : '';
+      } else {
+        args[field] = message;
+      }
+    });
+
+    Object.keys(properties).forEach((key) => {
+      if (args[key] === undefined) return;
+      args[key] = this.coerceValueBySchema(args[key], properties[key]);
+    });
+
+    return args;
+  }
+
+  renderToolResultReply({ tool, result }) {
+    const name = String(tool?.name || 'ferramenta');
+    if (!result || !result.success) {
+      return `Tentei executar a ferramenta "${name}", mas ocorreu uma falha tecnica. Vou te encaminhar para um atendente humano no chat.`;
+    }
+
+    const data = result?.data;
+    if (data && typeof data === 'object') {
+      const message = String(data.message || data.msg || data.detail || data.statusText || '').trim();
+      if (message) return message;
+      if (typeof data.reply === 'string' && data.reply.trim()) return data.reply.trim();
+      if (typeof data.text === 'string' && data.text.trim()) return data.text.trim();
+    }
+
+    return `Ferramenta "${name}" executada com sucesso.`;
+  }
+
+  async runAutoToolIfNeeded(payload = {}) {
+    if (!this.isAutoToolEnabled()) return null;
+
+    const tools = await aiToolService.listTools();
+    const enabledTools = tools.filter((tool) => tool && tool.enabled);
+    if (!enabledTools.length) return null;
+
+    const scored = enabledTools
+      .map((tool) => ({ tool, score: this.scoreToolForMessage(payload, tool) }))
+      .sort((a, b) => b.score - a.score);
+
+    const selected = scored[0];
+    if (!selected || selected.score < 2) return null;
+
+    const args = this.buildToolArguments(payload, selected.tool);
+    const result = await aiToolService.runTool(selected.tool, args, {
+      roomId: String(payload?.roomId || ''),
+      actorId: String(payload?.user?.id || ''),
+      userId: String(payload?.user?.id || '')
+    });
+
+    return {
+      tool: {
+        id: selected.tool.id,
+        slug: selected.tool.slug,
+        name: selected.tool.name
+      },
+      score: selected.score,
+      args,
+      result
+    };
+  }
+
   isAuthorized(req) {
     const required = this.getInternalToken();
     if (!required) return true;
@@ -101,6 +295,8 @@ class AIController {
       'Cumprimente apenas na primeira interacao da conversa; depois responda direto ao ponto.',
       'Nao repita saudacao, nome do usuario ou frase de abertura em toda resposta.',
       'Nao repita o mesmo texto da resposta anterior; se houver repeticao, reformule com palavras diferentes.',
+      'Se o usuario mudar de assunto, abandone imediatamente o topico anterior e responda somente o novo tema.',
+      'Se o novo tema nao estiver claro, faca 1 pergunta curta de esclarecimento.',
       'Nao invente nem altere o nome do usuario; se usar nome, use exatamente o nome informado no prompt.',
       'Quando houver base de conhecimento enviada, use essa base como fonte principal.',
       'Se a resposta nao estiver na base enviada, diga que precisa de mais informacoes ou ofereca humano.',
@@ -112,7 +308,7 @@ class AIController {
       'Ofereca opcao de falar com atendente humano apenas quando houver bloqueio real ou pedido explicito do usuario.',
       'Nao invente dados; quando faltar contexto, peca informacao.',
       'Evite encerrar toda resposta com a mesma pergunta padrao.',
-      'Mantenha no maximo 5 linhas e ate 520 caracteres.'
+      'Mantenha no maximo 5 linhas e ate 420 caracteres.'
       ,
       ai.personalityPrompt ? `Personalidade configurada: ${ai.personalityPrompt}` : ''
     ].join(' ');
@@ -121,17 +317,17 @@ class AIController {
   getMaxReplyChars(overrides = {}) {
     const settingsValue = Number(this.getAiSettings(overrides).maxReplyChars);
     if (Number.isFinite(settingsValue) && settingsValue >= 120) return settingsValue;
-    const envValue = Number(process.env.AI_MAX_REPLY_CHARS || 520);
-    return Number.isFinite(envValue) && envValue >= 120 ? envValue : 520;
+    const envValue = Number(process.env.AI_MAX_REPLY_CHARS || 420);
+    return Number.isFinite(envValue) && envValue >= 120 ? envValue : 420;
   }
 
-  getTemperature(defaultValue = 0.35, overrides = {}) {
+  getTemperature(defaultValue = 0.25, overrides = {}) {
     const n = Number(this.getAiSettings(overrides).temperature);
     if (!Number.isFinite(n)) return defaultValue;
     return Math.max(0, Math.min(2, n));
   }
 
-  getMaxOutputTokens(defaultValue = 360, overrides = {}) {
+  getMaxOutputTokens(defaultValue = 280, overrides = {}) {
     const n = Number(this.getAiSettings(overrides).maxOutputTokens);
     if (!Number.isFinite(n)) return defaultValue;
     return Math.max(64, Math.min(2048, Math.floor(n)));
@@ -245,8 +441,8 @@ class AIController {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
           generationConfig: {
-            temperature: this.getTemperature(0.35, overrides),
-            maxOutputTokens: this.getMaxOutputTokens(360, overrides)
+            temperature: this.getTemperature(0.25, overrides),
+            maxOutputTokens: this.getMaxOutputTokens(280, overrides)
           }
         })
       }
@@ -281,8 +477,8 @@ class AIController {
         prompt,
         stream: false,
         options: {
-          temperature: this.getTemperature(Number(process.env.OLLAMA_TEMPERATURE || 0.2), overrides),
-          num_predict: this.getMaxOutputTokens(Number(process.env.OLLAMA_MAX_TOKENS || 160), overrides),
+          temperature: this.getTemperature(Number(process.env.OLLAMA_TEMPERATURE || 0.25), overrides),
+          num_predict: this.getMaxOutputTokens(Number(process.env.OLLAMA_MAX_TOKENS || 280), overrides),
           top_p: Number(process.env.OLLAMA_TOP_P || 0.9),
           repeat_penalty: Number(process.env.OLLAMA_REPEAT_PENALTY || 1.1)
         }
@@ -358,6 +554,45 @@ class AIController {
       const providers = this.getProviderOrder();
       const userPrompt = this.buildUserPrompt(payload);
       const systemInstruction = this.buildSystemInstruction();
+
+      let toolExecution = null;
+      try {
+        toolExecution = await this.runAutoToolIfNeeded(payload);
+        if (toolExecution) {
+          const toolLatencyMs = Date.now() - startedAt;
+          const toolReply = this.sanitizeReplyText(
+            this.renderToolResultReply({ tool: toolExecution.tool, result: toolExecution.result }),
+            {}
+          );
+          this.logAiMetric('tool_auto_execution', {
+            roomId,
+            chamadoId,
+            chatState,
+            tool: toolExecution.tool,
+            score: toolExecution.score,
+            success: Boolean(toolExecution?.result?.success),
+            latencyMs: toolLatencyMs
+          });
+
+          return res.json({
+            success: true,
+            provider: 'tool',
+            model: `tool:${toolExecution.tool.slug}`,
+            reply: toolReply,
+            usage: null,
+            latencyMs: toolLatencyMs,
+            tool: toolExecution.tool,
+            toolResult: toolExecution.result
+          });
+        }
+      } catch (toolError) {
+        this.logAiMetric('tool_auto_execution_error', {
+          roomId,
+          chamadoId,
+          chatState,
+          error: toolError.message
+        });
+      }
 
       const result = await this.tryProviders({
         providers,

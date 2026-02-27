@@ -9,6 +9,8 @@ Esta pasta foi reorganizada para servir como base oficial de consulta do projeto
 3. `FLUXOS_DE_USO.md`: fluxos reais de autenticacao, chat e operacao.
 4. `BANCO_DE_DADOS.md`: modelos, tabelas e relacoes.
 5. `OPERACAO_E_MANUTENCAO.md`: variaveis de ambiente, deploy, runbook e evolucao.
+6. `DOSSIE_IMPLEMENTACOES_IA_E_CHAT_2026-02-27.md`: consolidado das implementacoes recentes de IA/chat, memoria, RAG e operacao.
+7. `AI_TOOLS_CONTRATO_V1.md`: contrato de ferramentas IA (cadastro, teste e execucao interna).
 
 ## Ordem recomendada para onboarding
 
@@ -23,4 +25,3 @@ Esta pasta foi reorganizada para servir como base oficial de consulta do projeto
 - Baseada no codigo atual em `src/`
 - Focada em comportamento em execucao
 - Escrita para manutencao futura e atualizacoes seguras
-

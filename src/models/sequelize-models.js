@@ -121,6 +121,45 @@ const ChatQueueModel = sequelize.define('chat_queue', {
   timestamps: false
 });
 
+const AiToolModel = sequelize.define('ai_tools', {
+  id: { type: DataTypes.STRING(64), primaryKey: true },
+  name: { type: DataTypes.STRING(160), allowNull: false },
+  slug: { type: DataTypes.STRING(120), allowNull: false, unique: true },
+  description: { type: DataTypes.TEXT, allowNull: true },
+  enabled: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 1 },
+  method: { type: DataTypes.STRING(16), allowNull: false, defaultValue: 'POST' },
+  endpoint_url: { type: DataTypes.TEXT, allowNull: false },
+  headers_json: { type: DataTypes.TEXT, allowNull: true },
+  input_schema_json: { type: DataTypes.TEXT, allowNull: true },
+  payload_template: { type: DataTypes.TEXT, allowNull: true },
+  timeout_ms: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 12000 },
+  allowed_domains_json: { type: DataTypes.TEXT, allowNull: true },
+  created_by: { type: DataTypes.STRING(64), allowNull: true }
+}, {
+  ...common,
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
+});
+
+const AiToolRunModel = sequelize.define('ai_tool_runs', {
+  id: { type: DataTypes.STRING(64), primaryKey: true },
+  tool_id: { type: DataTypes.STRING(64), allowNull: false },
+  room_id: { type: DataTypes.STRING(64), allowNull: true },
+  actor_id: { type: DataTypes.STRING(64), allowNull: true },
+  status: { type: DataTypes.STRING(32), allowNull: false, defaultValue: 'success' },
+  input_json: { type: DataTypes.TEXT, allowNull: true },
+  request_json: { type: DataTypes.TEXT, allowNull: true },
+  response_status: { type: DataTypes.INTEGER, allowNull: true },
+  response_body: { type: DataTypes.TEXT, allowNull: true },
+  error_message: { type: DataTypes.TEXT, allowNull: true },
+  latency_ms: { type: DataTypes.INTEGER, allowNull: true },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+}, {
+  ...common,
+  timestamps: false
+});
+
 ChatRoomModel.belongsTo(UserModel, { foreignKey: 'owner_id', as: 'owner' });
 MessageModel.belongsTo(UserModel, { foreignKey: 'user_id', as: 'sender' });
 MessageModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
@@ -131,6 +170,9 @@ SupportChamadoRoomModel.belongsTo(UserModel, { foreignKey: 'created_by', as: 'cr
 ChatQueueModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
 ChatQueueModel.belongsTo(UserModel, { foreignKey: 'user_id' });
 ChatQueueModel.belongsTo(UserModel, { foreignKey: 'assigned_agent_id', as: 'assignedAgent' });
+AiToolRunModel.belongsTo(AiToolModel, { foreignKey: 'tool_id', as: 'tool' });
+AiToolRunModel.belongsTo(UserModel, { foreignKey: 'actor_id', as: 'actor' });
+AiToolRunModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id', as: 'room' });
 
 let synced = false;
 
@@ -245,5 +287,7 @@ module.exports = {
   MetricModel,
   TypingStatusModel,
   ChatQueueModel,
+  AiToolModel,
+  AiToolRunModel,
   syncDatabase
 };

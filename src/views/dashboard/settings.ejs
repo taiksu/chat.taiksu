@@ -8,7 +8,7 @@
 </head>
 <body class="min-h-dvh text-green-700">
   <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
-  <%- include('../partials/sidebar', { user, active: 'settings' }) %>
+  <%- include('../partials/sidebar', { user, active: typeof activeNav !== 'undefined' ? activeNav : 'ai' }) %>
 
   <div>
     <%- include('../partials/topbar', { user, pageTitle: 'Configuracoes' }) %>
@@ -19,6 +19,8 @@
         paginaAnterior: 'Dashboard',
         paginaAtual: 'Configuracoes'
       }) %>
+
+      <%- include('./partials/ai-tabs', { aiTab: typeof aiTab !== 'undefined' ? aiTab : 'agent' }) %>
 
       <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
         <h1 class="text-xl font-bold text-green-800">Configuracoes gerais</h1>
@@ -62,7 +64,7 @@
           </label>
           <label class="text-sm">
             <span class="mb-1 block font-semibold text-gray-600">Avatar (URL ou caminho)</span>
-            <input id="aiAgentAvatar" type="text" value="<%= settings.aiAgentAvatar %>" placeholder="/images/system.png" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+            <input id="aiAgentAvatar" type="text" value="<%= settings.aiAgentAvatar %>" placeholder="/images/seta.png" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
           </label>
           <label class="text-sm sm:col-span-2">
             <span class="mb-1 block font-semibold text-gray-600">Prompt de personalidade</span>

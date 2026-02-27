@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Fundo circular -->
+  <circle cx="256" cy="256" r="256" fill="#369C2A"></circle>
+
+  <!-- Balão de conversa -->
+  <path d="
+    M170 150
+    H350
+    Q380 150 380 180
+    V290
+    Q380 320 350 320
+    H250
+    L200 370
+    V320
+    H170
+    Q140 320 140 290
+    V180
+    Q140 150 170 150
+    Z
+  " fill="#FFFFFF"></path>
+
+  <!-- Linhas de texto -->
+  <rect x="190" y="185" width="160" height="18" rx="4" fill="#369C2A"></rect>
+  <rect x="190" y="220" width="140" height="18" rx="4" fill="#369C2A"></rect>
+  <rect x="190" y="255" width="110" height="18" rx="4" fill="#369C2A"></rect>
+</svg>

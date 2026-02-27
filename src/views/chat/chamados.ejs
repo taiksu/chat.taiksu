@@ -13,21 +13,22 @@
   <div>
     <%- include('../partials/topbar', {
       user,
-      pageTitle: 'Chamados'
+      pageTitle: 'Novo Chamado'
     }) %>
 
     <main class="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
-      <%- include('../components/breadcrumb/index', {
-        link: '/dashboard',
-        paginaAnterior: 'Dashboard',
-        paginaAtual: 'Chamados'
-      }) %>
-      <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <h2 class="text-xl font-bold text-green-700 sm:text-2xl">Chats Criados por Chamado</h2>
-        <div class="w-full sm:w-80">
+      <div class="mb-5 grid grid-cols-1 items-center gap-3 md:grid-cols-2">
+        <div class="md:justify-self-start">
+          <%- include('../components/breadcrumb/index', {
+            link: '/dashboard',
+            paginaAnterior: 'Dashboard',
+            paginaAtual: 'Chamados'
+          }) %>
+        </div>
+        <div class="md:justify-self-end">
           <%- include('../components/buttons/default', {
             id: 'create-chamado-room-btn',
-            label: 'Criar Chat por Chamado',
+            label: 'Novo Chamado',
             icon: 'plus',
             tipo: 'default'
           }) %>
@@ -35,7 +36,7 @@
       </div>
 
       <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-        <div class="grid gap-3 lg:grid-cols-3">
+        <div class="grid gap-4 lg:grid-cols-3">
           <label class="text-sm lg:col-span-2">
             <span class="mb-1 block font-semibold text-gray-500">Pesquisar chamado</span>
             <input
@@ -45,21 +46,14 @@
               class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400"
             >
           </label>
-          <div class="text-sm">
-            <span class="mb-1 block font-semibold text-gray-500">Filtro de data (mes)</span>
+          <div class="text-sm flex flex-col items-center gap-2">
+            <span class="font-semibold text-gray-500 text-center">Filtro de data (mes)</span>
+
             <%- include('../components/dateSelector/index', {
               mes: new Date().getMonth(),
               ano: new Date().getFullYear()
             }) %>
           </div>
-        </div>
-
-        <div class="mt-3 w-full sm:w-56">
-          <%- include('../components/buttons/default', {
-            id: 'reset-chamado-filters',
-            label: 'Limpar filtros',
-            tipo: 'default'
-          }) %>
         </div>
       </section>
 
@@ -74,10 +68,10 @@
                 <th class="w-[14%] px-4 py-3">Chamado</th>
                 <th class="w-[31%] px-4 py-3">Sala</th>
                 <th class="w-[10%] px-4 py-3 text-center">Participantes</th>
-                <th class="w-[10%] px-4 py-3 text-center">Nao lidas</th>
+                <th class="w-[10%] px-4 py-3 text-center">Não lidas</th>
                 <th class="w-[13%] px-4 py-3 text-center">Status</th>
                 <th class="w-[12%] px-4 py-3 text-center">Criada em</th>
-                <th class="w-[10%] px-4 py-3 text-right">Acao</th>
+                <th class="w-[10%] px-4 py-3 text-center">Ação</th>
               </tr>
             </thead>
             <tbody id="chamadosTableBody" class="divide-y divide-green-100 text-gray-700">
@@ -140,6 +134,35 @@
           </table>
         </div>
       </section>
+
+      <div id="createChamadoModal" class="fixed inset-0 z-[120] hidden">
+        <div class="absolute inset-0 bg-black/40" data-close-chamado-modal></div>
+        <div class="relative mx-auto mt-20 w-[92%] max-w-lg rounded-2xl border border-green-100 bg-white p-5 shadow-2xl">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-bold text-green-800">Novo Chamado</h3>
+            <button type="button" data-close-chamado-modal class="rounded-full px-2 py-1 text-gray-500 hover:bg-gray-100">x</button>
+          </div>
+          <p class="mt-1 text-sm text-gray-500">Informe os dados para criar a sala vinculada ao chamado.</p>
+          <div class="mt-4 space-y-3">
+            <label class="block text-sm">
+              <span class="mb-1 block font-semibold text-gray-600">ID do chamado</span>
+              <input id="chamadoIdInput" type="text" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400" placeholder="Ex.: 12345">
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1 block font-semibold text-gray-600">Titulo (opcional)</span>
+              <input id="chamadoTitleInput" type="text" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400" placeholder="Titulo do chamado">
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1 block font-semibold text-gray-600">Descricao (opcional)</span>
+              <textarea id="chamadoDescriptionInput" rows="3" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400" placeholder="Descricao inicial"></textarea>
+            </label>
+          </div>
+          <div class="mt-4 flex items-center justify-end gap-2">
+            <button type="button" data-close-chamado-modal class="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-50">Cancelar</button>
+            <button id="submitCreateChamadoBtn" type="button" class="rounded-full border border-green-300 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-100">Criar chamado</button>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -152,9 +175,69 @@
     const prevMonthBtn = document.getElementById('prev-month-btn');
     const nextMonthBtn = document.getElementById('next-month-btn');
     const resultLabel = document.getElementById('chamadosResultLabel');
-    const resetFiltersBtn = document.getElementById('reset-chamado-filters');
     const statusSelects = Array.from(document.querySelectorAll('.chamado-status-select'));
+    const chamadoModal = document.getElementById('createChamadoModal');
+    const chamadoIdInput = document.getElementById('chamadoIdInput');
+    const chamadoTitleInput = document.getElementById('chamadoTitleInput');
+    const chamadoDescriptionInput = document.getElementById('chamadoDescriptionInput');
+    const submitCreateChamadoBtn = document.getElementById('submitCreateChamadoBtn');
     const monthFormatter = new Intl.DateTimeFormat('pt-BR', { month: 'short' });
+
+    function ensureToastHost() {
+      let host = document.getElementById('page-toast-host');
+      if (host) return host;
+      host = document.createElement('div');
+      host.id = 'page-toast-host';
+      host.style.position = 'fixed';
+      host.style.top = '16px';
+      host.style.right = '16px';
+      host.style.zIndex = '99999';
+      host.style.display = 'flex';
+      host.style.flexDirection = 'column';
+      host.style.gap = '8px';
+      document.body.appendChild(host);
+      return host;
+    }
+
+    function showToast(message, type = 'info') {
+      const palette = {
+        success: { border: '#86efac', title: '#166534', text: '#14532d', bg: '#f0fdf4' },
+        error: { border: '#fecaca', title: '#b91c1c', text: '#7f1d1d', bg: '#fff1f2' },
+        warn: { border: '#fde68a', title: '#92400e', text: '#78350f', bg: '#fffbeb' },
+        info: { border: '#bfdbfe', title: '#1d4ed8', text: '#1e3a8a', bg: '#eff6ff' }
+      };
+      const style = palette[type] || palette.info;
+      const card = document.createElement('div');
+      card.style.minWidth = '280px';
+      card.style.maxWidth = '360px';
+      card.style.border = `1px solid ${style.border}`;
+      card.style.background = style.bg;
+      card.style.borderRadius = '12px';
+      card.style.padding = '10px 12px';
+      card.style.boxShadow = '0 10px 24px rgba(0,0,0,.12)';
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <strong style="color:${style.title};font-size:13px">${type === 'error' ? 'Erro' : type === 'success' ? 'Sucesso' : 'Aviso'}</strong>
+          <button type="button" style="border:0;background:transparent;color:#6b7280;cursor:pointer;font-size:14px">x</button>
+        </div>
+        <div style="font-size:12px;color:${style.text};margin-top:4px">${String(message || '')}</div>
+      `;
+      const host = ensureToastHost();
+      card.querySelector('button')?.addEventListener('click', () => card.remove());
+      host.appendChild(card);
+      setTimeout(() => card.remove(), 4500);
+    }
+
+    function openChamadoModal() {
+      if (!chamadoModal) return;
+      chamadoModal.classList.remove('hidden');
+      chamadoIdInput?.focus();
+    }
+
+    function closeChamadoModal() {
+      if (!chamadoModal) return;
+      chamadoModal.classList.add('hidden');
+    }
 
     function formatMonthYear(month, year) {
       const label = monthFormatter.format(new Date(year, month, 1));
@@ -210,19 +293,15 @@
       applyChamadoFilters();
     }
 
-    function resetFilters() {
-      if (searchInput) searchInput.value = '';
-      const now = new Date();
-      updateDateDisplay(now.getMonth(), now.getFullYear());
-      applyChamadoFilters();
-    }
-
     async function createChamadoRoom() {
-      const chamadoId = prompt('Informe o ID do chamado:');
-      if (!chamadoId) return;
-
-      const chamadoTitle = prompt('Titulo do chamado (opcional):') || '';
-      const description = prompt('Descricao do chat (opcional):') || '';
+      const chamadoId = String(chamadoIdInput?.value || '').trim();
+      const chamadoTitle = String(chamadoTitleInput?.value || '').trim();
+      const description = String(chamadoDescriptionInput?.value || '').trim();
+      if (!chamadoId) {
+        showToast('Informe o ID do chamado.', 'warn');
+        chamadoIdInput?.focus();
+        return;
+      }
 
       try {
         const response = await fetch(`/api/chat/chamados/${encodeURIComponent(chamadoId)}/room`, {
@@ -236,17 +315,22 @@
           throw new Error(data.error || 'Falha ao criar sala do chamado');
         }
 
+        showToast('Chamado criado com sucesso. Redirecionando...', 'success');
+        closeChamadoModal();
         window.location.href = `/chat/room/${data.room.id}`;
       } catch (err) {
-        alert('Erro: ' + err.message);
+        showToast('Erro: ' + err.message, 'error');
       }
     }
 
-    document.getElementById('create-chamado-room-btn')?.addEventListener('click', createChamadoRoom);
+    document.getElementById('create-chamado-room-btn')?.addEventListener('click', openChamadoModal);
+    submitCreateChamadoBtn?.addEventListener('click', createChamadoRoom);
+    chamadoModal?.querySelectorAll('[data-close-chamado-modal]')?.forEach((el) => {
+      el.addEventListener('click', closeChamadoModal);
+    });
     searchInput?.addEventListener('input', applyChamadoFilters);
     prevMonthBtn?.addEventListener('click', () => shiftMonth(-1));
     nextMonthBtn?.addEventListener('click', () => shiftMonth(1));
-    resetFiltersBtn?.addEventListener('click', resetFilters);
     statusSelects.forEach((selectEl) => {
       selectEl.addEventListener('change', async () => {
         const chamadoId = String(selectEl.dataset.chamadoId || '').trim();
@@ -268,7 +352,7 @@
           selectEl.dataset.currentStatus = next;
         } catch (error) {
           selectEl.value = previous;
-          alert(`Erro ao atualizar status do chamado: ${error.message}`);
+          showToast(`Erro ao atualizar status do chamado: ${error.message}`, 'error');
         } finally {
           selectEl.disabled = false;
         }

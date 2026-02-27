@@ -226,14 +226,6 @@
 
       <!-- Pills bar -->
       <div class="flex flex-wrap items-center gap-3 border-b border-emerald-50 bg-emerald-50 px-5 py-3 text-emerald-800">
-        <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-sm font-semibold shadow-sm">
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
-          Rolagem suave
-        </span>
-        <span class="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-sm font-semibold shadow-sm">
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H5.17L4 17.17z"/><path d="M8 9h8M8 13h5"/></svg>
-          Widget-like
-        </span>
         <div class="ml-auto flex flex-wrap items-center gap-2 text-xs">
           <button type="button" class="rounded-full border border-emerald-200 bg-white px-3 py-1 font-semibold text-emerald-700 transition hover:bg-emerald-100" onclick="markAllAsRead()">Marcar tudo como lido</button>
           <button type="button" class="rounded-full border border-emerald-200 bg-white px-3 py-1 font-semibold text-emerald-700 transition hover:bg-emerald-100" onclick="scrollMessagesToBottom(true)">Ir para o fim</button>
@@ -351,6 +343,15 @@
       .replace(/"/g, '&quot;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;'));
+    const linkifyText = (content) => {
+      const source = String(content || '');
+      const escaped = escapeHtml(source);
+      return escaped.replace(/(https?:\/\/[^\s<>"']+)/gi, (url) => {
+        const safeUrl = String(url || '').trim();
+        if (!/^https?:\/\//i.test(safeUrl)) return safeUrl;
+        return `<a href="${escapeAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="font-semibold text-sky-600 underline hover:text-sky-700 break-all">${escapeHtml(safeUrl)}</a>`;
+      });
+    };
     const formatTimePtBr = templateCore.formatTimePtBr || ((dateValue) => new Date(dateValue).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     const insertTextAtCursor = templateCore.insertTextAtCursor || ((input, text) => {
       if (!input) return;
@@ -403,6 +404,7 @@
       setupMicrophoneButton();
       initEmojiPicker();
       initAudioPlayers();
+      enhanceRenderedTextLinks();
       bindMessageAreaScroll();
       scheduleInitialBottomSync();
       
@@ -879,7 +881,7 @@
             `
           })
         : (msg.type === 'text'
-            ? escapeHtml(msg.content)
+            ? linkifyText(msg.content)
             : (msg.type === 'audio'
                 ? buildAudioPlayerHtml(msg.file_url || '')
                 : (msg.type === 'image'
@@ -927,6 +929,16 @@
 
     function shouldAutoScroll(area) {
         return stickToBottom || isNearBottom(area);
+    }
+
+    function enhanceRenderedTextLinks(root = document) {
+      root.querySelectorAll('.message-bubble').forEach((bubble) => {
+        if (!bubble) return;
+        if (bubble.querySelector('a, img, audio, .tw-audio-player')) return;
+        const text = String(bubble.textContent || '').trim();
+        if (!/^.*https?:\/\/.+$/i.test(text)) return;
+        bubble.innerHTML = linkifyText(text);
+      });
     }
 
     function buildAudioPlayerHtml(url) {

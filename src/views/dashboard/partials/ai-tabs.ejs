@@ -1,0 +1,20 @@
+<%
+const currentTab = String(typeof aiTab !== 'undefined' ? aiTab : 'operation');
+const tabs = [
+  { key: 'operation', label: 'Operacao', href: '/dashboard/ai/operation' },
+  { key: 'agent', label: 'Agente', href: '/dashboard/ai/agent' },
+  { key: 'knowledge', label: 'Conhecimento', href: '/dashboard/ai/knowledge' },
+  { key: 'tools', label: 'Tools', href: '/dashboard/ai/tools' },
+  { key: 'quality', label: 'Qualidade', href: '/dashboard/ai/quality' },
+  { key: 'debug', label: 'Debug', href: '/dashboard/ai/debug' }
+];
+%>
+<section class="rounded-2xl border border-green-100 bg-white p-2 shadow-sm">
+  <nav class="flex flex-wrap gap-2">
+    <% tabs.forEach((tab) => { const active = tab.key === currentTab; %>
+      <a href="<%= tab.href %>" class="rounded-full border px-4 py-1.5 text-sm font-semibold transition <%= active ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-600 hover:border-green-200 hover:text-green-700' %>">
+        <%= tab.label %>
+      </a>
+    <% }); %>
+  </nav>
+</section>

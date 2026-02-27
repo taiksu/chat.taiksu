@@ -40,6 +40,8 @@
   const selfAliases = new Set();
   let localTypingEchoUntil = 0;
   let aiProcessingActive = false;
+  let aiProcessingTimer = null;
+  let aiProcessingStartedAt = 0;
   const renderedIds = new Set();
   let templateCore = (typeof window !== "undefined" && window.ChatTemplateCore) ? window.ChatTemplateCore : null;
   let templateCoreLoader = null;
@@ -171,12 +173,14 @@
       .tw-root { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; line-height: 1.2; position: relative; }
       
       .tw-toggle { 
-        width: 58px; height: 58px; border: 0; border-radius: 999px; 
-        background: linear-gradient(135deg,#075e54 0%,#128c7e 100%); 
-        color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; 
-        box-shadow:0 10px 25px rgba(7, 94, 84, 0.3); transition: transform 0.2s; 
+        width: 74px; height: 74px; border: 0; border-radius: 0;
+        background: transparent;
+        color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center;
+        box-shadow: none; transition: transform 0.2s;
+        padding: 0;
       }
       .tw-toggle:hover { transform: scale(1.05); }
+      .tw-toggle-icon { width: 100%; height: 100%; display: block; object-fit: contain; }
       
       .tw-widget { 
         width: min(${Math.max(320, Number(config.width) || 400)}px, calc(100vw - 24px)); 
@@ -321,6 +325,13 @@
         transition: all 0.2s ease;
       }
       .tw-msg-action:hover { background: #d1fae5; }
+      .tw-link {
+        color: #2563eb;
+        text-decoration: underline;
+        font-weight: 600;
+        word-break: break-all;
+      }
+      .tw-link:hover { color: #1d4ed8; }
       .tw-feedback-row { margin-top: 8px; display: flex; align-items: center; gap: 6px; }
       .tw-feedback-btn {
         border: 1px solid #d1d5db;
@@ -448,7 +459,10 @@
       <style>${styles()}</style>
       <div class="tw-root">
         <button class="tw-toggle" id="tw-toggle-btn" title="Abrir chat" aria-label="Abrir chat">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
+          <img class="tw-toggle-icon" src="${escapeAttr(resolveMediaUrl('/images/icon-chat.svg'))}" alt="Abrir chat" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+          <span style="display:none;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
+          </span>
         </button>
       </div>
     `;
@@ -918,6 +932,9 @@
 
   function closeWidget() {
     widgetOpen = false;
+    aiProcessingActive = false;
+    aiProcessingStartedAt = 0;
+    clearAiProcessingTimer();
     stopRecording();
     closeSSE();
     renderClosed();
@@ -1040,6 +1057,28 @@
     };
   }
 
+  function clearAiProcessingTimer() {
+    if (aiProcessingTimer) {
+      clearInterval(aiProcessingTimer);
+      aiProcessingTimer = null;
+    }
+  }
+
+  function getAiProcessingLabel(data) {
+    const explicitStage = String(data?.stage || "").trim().toLowerCase();
+    const map = {
+      context: "Analisando",
+      knowledge: "Buscando informacoes",
+      answer: "Elaborando resposta"
+    };
+    if (explicitStage && map[explicitStage]) return map[explicitStage];
+
+    const elapsedMs = Math.max(0, Date.now() - Number(aiProcessingStartedAt || Date.now()));
+    if (elapsedMs < 2500) return map.context;
+    if (elapsedMs < 5200) return map.knowledge;
+    return map.answer;
+  }
+
   function renderMessageActions(message) {
     const actions = Array.isArray(message?.actions) ? message.actions : [];
     if (!actions.length) return "";
@@ -1099,7 +1138,7 @@
         docIconHtml: `${ICONS.filePdf} `
       });
     }
-    if (message.type === "text") return `${escapeHtml(message.content)}`;
+    if (message.type === "text") return linkifyText(message.content);
     const mediaUrl = resolveMediaUrl(message.file_url);
     if (!mediaUrl) return `Arquivo sem URL`;
     if (message.type === "image") return `<img class="tw-media image" src="${escapeAttr(mediaUrl)}" alt="Imagem" loading="lazy">`;
@@ -1136,6 +1175,8 @@
     if (!message) return;
     if (Boolean(message.is_ai) || String(message.sender_role || "").toLowerCase() === "system") {
       aiProcessingActive = false;
+      aiProcessingStartedAt = 0;
+      clearAiProcessingTimer();
       const typingEl = shadow && shadow.getElementById("tw-typing");
       if (typingEl) typingEl.classList.remove("show");
     }
@@ -1497,8 +1538,19 @@
     const dots = `<span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`;
     const activity = data.activity === "recording" ? "esta gravando audio" : "esta digitando";
     if (!recording && chip) chip.classList.remove("show");
-    typingEl.innerHTML = `<strong>${escapeHtml(data.userName || "Alguem")}</strong> ${activity}... ${dots}`;
+    typingEl.innerHTML = `<strong>${escapeHtml(data.userName || "Alguem")}</strong> ${activity} ${dots}`;
     typingEl.classList.add("show");
+  }
+
+  function linkifyText(content) {
+    const source = String(content || "");
+    const escaped = escapeHtml(source);
+    const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
+    return escaped.replace(urlRegex, (url) => {
+      const safeUrl = String(url || "").trim();
+      if (!/^https?:\/\//i.test(safeUrl)) return safeUrl;
+      return `<a class="tw-link" href="${escapeAttr(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(safeUrl)}</a>`;
+    });
   }
 
   function renderAiProcessing(data) {
@@ -1509,6 +1561,8 @@
     aiProcessingActive = active;
 
     if (!active) {
+      aiProcessingStartedAt = 0;
+      clearAiProcessingTimer();
       typingEl.classList.remove("show");
       if (!recording && chip) chip.classList.remove("show");
       return;
@@ -1516,10 +1570,23 @@
 
     const aiName = String(data?.aiUserName || "Marina");
     const dots = `<span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`;
+    const paint = () => {
+      const statusLabel = getAiProcessingLabel(data);
+      typingEl.innerHTML = `<strong>${escapeHtml(aiName)}</strong> ${escapeHtml(statusLabel)}... ${dots}`;
+      typingEl.classList.add("show");
+      scrollToBottom();
+    };
+    aiProcessingStartedAt = Date.now();
+    clearAiProcessingTimer();
+    paint();
+    aiProcessingTimer = setInterval(() => {
+      if (!aiProcessingActive) {
+        clearAiProcessingTimer();
+        return;
+      }
+      paint();
+    }, 1400);
     if (!recording && chip) chip.classList.remove("show");
-    typingEl.innerHTML = `<strong>${escapeHtml(aiName)}</strong> esta respondendo... ${dots}`;
-    typingEl.classList.add("show");
-    scrollToBottom();
   }
 
   function scrollToBottom() {

@@ -23,7 +23,9 @@ class FeedbackInsightsController {
     if (!this.isAdmin(req)) return this.denyPage(req, res);
     return res.render('dashboard/feedback-insights', {
       title: 'Insights de Feedback IA - Chat Taiksu',
-      user: req.session.user
+      user: req.session.user,
+      activeNav: 'ai',
+      aiTab: 'quality'
     });
   }
 

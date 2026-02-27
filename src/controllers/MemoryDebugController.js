@@ -21,7 +21,9 @@ class MemoryDebugController {
     if (!this.isAdmin(req)) return this.denyPage(req, res);
     return res.render('dashboard/memory-debug', {
       title: 'Debug Memoria IA - Chat Taiksu',
-      user: req.session.user
+      user: req.session.user,
+      activeNav: 'ai',
+      aiTab: 'debug'
     });
   }
 

@@ -127,7 +127,7 @@ class MessageController {
     if (configured) return configured;
     const envAvatar = String(process.env.AI_USER_AVATAR || '').trim();
     if (envAvatar) return envAvatar;
-    return '/images/system.png';
+    return '/images/seta.png';
   }
 
   getChamadoCreateUrl() {
@@ -163,7 +163,7 @@ class MessageController {
   isTutorialRequest(text) {
     const normalized = String(text || '').toLowerCase();
     if (!normalized) return false;
-    return /(tutorial|passo a passo|guia|manual|documentacao|documentação)/i.test(normalized);
+    return /(tutorial|passo a passo|guia|manual|documentacao|documenta\u00e7\u00e3o|video|v[i\u00ed]deo|ajuda|artigo)/i.test(normalized);
   }
 
   isOpenChamadoIntent(text) {
@@ -449,6 +449,48 @@ class MessageController {
     return /(qual objetivo|pra que serve|para que serve|serve pra que|qual a finalidade|objetivo dessa funcao|objetivo dessa funcao)/i.test(normalized);
   }
 
+  isTopicShiftMessage(text) {
+    const normalized = this.normalizeCompareText(text);
+    if (!normalized) return false;
+    return /(mudar de assunto|outro assunto|nao quero saber|nao era isso|nao e isso|quero saber sobre|gostaria de saber sobre|eu queria saber sobre|falar sobre)/i.test(normalized);
+  }
+
+  extractRequestedTopic(text) {
+    const source = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!source) return '';
+    const patterns = [
+      /(?:quero|gostaria|queria)\s+saber\s+sobre\s+(.+)$/i,
+      /(?:falar|entender)\s+sobre\s+(.+)$/i,
+      /(?:nao|não).{0,25}(?:quero|era).{0,15}sobre\s+(.+)$/i,
+      /sobre\s+(.+)$/i
+    ];
+    for (const pattern of patterns) {
+      const match = source.match(pattern);
+      if (match && match[1]) {
+        return String(match[1])
+          .replace(/[.!?]+$/g, '')
+          .trim()
+          .slice(0, 140);
+      }
+    }
+    return '';
+  }
+
+  detectTopicLabel(text) {
+    const normalized = this.normalizeCompareText(text);
+    if (!normalized) return '';
+    const map = [
+      ['modo_restrito', /(modo restrito|modo estrito|auditoria)/i],
+      ['caixa', /(abrir caixa|fechar caixa|caixa)/i],
+      ['visao_geral', /(visao geral|visão geral|dashboard|painel)/i],
+      ['chamado', /(chamado|ticket|protocolo)/i]
+    ];
+    for (const [label, pattern] of map) {
+      if (pattern.test(normalized)) return label;
+    }
+    return '';
+  }
+
   isVerySimilarReply(currentReply, previousReply) {
     const a = this.normalizeCompareText(currentReply);
     const b = this.normalizeCompareText(previousReply);
@@ -475,6 +517,7 @@ class MessageController {
     let safe = this.sanitizeAiReply(replyText);
     const memory = this.getRoomMemory(roomId);
     const hasAssistantHistory = Boolean(String(memory?.lastAiMessage || '').trim());
+    const requestedTopic = this.extractRequestedTopic(userMessage);
 
     if (hasAssistantHistory) {
       safe = this.stripLeadingGreeting(safe);
@@ -494,6 +537,14 @@ class MessageController {
       } else {
         safe = `Entendi. Reformulando de forma direta: ${safe}`;
       }
+    }
+
+    const userTopicLabel = this.detectTopicLabel(requestedTopic || userMessage);
+    const replyTopicLabel = this.detectTopicLabel(safe);
+    if (userTopicLabel && replyTopicLabel && userTopicLabel !== replyTopicLabel) {
+      safe = requestedTopic
+        ? `Entendi, voce quer saber sobre ${requestedTopic}. Vou focar nesse assunto. Pode me dizer se voce quer uma visao geral ou passo a passo?`
+        : 'Entendi a mudanca de assunto. Vou focar no novo tema. Voce quer uma visao geral ou passo a passo?';
     }
 
     safe = this.sanitizeAiReply(safe);
@@ -539,6 +590,30 @@ class MessageController {
       .replace(/\s+\n/g, '\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
+  }
+
+  isValidKbUrl(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return false;
+    return /^https?:\/\/[^\s]+$/i.test(raw);
+  }
+
+  pickBestKbUrl(kbLinks = []) {
+    if (!Array.isArray(kbLinks)) return '';
+    const found = kbLinks.find((item) => this.isValidKbUrl(item?.url));
+    return found ? String(found.url).trim() : '';
+  }
+
+  appendKnowledgeReference(replyText, kbLinks = [], userMessage = '') {
+    const safe = String(replyText || '').trim();
+    const link = this.pickBestKbUrl(kbLinks);
+    if (!safe || !link) return safe;
+    if (safe.includes(link)) return safe;
+
+    const wantsReference = /(tutorial|passo a passo|guia|manual|video|v[ií]deo|artigo|ajuda|link|onde vejo|onde encontro)/i.test(String(userMessage || ''));
+    if (!wantsReference) return safe;
+
+    return `${safe}\n\nSaiba mais: ${link}`;
   }
 
   shouldOfferChoiceFollowUp(replyText) {
@@ -644,7 +719,8 @@ class MessageController {
       user: {
         id: String(req.session.user?.id || ''),
         name: String(req.session.user?.name || 'Usuario'),
-        role: String(req.session.user?.role || 'user')
+        role: String(req.session.user?.role || 'user'),
+        email: String(req.session.user?.email || '')
       },
       context,
       memory: this.buildMemoryPayload(roomId),
@@ -696,6 +772,9 @@ class MessageController {
       reply,
       kbHits: contextDocs.length,
       kbDocIds: contextDocs.map((doc) => doc.id),
+      kbLinks: contextDocs
+        .filter((doc) => this.isValidKbUrl(doc?.url))
+        .map((doc) => ({ id: String(doc.id || ''), title: String(doc.title || ''), url: String(doc.url || '') })),
       usage: data?.usage || null
     };
   }
@@ -799,7 +878,19 @@ class MessageController {
     const alreadyInChamado = this.isChamadoRoom(room, chamadoId);
     const pending = this.getPendingDialog(roomId);
 
-    if (this.shouldTrackTopic(trimmedContent)) {
+    const isTopicShift = this.isTopicShiftMessage(trimmedContent);
+    if (isTopicShift) {
+      const requestedTopic = this.extractRequestedTopic(trimmedContent) || this.extractTopicFromText(trimmedContent);
+      this.clearPendingDialog(roomId);
+      this.setRoomMemory(roomId, {
+        topic: requestedTopic || '',
+        intent: this.inferMemoryIntent(trimmedContent),
+        summary: requestedTopic
+          ? `Topico atual: ${requestedTopic}. Intencao: ${this.inferMemoryIntent(trimmedContent)}.`
+          : `Intencao: ${this.inferMemoryIntent(trimmedContent)}.`,
+        lastUserMessage: trimmedContent.slice(0, 260)
+      });
+    } else if (this.shouldTrackTopic(trimmedContent)) {
       this.setPendingDialog(roomId, {
         ...(pending || {}),
         topic: this.trimContextText(trimmedContent, 120)
@@ -848,7 +939,7 @@ class MessageController {
       }
     }
 
-    if (askedTutorial || askedOpenChamado) {
+    if (askedOpenChamado) {
       await ChatRoom.updateChatState(roomId, 'AGUARDANDO_HUMANO');
       await alertService.emit({
         type: 'human_requested',
@@ -902,14 +993,15 @@ class MessageController {
     }
 
     let aiReply = '';
-    let aiMeta = { kbHits: 0, kbDocIds: [] };
+    let aiMeta = { kbHits: 0, kbDocIds: [], kbLinks: [] };
     try {
       this.publishAiProcessing(roomId, true);
       const aiResult = await this.callAiApi({ roomId, chamadoId, content: aiInputContent, req, roomState: 'IA' });
       aiReply = String(aiResult?.reply || '').trim();
       aiMeta = {
         kbHits: Number(aiResult?.kbHits || 0),
-        kbDocIds: Array.isArray(aiResult?.kbDocIds) ? aiResult.kbDocIds : []
+        kbDocIds: Array.isArray(aiResult?.kbDocIds) ? aiResult.kbDocIds : [],
+        kbLinks: Array.isArray(aiResult?.kbLinks) ? aiResult.kbLinks : []
       };
     } catch (error) {
       console.error('[AI] Falha ao consultar API_AI_URL:', error.message);
@@ -951,6 +1043,7 @@ class MessageController {
       userMessage: trimmedContent,
       roomId
     });
+    aiReply = this.appendKnowledgeReference(aiReply, aiMeta.kbLinks, trimmedContent);
     if (this.shouldOfferChoiceFollowUp(aiReply)) {
       this.setPendingDialog(roomId, {
         ...(pending || {}),

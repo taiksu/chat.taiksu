@@ -33,7 +33,9 @@ class KnowledgeBaseController {
       title: 'Base de Conhecimento IA - Chat Taiksu',
       user: req.session.user,
       draftCount: draftItems.length,
-      liveCount: liveItems.length
+      liveCount: liveItems.length,
+      activeNav: 'ai',
+      aiTab: 'knowledge'
     });
   }
 
