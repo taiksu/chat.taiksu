@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="min-h-dvh text-green-700">
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
+  <%- include('../partials/sidebar', { user, active: 'settings' }) %>
+
+  <div>
+    <%- include('../partials/topbar', { user, pageTitle: 'Configuracoes' }) %>
+
+    <main class="mx-auto w-full max-w-5xl space-y-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <%- include('../components/breadcrumb/index', {
+        link: '/dashboard',
+        paginaAnterior: 'Dashboard',
+        paginaAtual: 'Configuracoes'
+      }) %>
+
+      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h1 class="text-xl font-bold text-green-800">Configuracoes gerais</h1>
+        <p class="mt-1 text-sm text-gray-500">Ajuste alertas para administradores e controle global da IA atendente.</p>
+      </section>
+
+      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h2 class="text-lg font-bold text-green-800">Modo IA Atendente</h2>
+        <label class="mt-3 flex items-center gap-3 rounded-xl border border-green-100 p-3">
+          <input id="aiAttendantEnabled" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500" <%= settings.aiAttendantEnabled ? 'checked' : '' %>>
+          <span class="text-sm font-semibold text-slate-700">Ativar IA no primeiro atendimento do chat</span>
+        </label>
+        <p class="mt-2 text-xs text-gray-500">Quando desativado, a IA para de responder automaticamente no chat.</p>
+      </section>
+
+      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h2 class="text-lg font-bold text-green-800">Alertas por e-mail</h2>
+        <div class="mt-3 grid gap-3 sm:grid-cols-2">
+          <label class="text-sm sm:col-span-2">
+            <span class="mb-1 block font-semibold text-gray-600">Ativar envio por e-mail</span>
+            <input id="alertEmailEnabled" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500" <%= settings.alertEmailEnabled ? 'checked' : '' %>>
+          </label>
+          <label class="text-sm sm:col-span-2">
+            <span class="mb-1 block font-semibold text-gray-600">Destinatarios (separados por virgula)</span>
+            <input id="alertEmailTo" type="text" value="<%= settings.alertEmailTo %>" placeholder="admin@taiksu.com.br,dev@taiksu.com.br" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+          </label>
+          <label class="text-sm">
+            <span class="mb-1 block font-semibold text-gray-600">Email Service ID</span>
+            <input id="alertEmailServiceId" type="number" min="1" value="<%= settings.alertEmailServiceId %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+          </label>
+          <label class="text-sm">
+            <span class="mb-1 block font-semibold text-gray-600">URL da API de e-mail</span>
+            <input id="alertEmailApiUrl" type="text" value="<%= settings.alertEmailApiUrl %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+          </label>
+          <label class="text-sm sm:col-span-2">
+            <span class="mb-1 block font-semibold text-gray-600">Token da API de e-mail</span>
+            <input id="alertEmailToken" type="password" placeholder="<%= settings.hasAlertEmailToken ? 'Token configurado (digite para substituir)' : 'Cole o token Bearer aqui' %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+          </label>
+        </div>
+      </section>
+
+      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="w-full sm:w-72">
+            <%- include('../components/buttons/default', {
+              id: 'saveSettingsBtn',
+              label: 'Salvar Configuracoes'
+            }) %>
+          </div>
+          <span id="settingsStatus" class="text-sm font-semibold text-gray-600">Aguardando alteracoes</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <%- include('../partials/sidebar-script') %>
+  <script>
+    const statusEl = document.getElementById('settingsStatus');
+
+    function setStatus(text, type) {
+      const colors = {
+        info: 'text-gray-600',
+        success: 'text-emerald-700',
+        error: 'text-red-700'
+      };
+      statusEl.textContent = text;
+      statusEl.className = `text-sm font-semibold ${colors[type] || colors.info}`;
+    }
+
+    async function saveSettings() {
+      const payload = {
+        aiAttendantEnabled: document.getElementById('aiAttendantEnabled').checked,
+        alertEmailEnabled: document.getElementById('alertEmailEnabled').checked,
+        alertEmailTo: document.getElementById('alertEmailTo').value || '',
+        alertEmailServiceId: Number(document.getElementById('alertEmailServiceId').value || 1),
+        alertEmailApiUrl: document.getElementById('alertEmailApiUrl').value || '',
+        alertEmailToken: document.getElementById('alertEmailToken').value || undefined
+      };
+
+      try {
+        const response = await fetch('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          credentials: 'include'
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || `Erro HTTP ${response.status}`);
+        document.getElementById('alertEmailToken').value = '';
+        setStatus('Configuracoes salvas com sucesso', 'success');
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+  </script>
+</body>
+</html>

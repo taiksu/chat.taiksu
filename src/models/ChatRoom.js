@@ -179,6 +179,22 @@ class ChatRoom {
     });
   }
 
+  static async findPendingHumanRooms(limit = 20) {
+    return sequelize.query(
+      `SELECT cr.*, scr.chamado_id
+       FROM chat_rooms cr
+       LEFT JOIN support_chamados_rooms scr ON scr.room_id = cr.id
+       WHERE UPPER(COALESCE(cr.chat_state, 'NEW')) IN ('AGUARDANDO_HUMANO', 'FILA')
+         AND LOWER(COALESCE(cr.status, 'aberto')) NOT IN ('fechado', 'closed', 'concluido', 'concluído', 'finalizado', 'resolved')
+       ORDER BY cr.updated_at ASC
+       LIMIT :limit`,
+      {
+        replacements: { limit: Number(limit || 20) },
+        type: QueryTypes.SELECT
+      }
+    );
+  }
+
   static async updateStatus(roomId, status) {
     const [changes] = await ChatRoomModel.update(
       { status: String(status || '').trim() || 'aberto' },

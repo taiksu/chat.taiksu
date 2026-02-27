@@ -2,6 +2,8 @@ const Message = require('../models/Message');
 const ChatRoom = require('../models/ChatRoom');
 const User = require('../models/User');
 const knowledgeBase = require('../services/knowledgeBase');
+const alertService = require('../services/alertService');
+const settingsService = require('../services/settingsService');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -70,6 +72,7 @@ const upload = multer({ storage, limits: { fileSize: parseInt(process.env.MAX_FI
 class MessageController {
   constructor() {
     this.bootstrapLocks = new Set();
+    this.pendingDialog = new Map();
   }
 
   logAiMetric(event, data = {}) {
@@ -87,7 +90,9 @@ class MessageController {
   }
 
   isAiEnabled() {
-    return Boolean(this.getAiApiUrl());
+    const settings = settingsService.load();
+    const enabledBySettings = Boolean(settings.aiAttendantEnabled);
+    return enabledBySettings && Boolean(this.getAiApiUrl());
   }
 
   getAiUserId() {
@@ -95,7 +100,7 @@ class MessageController {
   }
 
   getAiUserName() {
-    return String(process.env.AI_USER_NAME || 'Assistente Taiksu IA');
+    return String(process.env.AI_USER_NAME || 'Marina');
   }
 
   getAiUserAvatar() {
@@ -143,6 +148,142 @@ class MessageController {
     const normalized = String(text || '').toLowerCase();
     if (!normalized) return false;
     return /(abrir chamado|abrir um chamado|como abro.*chamado|como abrir.*chamado|criar chamado|novo chamado|abrir ticket|criar ticket)/i.test(normalized);
+  }
+
+  isYesAnswer(text) {
+    const normalized = String(text || '').trim().toLowerCase();
+    return /^(sim|s|isso|claro|ok|pode ser|quero|pode)$/i.test(normalized);
+  }
+
+  isNoAnswer(text) {
+    const normalized = String(text || '').trim().toLowerCase();
+    return /^(nao|não|n|negativo|deixa|agora nao|agora não)$/i.test(normalized);
+  }
+
+  shouldTrackTopic(text) {
+    const normalized = String(text || '').trim();
+    if (!normalized) return false;
+    if (normalized.length < 8) return false;
+    if (this.isYesAnswer(normalized) || this.isNoAnswer(normalized)) return false;
+    return true;
+  }
+
+  getPendingDialog(roomId) {
+    if (!roomId) return null;
+    const value = this.pendingDialog.get(String(roomId));
+    if (!value) return null;
+    if ((Date.now() - Number(value.ts || 0)) > 15 * 60 * 1000) {
+      this.pendingDialog.delete(String(roomId));
+      return null;
+    }
+    return value;
+  }
+
+  setPendingDialog(roomId, data = {}) {
+    if (!roomId) return;
+    this.pendingDialog.set(String(roomId), {
+      ts: Date.now(),
+      ...data
+    });
+  }
+
+  clearPendingDialog(roomId) {
+    if (!roomId) return;
+    this.pendingDialog.delete(String(roomId));
+  }
+
+  trimContextText(text, maxChars = 220) {
+    const raw = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return '';
+    if (raw.length <= maxChars) return raw;
+    return `${raw.slice(0, maxChars - 3).trim()}...`;
+  }
+
+  buildCompactContext(contextMessages, userId) {
+    const all = Array.isArray(contextMessages) ? contextMessages : [];
+    const last = all.slice(-6);
+    let totalChars = 0;
+    const maxTotal = 1200;
+
+    return last
+      .map((item) => {
+        const role = String(item.user_id || '') === String(userId || '') ? 'user' : 'assistant';
+        const content = this.trimContextText(item.content || '', 220);
+        if (!content) return null;
+        totalChars += content.length;
+        if (totalChars > maxTotal) return null;
+        return {
+          role,
+          content,
+          createdAt: item.created_at
+        };
+      })
+      .filter(Boolean);
+  }
+
+  sanitizeAiReply(text) {
+    let safe = String(text || '').trim();
+    if (!safe) return '';
+    safe = safe.replace(/\s+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
+
+    const lower = safe.toLowerCase();
+    const looksCut = /(ou prefere|ou se|ou posso|ou quer|ou deseja|prefere\s*)$/i.test(lower)
+      || /[:;,]$/.test(safe);
+    if (looksCut) {
+      safe = `${safe}\n\nSe preferir, posso te encaminhar para um atendente humano agora.`;
+    }
+    if (!/[.!?]$/.test(safe)) safe = `${safe}.`;
+    return safe;
+  }
+
+  normalizeUserFirstName(name) {
+    return String(name || '')
+      .trim()
+      .split(/\s+/)[0]
+      .replace(/[^a-zA-ZÀ-ÿ0-9]/g, '')
+      .toLowerCase();
+  }
+
+  fixHallucinatedUserName(replyText, userName) {
+    let safe = String(replyText || '').trim();
+    if (!safe) return safe;
+
+    const expected = this.normalizeUserFirstName(userName);
+    const greetMatch = safe.match(/^ol[aá],\s*([^\s!,.?]+)([!,.?])?/i);
+    if (greetMatch) {
+      const used = this.normalizeUserFirstName(greetMatch[1]);
+      if (used && expected && used !== expected) {
+        safe = safe.replace(/^ol[aá],\s*[^\s!,.?]+([!,.?])?\s*/i, 'Olá! ');
+      }
+    }
+
+    if (/^sim,\s*[^\s,.!?]+\s+sabe/i.test(safe)) {
+      safe = safe.replace(/^sim,\s*[^\s,.!?]+\s+sabe/i, 'Sim, eu sei');
+    }
+
+    return safe;
+  }
+
+  maybeStripChamadoLink(replyText, { kbHits = 0, askedTutorial = false, askedOpenChamado = false, askedHuman = false } = {}) {
+    if (askedTutorial || askedOpenChamado || askedHuman) return String(replyText || '').trim();
+    if (Number(kbHits || 0) <= 0) return String(replyText || '').trim();
+    return String(replyText || '')
+      .replace(/https?:\/\/ajuda\.taiksu\.com\.br\/chamados\/criar\/?/gi, '')
+      .replace(/\s+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  shouldOfferChoiceFollowUp(replyText) {
+    const text = String(replyText || '').toLowerCase();
+    return /(mais detalhes|falar com.*atendente|atendente humano|prefere|posso te ajudar.*ou)/i.test(text);
+  }
+
+  getLastKnownTopic(content, roomId) {
+    const pending = this.getPendingDialog(roomId);
+    const pendingTopic = String(pending?.topic || '').trim();
+    if (pendingTopic) return pendingTopic;
+    return this.trimContextText(content || '', 120);
   }
 
   isChamadoRoom(room, chamadoId) {
@@ -238,11 +379,7 @@ class MessageController {
     const kbTopK = Number(process.env.KB_TOP_K || 3);
     const kbMinScore = Number(process.env.KB_MIN_SCORE || 2);
     const contextMessages = await Message.findByRoomId(roomId, 20);
-    const context = (contextMessages || []).slice(-10).map((item) => ({
-      role: String(item.user_id || '') === String(req.session.user?.id || '') ? 'user' : 'assistant',
-      content: String(item.content || ''),
-      createdAt: item.created_at
-    }));
+    const context = this.buildCompactContext(contextMessages, req.session.user?.id);
     const contextDocs = knowledgeBase.retrieve(content, { limit: kbTopK, minScore: kbMinScore });
 
     const payload = {
@@ -288,7 +425,7 @@ class MessageController {
 
     const data = await response.json().catch(() => ({}));
     const rawReply = data?.reply ?? data?.message ?? data?.answer ?? data?.data?.reply ?? '';
-    const reply = String(rawReply || '').trim();
+    const reply = this.sanitizeAiReply(rawReply);
     this.logAiMetric('proxy_success', {
       roomId,
       chamadoId: chamadoId ? String(chamadoId) : '',
@@ -301,7 +438,12 @@ class MessageController {
       kbDocIds: contextDocs.map((doc) => doc.id),
       usage: data?.usage || null
     });
-    return reply;
+    return {
+      reply,
+      kbHits: contextDocs.length,
+      kbDocIds: contextDocs.map((doc) => doc.id),
+      usage: data?.usage || null
+    };
   }
 
   appendHumanHandoffOffer(text) {
@@ -359,16 +501,68 @@ class MessageController {
       is_read: 0,
       name: this.getAiUserName(),
       avatar: this.getAiUserAvatar(),
+      sender_role: 'system',
+      is_ai: true,
+      feedback_value: null,
+      feedback_at: null,
+      feedback_by: null,
       actions: aiMessage.actions || normalizedActions
     });
   }
 
   async processAiFirstContactFlow({ room, roomId, chamadoId, content, req }) {
     const roomState = this.normalizeChatState(room?.chat_state);
+    const trimmedContent = String(content || '').trim();
     const askedHuman = this.isHumanRequest(content);
     const askedTutorial = this.isTutorialRequest(content);
     const askedOpenChamado = this.isOpenChamadoIntent(content);
     const alreadyInChamado = this.isChamadoRoom(room, chamadoId);
+    const pending = this.getPendingDialog(roomId);
+
+    if (this.shouldTrackTopic(trimmedContent)) {
+      this.setPendingDialog(roomId, {
+        ...(pending || {}),
+        topic: this.trimContextText(trimmedContent, 120)
+      });
+    }
+
+    if (pending && this.isYesAnswer(trimmedContent)) {
+      if (pending.type === 'details_or_human') {
+        const topic = this.getLastKnownTopic(trimmedContent, roomId) || 'o assunto anterior';
+        let aiReply = '';
+        try {
+          const aiResult = await this.callAiApi({
+            roomId,
+            chamadoId,
+            content: `O usuario respondeu "sim". Continue com mais detalhes sobre: ${topic}`,
+            req,
+            roomState: 'IA'
+          });
+          aiReply = String(aiResult?.reply || '').trim();
+        } catch (_err) {}
+        if (!aiReply) {
+          aiReply = `Perfeito. Vou seguir com mais detalhes sobre ${topic}.`;
+        }
+        await this.sendAiMessage({
+          roomId,
+          content: this.appendHumanHandoffOffer(this.sanitizeAiReply(aiReply))
+        });
+        this.clearPendingDialog(roomId);
+        return;
+      }
+    }
+
+    if (pending && this.isNoAnswer(trimmedContent)) {
+      if (pending.type === 'details_or_human') {
+        await ChatRoom.updateChatState(roomId, 'AGUARDANDO_HUMANO');
+        await this.sendAiMessage({
+          roomId,
+          content: 'Sem problema. Vou te encaminhar para atendimento humano agora.'
+        });
+        this.clearPendingDialog(roomId);
+        return;
+      }
+    }
 
     if (askedTutorial || askedOpenChamado) {
       const actions = this.buildChamadoActions({ roomId, isChamadoRoom: alreadyInChamado });
@@ -376,6 +570,7 @@ class MessageController {
         ? 'Este chat já está vinculado a um chamado. Pode continuar por aqui e, se quiser, abrir a visualização completa no botão abaixo.'
         : `Para abrir um chamado, acesse o botão abaixo ou use este link oficial: ${this.getChamadoCreateUrl()}`;
       await this.sendAiMessage({ roomId, content: reply, actions });
+      this.clearPendingDialog(roomId);
       return;
     }
 
@@ -388,10 +583,22 @@ class MessageController {
         return;
       }
       await ChatRoom.updateChatState(roomId, 'AGUARDANDO_HUMANO');
+      await alertService.emit({
+        type: 'human_requested',
+        level: 'warning',
+        roomId,
+        chamadoId: chamadoId ? String(chamadoId) : '',
+        chatState: 'AGUARDANDO_HUMANO',
+        actorId: String(req.session?.user?.id || ''),
+        actorName: String(req.session?.user?.name || ''),
+        message: 'Cliente solicitou atendimento humano via chat',
+        authToken: String(req.session?.ssoToken || '')
+      });
       await this.sendAiMessage({
         roomId,
         content: 'Entendi. Vou te encaminhar para um atendente humano. Um instante, por favor.'
       });
+      this.clearPendingDialog(roomId);
       return;
     }
 
@@ -400,15 +607,55 @@ class MessageController {
     }
 
     let aiReply = '';
+    let aiMeta = { kbHits: 0, kbDocIds: [] };
     try {
-      aiReply = await this.callAiApi({ roomId, chamadoId, content, req, roomState: 'IA' });
+      const aiResult = await this.callAiApi({ roomId, chamadoId, content, req, roomState: 'IA' });
+      aiReply = String(aiResult?.reply || '').trim();
+      aiMeta = {
+        kbHits: Number(aiResult?.kbHits || 0),
+        kbDocIds: Array.isArray(aiResult?.kbDocIds) ? aiResult.kbDocIds : []
+      };
     } catch (error) {
       console.error('[AI] Falha ao consultar API_AI_URL:', error.message);
-      aiReply = '';
+      await ChatRoom.updateChatState(roomId, 'AGUARDANDO_HUMANO');
+      await alertService.emit({
+        type: 'ai_model_failure_handoff',
+        level: 'critical',
+        roomId,
+        chamadoId: chamadoId ? String(chamadoId) : '',
+        chatState: 'AGUARDANDO_HUMANO',
+        actorId: String(req.session?.user?.id || ''),
+        actorName: String(req.session?.user?.name || ''),
+        message: `Falha na IA (${error.message}). Encaminhando para humano.`,
+        authToken: String(req.session?.ssoToken || '')
+      });
+      await this.sendAiMessage({
+        roomId,
+        content: 'Estou com instabilidade no atendimento automatico agora. Vou te encaminhar para um atendente humano.',
+        actions: this.buildChamadoActions({ roomId, isChamadoRoom: alreadyInChamado })
+      });
+      this.clearPendingDialog(roomId);
+      return;
     }
 
     if (!aiReply) {
       aiReply = 'Recebi sua mensagem. Posso te ajudar com isso agora.';
+    }
+
+    aiReply = this.fixHallucinatedUserName(aiReply, req.session?.user?.name || '');
+    aiReply = this.maybeStripChamadoLink(aiReply, {
+      kbHits: aiMeta.kbHits,
+      askedTutorial,
+      askedOpenChamado,
+      askedHuman
+    });
+    aiReply = this.sanitizeAiReply(aiReply);
+    if (this.shouldOfferChoiceFollowUp(aiReply)) {
+      this.setPendingDialog(roomId, {
+        ...(pending || {}),
+        type: 'details_or_human',
+        topic: this.getLastKnownTopic(trimmedContent, roomId)
+      });
     }
 
     await this.sendAiMessage({
@@ -561,6 +808,11 @@ class MessageController {
           is_read: 0,
           name: req.session.user.name,
           avatar: req.session.user.avatar,
+          sender_role: req.session.user.role || 'user',
+          is_ai: false,
+          feedback_value: null,
+          feedback_at: null,
+          feedback_by: null,
           actions: Array.isArray(message.actions) ? message.actions : []
         };
 
@@ -633,6 +885,48 @@ class MessageController {
 
       await Message.markAsRead(messageId);
       return res.json({ success: true, messageId });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  async submitFeedback(req, res) {
+    try {
+      const userId = req.session.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const { messageId } = req.params;
+      const value = String(req.body?.value || '').trim().toLowerCase();
+      if (!messageId) {
+        return res.status(400).json({ error: 'messageId obrigatorio' });
+      }
+      if (!['up', 'down'].includes(value)) {
+        return res.status(400).json({ error: 'value invalido', allowed: ['up', 'down'] });
+      }
+
+      const message = await Message.findById(messageId);
+      if (!message) {
+        return res.status(404).json({ error: 'Mensagem nao encontrada' });
+      }
+
+      await Message.setFeedback({ messageId, value, userId });
+
+      const payload = {
+        type: 'message_feedback',
+        roomId: message.room_id,
+        messageId,
+        value,
+        feedbackBy: String(userId),
+        feedbackAt: new Date().toISOString()
+      };
+      const clients = this.getRoomClients(message.room_id);
+      clients.forEach((client) => {
+        client.write(`data: ${JSON.stringify(payload)}\n\n`);
+      });
+
+      return res.json({ success: true, messageId, value });
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }

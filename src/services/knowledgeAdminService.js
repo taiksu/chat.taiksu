@@ -232,6 +232,55 @@ class KnowledgeAdminService {
 
     return { published: draft.length, versionFile };
   }
+
+  addSuggestionFromMessage(input = {}) {
+    const messageId = String(input.messageId || '').trim();
+    if (!messageId) throw new Error('messageId obrigatorio');
+
+    const content = String(input.content || '').trim();
+    if (!content) throw new Error('Conteudo da mensagem vazio');
+
+    const normalized = content.replace(/\s+/g, ' ').trim();
+    const date = this.nowIsoDate();
+    const shortTitle = normalized.split(/[.!?]\s+/)[0].slice(0, 90) || 'Sugestao de resposta da IA';
+    const slug = this.toSlug(shortTitle);
+    const id = `kb_suggest_${slug}_${messageId.slice(0, 8)}`;
+
+    const draft = this.getDraft();
+    const existsIndex = draft.findIndex((item) => String(item?.sourceMessageId || '') === messageId);
+    const baseItem = {
+      id,
+      title: shortTitle,
+      content: normalized,
+      tags: this.buildTags(normalized),
+      url: '',
+      category: this.inferCategory(normalized),
+      intent: this.inferIntent(normalized),
+      audience: 'cliente',
+      priority: 3,
+      confidence: 0.65,
+      status: 'active',
+      updatedAt: date,
+      owner: String(input.author || 'admin'),
+      source: 'feedback_suggestion',
+      sourceMessageId: messageId,
+      sourceRoomId: String(input.roomId || ''),
+      sourceFeedbackValue: String(input.feedbackValue || '')
+    };
+
+    if (existsIndex >= 0) {
+      draft[existsIndex] = {
+        ...draft[existsIndex],
+        ...baseItem,
+        id: draft[existsIndex].id || id
+      };
+    } else {
+      draft.push(baseItem);
+    }
+
+    this.writeJsonArray(this.draftFile, draft);
+    return existsIndex >= 0 ? draft[existsIndex] : baseItem;
+  }
 }
 
 module.exports = new KnowledgeAdminService();

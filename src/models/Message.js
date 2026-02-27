@@ -44,7 +44,10 @@ class Message {
       type: created.type,
       fileUrl: created.file_url,
       fileType: created.file_type,
-      actions: this.parseActions(created.actions)
+      actions: this.parseActions(created.actions),
+      feedbackValue: created.feedback_value || null,
+      feedbackAt: created.feedback_at || null,
+      feedbackBy: created.feedback_by || null
     };
   }
 
@@ -55,7 +58,7 @@ class Message {
   static async findByRoomId(roomId, limit = 50) {
     const rows = await MessageModel.findAll({
       where: { room_id: roomId },
-      include: [{ model: UserModel, as: 'sender', attributes: ['name', 'avatar'] }],
+      include: [{ model: UserModel, as: 'sender', attributes: ['name', 'avatar', 'role'] }],
       order: [['created_at', 'DESC']],
       limit: Number(limit)
     });
@@ -67,10 +70,32 @@ class Message {
           ...plain,
           name: plain.sender?.name || null,
           avatar: plain.sender?.avatar || null,
+          sender_role: plain.sender?.role || null,
+          is_ai: String(plain.sender?.role || '').toLowerCase() === 'system',
+          feedback_value: plain.feedback_value || null,
+          feedback_at: plain.feedback_at || null,
+          feedback_by: plain.feedback_by || null,
           actions: this.parseActions(plain.actions)
         };
       })
       .reverse();
+  }
+
+  static async setFeedback({ messageId, value, userId }) {
+    const normalized = String(value || '').toLowerCase();
+    if (!['up', 'down'].includes(normalized)) {
+      throw new Error('feedback_value_invalid');
+    }
+
+    const [changes] = await MessageModel.update(
+      {
+        feedback_value: normalized,
+        feedback_at: new Date(),
+        feedback_by: userId ? String(userId) : null
+      },
+      { where: { id: messageId } }
+    );
+    return changes;
   }
 
   static async markAsRead(messageId) {

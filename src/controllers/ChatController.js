@@ -2,6 +2,7 @@ const ChatRoom = require('../models/ChatRoom');
 const Message = require('../models/Message');
 const User = require('../models/User');
 const ChatQueue = require('../models/ChatQueue');
+const alertService = require('../services/alertService');
 const path = require('path');
 const fs = require('fs');
 
@@ -321,6 +322,16 @@ class ChatController {
       if (availableAgents.length > 0) {
         const selectedAgent = availableAgents[0];
         await this.assignAgentToRoom(room.id, selectedAgent.id, String(chamadoId));
+        await alertService.emit({
+          type: 'human_assigned',
+          level: 'info',
+          roomId: room.id,
+          chamadoId: String(chamadoId),
+          chatState: 'HUMANO',
+          actorId: String(user.id),
+          actorName: user.name || '',
+          authToken: String(req.session?.ssoToken || '')
+        });
 
         return res.json({
           success: true,
@@ -350,6 +361,17 @@ class ChatController {
           position: queueItem.position,
           chatState: 'FILA'
         });
+        await alertService.emit({
+          type: 'human_requested',
+          level: 'warning',
+          roomId: room.id,
+          chamadoId: String(chamadoId),
+          chatState: 'FILA',
+          actorId: String(user.id),
+          actorName: user.name || '',
+          message: `Cliente entrou na fila. Posicao ${queueItem.position}`,
+          authToken: String(req.session?.ssoToken || '')
+        });
 
         return res.json({
           success: true,
@@ -362,6 +384,17 @@ class ChatController {
       }
 
       await ChatRoom.updateChatState(room.id, 'AGUARDANDO_HUMANO');
+      await alertService.emit({
+        type: 'human_requested',
+        level: 'critical',
+        roomId: room.id,
+        chamadoId: String(chamadoId),
+        chatState: 'AGUARDANDO_HUMANO',
+        actorId: String(user.id),
+        actorName: user.name || '',
+        message: 'Sem atendentes disponiveis no momento',
+        authToken: String(req.session?.ssoToken || '')
+      });
       return res.json({
         success: true,
         mode: 'offline',

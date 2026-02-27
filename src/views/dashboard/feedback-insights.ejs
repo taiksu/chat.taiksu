@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="min-h-dvh text-green-700">
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
+  <%- include('../partials/sidebar', { user, active: 'feedback' }) %>
+
+  <div>
+    <%- include('../partials/topbar', { user, pageTitle: 'Feedback IA' }) %>
+
+    <main class="mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <%- include('../components/breadcrumb/index', {
+        link: '/dashboard',
+        paginaAnterior: 'Dashboard',
+        paginaAtual: 'Feedback IA'
+      }) %>
+
+      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h1 class="text-xl font-bold text-green-800">Insights de feedback da IA</h1>
+        <p class="mt-1 text-sm text-gray-500">Priorize melhorias usando as respostas com mais 👍 e 👎 e envie sugestões para a Base IA.</p>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+          <label class="text-sm">
+            <span class="mb-1 block font-semibold text-gray-600">Periodo (dias)</span>
+            <select id="daysFilter" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              <option value="7">Ultimos 7 dias</option>
+              <option value="30" selected>Ultimos 30 dias</option>
+              <option value="90">Ultimos 90 dias</option>
+            </select>
+          </label>
+          <label class="text-sm">
+            <span class="mb-1 block font-semibold text-gray-600">Top itens</span>
+            <select id="limitFilter" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              <option value="5">Top 5</option>
+              <option value="10" selected>Top 10</option>
+              <option value="20">Top 20</option>
+            </select>
+          </label>
+          <div class="text-sm">
+            <span class="mb-1 block font-semibold text-gray-600">Atualizar</span>
+            <%- include('../components/buttons/default', {
+              id: 'refreshBtn',
+              label: 'Atualizar insights'
+            }) %>
+          </div>
+        </div>
+        <p id="statusText" class="mt-3 text-xs font-semibold text-gray-500">Carregando dados...</p>
+      </section>
+
+      <section class="grid gap-4 lg:grid-cols-2">
+        <article class="rounded-2xl border border-rose-100 bg-white p-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-bold text-rose-700">Top respostas com 👎</h2>
+            <span id="downCount" class="rounded-full bg-rose-50 px-2 py-1 text-xs font-semibold text-rose-700">0</span>
+          </div>
+          <div id="topDownList" class="mt-3 space-y-3"></div>
+        </article>
+
+        <article class="rounded-2xl border border-emerald-100 bg-white p-4 shadow-sm">
+          <div class="flex items-center justify-between">
+            <h2 class="text-base font-bold text-emerald-700">Top respostas com 👍</h2>
+            <span id="upCount" class="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">0</span>
+          </div>
+          <div id="topUpList" class="mt-3 space-y-3"></div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <%- include('../partials/sidebar-script') %>
+
+  <script>
+    const downListEl = document.getElementById('topDownList');
+    const upListEl = document.getElementById('topUpList');
+    const downCountEl = document.getElementById('downCount');
+    const upCountEl = document.getElementById('upCount');
+    const statusTextEl = document.getElementById('statusText');
+    const refreshBtnEl = document.getElementById('refreshBtn');
+    const daysFilterEl = document.getElementById('daysFilter');
+    const limitFilterEl = document.getElementById('limitFilter');
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function setStatus(text, type) {
+      const palette = {
+        info: 'text-gray-600',
+        success: 'text-emerald-700',
+        error: 'text-red-700'
+      };
+      statusTextEl.textContent = text;
+      statusTextEl.className = `mt-3 text-xs font-semibold ${palette[type] || palette.info}`;
+    }
+
+    function asDate(value) {
+      if (!value) return '-';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '-';
+      return date.toLocaleString('pt-BR');
+    }
+
+    function renderItem(item, tone) {
+      const badgeClass = tone === 'down'
+        ? 'bg-rose-50 text-rose-700 border-rose-200'
+        : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      const snippet = String(item.content || '').slice(0, 380);
+      return `
+        <article class="rounded-xl border border-gray-200 p-3">
+          <div class="flex items-start justify-between gap-2">
+            <p class="text-sm font-semibold text-slate-800">Mensagem #${escapeHtml(item.sampleMessageId || '')}</p>
+            <span class="rounded-full border px-2 py-0.5 text-xs font-bold ${badgeClass}">${Number(item.count || 0)} feedbacks</span>
+          </div>
+          <p class="mt-2 whitespace-pre-wrap text-sm text-slate-700">${escapeHtml(snippet)}${item.content && item.content.length > 380 ? '...' : ''}</p>
+          <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+            <span>Sala: ${escapeHtml(item.roomId || '-')}</span>
+            <span>Ultimo feedback: ${escapeHtml(asDate(item.lastFeedbackAt))}</span>
+          </div>
+          <div class="mt-3">
+            <button
+              type="button"
+              class="rounded-full border border-green-300 bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+              data-action="suggest"
+              data-message-id="${escapeHtml(item.sampleMessageId || '')}"
+            >
+              Virar sugestao de conhecimento
+            </button>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderList(element, items, tone) {
+      if (!Array.isArray(items) || !items.length) {
+        element.innerHTML = '<p class="text-sm text-gray-500">Sem dados no periodo selecionado.</p>';
+        return;
+      }
+      element.innerHTML = items.map((item) => renderItem(item, tone)).join('');
+    }
+
+    async function fetchJson(url, init) {
+      const response = await fetch(url, init);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Falha HTTP ${response.status}`);
+      return data;
+    }
+
+    async function loadData() {
+      const days = Number(daysFilterEl.value || 30);
+      const limit = Number(limitFilterEl.value || 10);
+      setStatus('Atualizando insights...', 'info');
+      try {
+        const result = await fetchJson(`/dashboard/feedback-insights/data?days=${encodeURIComponent(days)}&limit=${encodeURIComponent(limit)}`);
+        const down = Array.isArray(result.topDown) ? result.topDown : [];
+        const up = Array.isArray(result.topUp) ? result.topUp : [];
+        downCountEl.textContent = String(down.length);
+        upCountEl.textContent = String(up.length);
+        renderList(downListEl, down, 'down');
+        renderList(upListEl, up, 'up');
+        setStatus('Insights atualizados com sucesso', 'success');
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function suggestFromMessage(messageId) {
+      const id = String(messageId || '').trim();
+      if (!id) return;
+      setStatus(`Enviando sugestao da mensagem ${id} para draft...`, 'info');
+      try {
+        await fetchJson(`/dashboard/feedback-insights/suggest/${encodeURIComponent(id)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        setStatus(`Mensagem ${id} adicionada ao draft da Base IA`, 'success');
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    [downListEl, upListEl].forEach((el) => {
+      el.addEventListener('click', (event) => {
+        const btn = event.target && event.target.closest('button[data-action="suggest"]');
+        if (!btn) return;
+        suggestFromMessage(btn.getAttribute('data-message-id'));
+      });
+    });
+
+    refreshBtnEl.addEventListener('click', loadData);
+    daysFilterEl.addEventListener('change', loadData);
+    limitFilterEl.addEventListener('change', loadData);
+    loadData();
+  </script>
+</body>
+</html>

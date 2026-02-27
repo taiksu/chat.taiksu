@@ -13,6 +13,7 @@ dotenv.config();
 
 const { runMigrations } = require('./config/migrations');
 const { syncDatabase } = require('./models/sequelize-models');
+const alertService = require('./services/alertService');
 
 const app = express();
 const isProd = process.env.NODE_ENV === 'production';
@@ -149,6 +150,7 @@ const chatApiRoutes = require('./routes/chat-api');
 const messageRoutes = require('./routes/messages');
 const aiRoutes = require('./routes/ai');
 const kbApiRoutes = require('./routes/kb-api');
+const settingsApiRoutes = require('./routes/settings-api');
 const ssoRoutes = require('./routes/sso');
 const SSOController = require('./controllers/SSOController');
 
@@ -161,6 +163,7 @@ app.use('/api/chat', chatApiRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/kb', kbApiRoutes);
+app.use('/api/settings', settingsApiRoutes);
 
 app.get('/', (req, res) => {
   if (isDev && startupError) {
@@ -275,6 +278,7 @@ const HOST = process.env.HOST || '0.0.0.0';
   app.listen(PORT, HOST, () => {
     const appUrl = process.env.APP_URL || `http://${HOST}:${PORT}`;
     console.log(`Chat Taiksu rodando em ${appUrl}`);
+    alertService.startMonitor();
   });
 })();
 

@@ -34,6 +34,18 @@
     label: 'Base IA',
     href: '/dashboard/knowledge-base',
     icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M12 6v12m6-6H6"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M4 7a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V7z"/></svg>'
+  },
+  {
+    key: 'feedback',
+    label: 'Feedback IA',
+    href: '/dashboard/feedback-insights',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M14 9h5m-5 6h5M5 7h4v10H5z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M9 17l4-2V9L9 7v10z"/></svg>'
+  },
+  {
+    key: 'settings',
+    label: 'Configuracoes',
+    href: '/dashboard/settings',
+    icon: '<svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M10.325 4.317a1.724 1.724 0 013.35 0 1.724 1.724 0 002.573 1.066 1.724 1.724 0 012.36 2.36 1.724 1.724 0 001.065 2.572 1.724 1.724 0 010 3.35 1.724 1.724 0 00-1.066 2.573 1.724 1.724 0 01-2.36 2.36 1.724 1.724 0 00-2.572 1.065 1.724 1.724 0 01-3.35 0 1.724 1.724 0 00-2.573-1.066 1.724 1.724 0 01-2.36-2.36 1.724 1.724 0 00-1.065-2.572 1.724 1.724 0 010-3.35 1.724 1.724 0 001.066-2.573 1.724 1.724 0 012.36-2.36 1.724 1.724 0 002.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.9" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>'
   }
 ]; %>
 
@@ -60,7 +72,10 @@
         <a href="<%= item.href %>" class="flex items-center justify-between border-b border-green-50 px-6 py-5 text-sm font-semibold transition <%= isActive ? 'bg-green-50 text-green-700' : 'text-slate-600 hover:bg-green-50 hover:text-green-700' %>">
           <div class="flex items-center gap-4">
             <span class="<%= isActive ? 'text-green-600' : 'text-slate-500' %>"><%- item.icon %></span>
-            <span class="font-semibold"> <%= item.label %></span>
+            <span class="font-semibold"><%= item.label %></span>
+            <% if (item.key === 'chamados') { %>
+              <span id="pending-human-badge" class="hidden min-w-[20px] rounded-full bg-red-500 px-2 py-0.5 text-center text-xs font-bold text-white">0</span>
+            <% } %>
           </div>
           <span class="flex h-8 w-8 items-center justify-center rounded-full text-green-500">
             <img src="https://login.taiksu.com.br/frontend/img/seta.png" class="h-5" />

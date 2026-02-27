@@ -1,0 +1,8 @@
+{
+  "aiAttendantEnabled": true,
+  "alertEmailEnabled": false,
+  "alertEmailApiUrl": "https://email.taiksu.com.br/api/email/send",
+  "alertEmailToken": "",
+  "alertEmailTo": "",
+  "alertEmailServiceId": 1
+}

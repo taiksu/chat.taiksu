@@ -44,3 +44,88 @@
     });
   })();
 </script>
+
+<script>
+  (() => {
+    const badge = document.getElementById('pending-human-badge');
+    let lastSince = Date.now();
+
+    function ensureToastHost() {
+      let host = document.getElementById('admin-alert-toast-host');
+      if (host) return host;
+      host = document.createElement('div');
+      host.id = 'admin-alert-toast-host';
+      host.style.position = 'fixed';
+      host.style.right = '16px';
+      host.style.bottom = '16px';
+      host.style.zIndex = '99999';
+      host.style.display = 'flex';
+      host.style.flexDirection = 'column';
+      host.style.gap = '8px';
+      document.body.appendChild(host);
+      return host;
+    }
+
+    function showToast(event) {
+      const host = ensureToastHost();
+      const card = document.createElement('div');
+      const type = String(event?.type || 'alerta');
+      const message = String(event?.message || 'Nova pendencia de atendimento');
+      const roomId = String(event?.roomId || '');
+      const title = type === 'human_wait_escalation' ? 'Escalonamento' : 'Atencao';
+      card.style.minWidth = '280px';
+      card.style.maxWidth = '360px';
+      card.style.background = '#ffffff';
+      card.style.border = '1px solid #fecaca';
+      card.style.boxShadow = '0 10px 24px rgba(0,0,0,.12)';
+      card.style.borderRadius = '12px';
+      card.style.padding = '10px 12px';
+      card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <strong style="color:#b91c1c;font-size:13px">${title}</strong>
+          <button type="button" style="border:0;background:transparent;color:#6b7280;cursor:pointer;font-size:14px">x</button>
+        </div>
+        <div style="font-size:12px;color:#334155;margin-top:4px">${message}</div>
+        ${roomId ? `<div style="font-size:11px;color:#64748b;margin-top:4px">Sala: ${roomId}</div>` : ''}
+      `;
+      const closeBtn = card.querySelector('button');
+      closeBtn?.addEventListener('click', () => card.remove());
+      host.appendChild(card);
+      setTimeout(() => card.remove(), 9000);
+    }
+
+    async function refreshPendingBadge() {
+      if (!badge) return;
+      try {
+        const response = await fetch('/dashboard/alerts/pending', { credentials: 'include' });
+        if (!response.ok) return;
+        const data = await response.json();
+        const count = Number(data?.count || 0);
+        badge.textContent = String(count);
+        if (count > 0) badge.classList.remove('hidden');
+        else badge.classList.add('hidden');
+      } catch (_err) {}
+    }
+
+    async function pollRecentAlerts() {
+      try {
+        const response = await fetch(`/dashboard/alerts/recent?since=${encodeURIComponent(String(lastSince))}`, { credentials: 'include' });
+        if (!response.ok) return;
+        const data = await response.json();
+        const events = Array.isArray(data?.events) ? data.events : [];
+        if (!events.length) return;
+        events.forEach((event) => showToast(event));
+        const newestTs = events.reduce((acc, item) => {
+          const ts = new Date(item?.ts || 0).getTime();
+          return ts > acc ? ts : acc;
+        }, lastSince);
+        if (newestTs > lastSince) lastSince = newestTs;
+      } catch (_err) {}
+    }
+
+    refreshPendingBadge();
+    pollRecentAlerts();
+    setInterval(refreshPendingBadge, 15000);
+    setInterval(pollRecentAlerts, 10000);
+  })();
+</script>

@@ -49,6 +49,9 @@ const MessageModel = sequelize.define('messages', {
   file_url: { type: DataTypes.TEXT, allowNull: true },
   file_type: { type: DataTypes.STRING(255), allowNull: true },
   actions: { type: DataTypes.TEXT, allowNull: true },
+  feedback_value: { type: DataTypes.STRING(8), allowNull: true },
+  feedback_at: { type: DataTypes.DATE, allowNull: true },
+  feedback_by: { type: DataTypes.STRING(64), allowNull: true },
   is_read: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   read_at: { type: DataTypes.DATE, allowNull: true },
   created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
@@ -199,6 +202,24 @@ async function ensureMessagesColumns() {
   if (!columns.actions) {
     await qi.addColumn('messages', 'actions', {
       type: DataTypes.TEXT,
+      allowNull: true
+    });
+  }
+  if (!columns.feedback_value) {
+    await qi.addColumn('messages', 'feedback_value', {
+      type: DataTypes.STRING(8),
+      allowNull: true
+    });
+  }
+  if (!columns.feedback_at) {
+    await qi.addColumn('messages', 'feedback_at', {
+      type: DataTypes.DATE,
+      allowNull: true
+    });
+  }
+  if (!columns.feedback_by) {
+    await qi.addColumn('messages', 'feedback_by', {
+      type: DataTypes.STRING(64),
       allowNull: true
     });
   }

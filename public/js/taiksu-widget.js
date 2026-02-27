@@ -320,6 +320,20 @@
         transition: all 0.2s ease;
       }
       .tw-msg-action:hover { background: #d1fae5; }
+      .tw-feedback-row { margin-top: 8px; display: flex; align-items: center; gap: 6px; }
+      .tw-feedback-btn {
+        border: 1px solid #d1d5db;
+        background: #fff;
+        color: #475569;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .tw-feedback-btn:hover { background: #f8fafc; }
+      .tw-feedback-btn.active.up { border-color: #10b981; color: #047857; background: #ecfdf5; }
+      .tw-feedback-btn.active.down { border-color: #f43f5e; color: #be123c; background: #fff1f2; }
 
       .tw-media.image { max-width: 100%; border-radius: 12px; display: block; cursor: pointer; margin: 4px 0; }
       .tw-file-link { color: #075e54; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 8px; }
@@ -571,6 +585,15 @@
     if (messagesArea) messagesArea.addEventListener("click", closeUIExtras);
     if (messagesArea) {
       messagesArea.addEventListener("click", (event) => {
+        const feedbackButton = event.target && event.target.closest(".tw-feedback-btn");
+        if (feedbackButton) {
+          const messageId = String(feedbackButton.getAttribute("data-feedback-id") || "");
+          const value = String(feedbackButton.getAttribute("data-feedback-value") || "");
+          if (messageId && (value === "up" || value === "down")) {
+            submitFeedback(messageId, value);
+          }
+          return;
+        }
         const actionButton = event.target && event.target.closest(".tw-msg-action");
         if (actionButton) {
           const actionType = String(actionButton.getAttribute("data-action-type") || "");
@@ -944,6 +967,11 @@
         renderTyping(payload);
       } else if (payload.type === "messages_read") {
         applyReadReceipts(payload.messageIds);
+      } else if (payload.type === "message_feedback") {
+        applyMessageFeedback({
+          messageId: payload.messageId,
+          value: payload.value
+        });
       }
     };
     eventSource.onerror = () => {
@@ -997,9 +1025,14 @@
       created_at: message.created_at ?? message.createdAt ?? new Date().toISOString(),
       name: message.name || "Usuario",
       avatar: message.avatar || "",
+      sender_role: message.sender_role || message.senderRole || "",
+      is_ai: Boolean(message.is_ai ?? message.isAi ?? false),
       type: message.type || "text",
       file_url: message.file_url ?? message.fileUrl ?? "",
       file_type: message.file_type ?? message.fileType ?? "",
+      feedback_value: message.feedback_value ?? message.feedbackValue ?? null,
+      feedback_at: message.feedback_at ?? message.feedbackAt ?? null,
+      feedback_by: message.feedback_by ?? message.feedbackBy ?? null,
       actions: normalizedActions
     };
   }
@@ -1020,6 +1053,22 @@
       .filter(Boolean)
       .join("");
     return buttons ? `<div class="tw-msg-actions">${buttons}</div>` : "";
+  }
+
+  function renderMessageFeedback(message) {
+    const isAiMessage = Boolean(message?.is_ai) || String(message?.sender_role || "").toLowerCase() === "system";
+    if (!isAiMessage) return "";
+    if (String(message?.type || "text").toLowerCase() !== "text") return "";
+    const messageId = String(message?.id || "").trim();
+    if (!messageId) return "";
+    const value = String(message?.feedback_value || "").toLowerCase();
+    return `
+      <div class="tw-feedback-row" data-feedback-for="${escapeAttr(messageId)}">
+        <span style="font-size:11px;color:#64748b">Essa resposta ajudou?</span>
+        <button type="button" class="tw-feedback-btn up ${value === "up" ? "active up" : ""}" data-feedback-value="up" data-feedback-id="${escapeAttr(messageId)}">👍</button>
+        <button type="button" class="tw-feedback-btn down ${value === "down" ? "active down" : ""}" data-feedback-value="down" data-feedback-id="${escapeAttr(messageId)}">👎</button>
+      </div>
+    `;
   }
 
   function inferFileType(mime) {
@@ -1129,7 +1178,7 @@
       ? `<div class="tw-avatar" title="${escapeAttr(msgName)}">${message.avatar ? `<img src="${escapeAttr(resolveMediaUrl(message.avatar))}" alt="${escapeAttr(msgName)}">` : `<span class="tw-avatar-initial">${escapeHtml((msgName || "U").charAt(0).toUpperCase())}</span>`}</div>`
       : (!own ? '<div class="tw-avatar-spacer"></div>' : '');
 
-    const bubbleHtml = `${renderMessageBody(message)}${renderMessageActions(message)}`;
+    const bubbleHtml = `${renderMessageBody(message)}${renderMessageActions(message)}${renderMessageFeedback(message)}`;
     const rowHtml = (templateCore && typeof templateCore.renderWidgetMessageRow === "function")
       ? templateCore.renderWidgetMessageRow({
           own,
@@ -1457,6 +1506,32 @@
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+
+  function applyMessageFeedback({ messageId, value }) {
+    const row = shadow && shadow.querySelector(`.tw-feedback-row[data-feedback-for="${String(messageId)}"]`);
+    if (!row) return;
+    const up = row.querySelector('.tw-feedback-btn.up');
+    const down = row.querySelector('.tw-feedback-btn.down');
+    if (up) up.classList.remove('active', 'up');
+    if (down) down.classList.remove('active', 'down');
+    if (value === 'up' && up) up.classList.add('active', 'up');
+    if (value === 'down' && down) down.classList.add('active', 'down');
+  }
+
+  function submitFeedback(messageId, value) {
+    fetch(buildApiUrl(`/api/messages/${encodeURIComponent(messageId)}/feedback`), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ value })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data || !data.success) return;
+        applyMessageFeedback({ messageId, value });
+      })
+      .catch(() => {});
   }
 
   async function resolveAudioForPlayback(audio, player) {

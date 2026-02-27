@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const ChatRoom = require('../models/ChatRoom');
+const alertService = require('../services/alertService');
 const { Op } = require('sequelize');
 const { MetricModel, MessageModel } = require('../models/sequelize-models');
 
@@ -213,6 +214,32 @@ class DashboardController {
         message: 'Erro ao abrir template lab',
         user: req.session.user
       });
+    }
+  }
+
+  async alertsPending(req, res) {
+    try {
+      const summary = await alertService.getPendingHumanSummary(50);
+      return res.json({
+        success: true,
+        count: summary.count,
+        items: summary.items
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  async alertsRecent(req, res) {
+    try {
+      const since = Number(req.query?.since || 0);
+      const events = alertService.getRecentSince(since, 60);
+      return res.json({
+        success: true,
+        events
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
     }
   }
 }
