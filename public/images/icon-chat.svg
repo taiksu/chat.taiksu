@@ -1,6 +1,6 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <!-- Fundo circular -->
-  <circle cx="256" cy="256" r="256" fill="#369C2A"></circle>
+  <circle cx="256" cy="256" r="256" fill="#369C2A"/>
 
   <!-- Balão de conversa -->
   <path d="
@@ -17,10 +17,10 @@
     V180
     Q140 150 170 150
     Z
-  " fill="#FFFFFF"></path>
+  " fill="#FFFFFF"/>
 
   <!-- Linhas de texto -->
-  <rect x="190" y="185" width="160" height="18" rx="4" fill="#369C2A"></rect>
-  <rect x="190" y="220" width="140" height="18" rx="4" fill="#369C2A"></rect>
-  <rect x="190" y="255" width="110" height="18" rx="4" fill="#369C2A"></rect>
+  <rect x="190" y="185" width="160" height="18" rx="4" fill="#369C2A"/>
+  <rect x="190" y="220" width="140" height="18" rx="4" fill="#369C2A"/>
+  <rect x="190" y="255" width="110" height="18" rx="4" fill="#369C2A"/>
 </svg>
