@@ -106,16 +106,27 @@ class FeedbackInsightsController {
     try {
       const limit = Math.min(30, Math.max(1, Number(req.query.limit || 10)));
       const days = this.parseDays(req.query.days);
+      const draftItems = knowledgeAdmin.getDraft();
+      const suggestedMessageIds = new Set(
+        (draftItems || [])
+          .map((item) => String(item?.sourceMessageId || '').trim())
+          .filter(Boolean)
+      );
       const [topDown, topUp] = await Promise.all([
         this.buildTopFeedback('down', days, limit),
         this.buildTopFeedback('up', days, limit)
       ]);
 
+      const enrich = (items) => (items || []).map((item) => ({
+        ...item,
+        alreadySuggested: suggestedMessageIds.has(String(item?.sampleMessageId || ''))
+      }));
+
       return res.json({
         success: true,
         filters: { limit, days },
-        topDown,
-        topUp
+        topDown: enrich(topDown),
+        topUp: enrich(topUp)
       });
     } catch (error) {
       return res.status(500).json({ error: error.message });

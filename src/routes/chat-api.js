@@ -11,6 +11,7 @@ router.patch('/chamados/:chamadoId/status', requireApiAuth, ChatController.updat
 router.patch('/agents/availability', requireApiAuth, ChatController.updateAgentAvailability.bind(ChatController));
 router.patch('/agents/:agentId/availability', requireApiAuth, ChatController.updateAgentAvailability.bind(ChatController));
 router.post('/rooms/:roomId/finish-human', requireApiAuth, ChatController.finishHumanChat.bind(ChatController));
+router.patch('/rooms/:roomId/status', requireApiAuth, ChatController.updateRoomStatus.bind(ChatController));
 router.delete('/rooms/:roomId/messages', requireApiAuth, ChatController.clearRoomMessages.bind(ChatController));
 router.delete('/rooms/:roomId', requireApiAuth, ChatController.deleteRoom.bind(ChatController));
 router.delete('/rooms/:roomId/participants/:userId', requireApiAuth, ChatController.removeParticipant.bind(ChatController));

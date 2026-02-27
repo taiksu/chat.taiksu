@@ -3,9 +3,11 @@ const path = require('path');
 
 class KnowledgeAdminService {
   constructor() {
-    this.dataDir = path.resolve(process.cwd(), 'src/data');
+    const baseDataDir = String(process.env.DATA_DIR || 'src/data').trim();
+    this.dataDir = path.resolve(process.cwd(), baseDataDir);
     this.knowledgeFile = path.join(this.dataDir, 'knowledge.json');
     this.draftFile = path.join(this.dataDir, 'knowledge.draft.json');
+    this.importHistoryFile = path.join(this.dataDir, 'kb-import-history.json');
     this.versionsDir = path.join(this.dataDir, 'knowledge_versions');
   }
 
@@ -231,6 +233,124 @@ class KnowledgeAdminService {
     this.clearDraft();
 
     return { published: draft.length, versionFile };
+  }
+
+  cloneLiveToDraft() {
+    const live = this.getKnowledge();
+    const cloned = JSON.parse(JSON.stringify(Array.isArray(live) ? live : []));
+    this.writeJsonArray(this.draftFile, cloned);
+    return { draftCount: cloned.length };
+  }
+
+  listVersions(limit = 20) {
+    this.ensureStorage();
+    if (!fs.existsSync(this.versionsDir)) return [];
+    const files = fs.readdirSync(this.versionsDir)
+      .filter((name) => /^knowledge\.\d+\.json$/i.test(name))
+      .map((name) => {
+        const fullPath = path.join(this.versionsDir, name);
+        const stat = fs.statSync(fullPath);
+        return {
+          file: name,
+          fullPath,
+          mtime: stat.mtime.toISOString(),
+          size: stat.size
+        };
+      })
+      .sort((a, b) => new Date(b.mtime) - new Date(a.mtime));
+    return files.slice(0, Math.max(1, Number(limit || 20)));
+  }
+
+  restoreVersion(versionFile) {
+    const safeName = path.basename(String(versionFile || '')).trim();
+    if (!safeName || !/^knowledge\.\d+\.json$/i.test(safeName)) {
+      throw new Error('version_file_invalid');
+    }
+    const target = path.join(this.versionsDir, safeName);
+    if (!fs.existsSync(target)) {
+      throw new Error('version_file_not_found');
+    }
+
+    const backupFile = path.join(this.versionsDir, `knowledge.${Date.now()}.json`);
+    const current = this.getKnowledge();
+    this.writeJsonArray(backupFile, current);
+
+    const restored = this.readJsonArray(target);
+    this.writeJsonArray(this.knowledgeFile, restored);
+    return {
+      restoredCount: restored.length,
+      restoredFrom: safeName,
+      backupFile
+    };
+  }
+
+  getImportHistory(limit = 30) {
+    const history = this.readJsonArray(this.importHistoryFile);
+    const normalized = (history || [])
+      .filter((item) => item && item.ts)
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts));
+    return normalized.slice(0, Math.max(1, Number(limit || 30)));
+  }
+
+  appendImportHistory(entry = {}) {
+    const history = this.readJsonArray(this.importHistoryFile);
+    const next = [
+      {
+        ts: new Date().toISOString(),
+        sourceName: String(entry.sourceName || 'import.md'),
+        imported: Number(entry.imported || 0),
+        mode: String(entry.mode || 'replace'),
+        autoPublished: Boolean(entry.autoPublished),
+        published: Number(entry.published || 0),
+        author: String(entry.author || 'sistema'),
+        draftCount: Number(entry.draftCount || 0),
+        versionFile: entry.versionFile ? String(entry.versionFile) : null
+      },
+      ...(Array.isArray(history) ? history : [])
+    ].slice(0, 200);
+    this.writeJsonArray(this.importHistoryFile, next);
+    return next[0];
+  }
+
+  importFromMarkdown(markdown, options = {}) {
+    const sourceName = String(options.sourceName || 'import.md');
+    const author = String(options.author || 'sistema');
+    const mode = String(options.mode || 'replace').toLowerCase() === 'append' ? 'append' : 'replace';
+    const autoPublish = Boolean(options.autoPublish);
+    const entries = this.parseMarkdownToEntries(markdown, options);
+
+    const currentDraft = this.getDraft();
+    const draft = mode === 'append' ? [...currentDraft, ...entries] : entries;
+    this.writeJsonArray(this.draftFile, draft);
+
+    let published = 0;
+    let versionFile = null;
+    if (autoPublish && draft.length > 0) {
+      const result = this.publishDraft();
+      published = Number(result.published || 0);
+      versionFile = result.versionFile || null;
+    }
+
+    const historyItem = this.appendImportHistory({
+      sourceName,
+      imported: entries.length,
+      mode,
+      autoPublished: autoPublish,
+      published,
+      author,
+      draftCount: autoPublish ? 0 : draft.length,
+      versionFile
+    });
+
+    return {
+      imported: entries.length,
+      mode,
+      draftCount: autoPublish ? 0 : draft.length,
+      autoPublished: autoPublish,
+      published,
+      versionFile,
+      historyItem
+    };
   }
 
   addSuggestionFromMessage(input = {}) {

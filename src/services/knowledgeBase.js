@@ -3,7 +3,8 @@ const path = require('path');
 
 class KnowledgeBaseService {
   constructor() {
-    this.filePath = path.resolve(process.cwd(), 'src/data/knowledge.json');
+    const baseDataDir = String(process.env.DATA_DIR || 'src/data').trim();
+    this.filePath = path.resolve(process.cwd(), baseDataDir, 'knowledge.json');
     this.cache = [];
     this.lastMtimeMs = 0;
   }

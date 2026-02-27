@@ -3,6 +3,7 @@ const SSOController = require('../controllers/SSOController');
 const User = require('../models/User');
 
 const TOKEN_COOKIE_NAME = process.env.SSO_TOKEN_COOKIE_NAME || 'taiksu_sso_token';
+const SSO_ENABLED = String(process.env.ENABLE_SSO ?? 'true').toLowerCase() === 'true';
 
 function parseCookies(req) {
   const header = req.headers.cookie || '';
@@ -24,6 +25,10 @@ function extractBearerToken(req) {
 }
 
 function getRedirectUrl(req) {
+  if (!SSO_ENABLED) {
+    const nextUrl = encodeURIComponent(String(req.originalUrl || '/dashboard'));
+    return `/auth/dev-login?redirect=${nextUrl}`;
+  }
   return process.env.SSO_URL || '/';
 }
 
@@ -37,6 +42,7 @@ function unauthorized(req, res, asApi) {
 
 async function rehydrateSession(req, res, asApi) {
   if (req.session?.user) return true;
+  if (!SSO_ENABLED) return false;
 
   const cookies = parseCookies(req);
   const token =
@@ -115,4 +121,3 @@ module.exports = {
   requireApiAuth,
   TOKEN_COOKIE_NAME
 };
-

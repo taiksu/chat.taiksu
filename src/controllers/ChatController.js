@@ -469,6 +469,70 @@ class ChatController {
     }
   }
 
+  async updateRoomStatus(req, res) {
+    try {
+      const actor = req.session.user;
+      if (!actor) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const { roomId } = req.params;
+      if (!roomId) {
+        return res.status(400).json({ error: 'roomId e obrigatorio' });
+      }
+
+      const room = await ChatRoom.findById(roomId);
+      if (!room) {
+        return res.status(404).json({ error: 'Sala nao encontrada' });
+      }
+
+      if (!this.isRoomAdmin(actor, room) && !this.isSupportAgent(actor)) {
+        return res.status(403).json({ error: 'Sem permissao para atualizar status da sala' });
+      }
+
+      const requestedStatus = req.body?.status;
+      const normalizedStatus = this.normalizeRoomStatus(requestedStatus);
+      if (!normalizedStatus) {
+        return res.status(400).json({
+          error: 'status invalido',
+          allowed: ['aberto', 'fechado']
+        });
+      }
+
+      await ChatRoom.updateStatus(roomId, normalizedStatus);
+
+      if (normalizedStatus === 'fechado') {
+        await ChatRoom.updateChatState(roomId, 'FECHADO');
+        await ChatQueue.cancelWaitingByRoom(roomId);
+        if (room.assigned_agent_id) {
+          await this.dispatchNextWaitingForAgent(String(room.assigned_agent_id));
+          await ChatRoom.setAssignedAgent(roomId, null);
+        }
+      } else {
+        await ChatRoom.updateChatState(roomId, 'NEW');
+        await ChatRoom.setAssignedAgent(roomId, null);
+      }
+
+      this.broadcastRoomEvent(roomId, {
+        type: 'room_status_changed',
+        roomId,
+        status: normalizedStatus,
+        closed: normalizedStatus === 'fechado',
+        changedBy: String(actor.id || '')
+      });
+
+      return res.json({
+        success: true,
+        roomId,
+        status: normalizedStatus,
+        closed: normalizedStatus === 'fechado'
+      });
+    } catch (error) {
+      console.error('Error updating room status:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   async updateAgentAvailability(req, res) {
     try {
       const actor = req.session.user;

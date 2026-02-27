@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="min-h-dvh text-green-700">
+  <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
+  <%- include('../partials/sidebar', { user, active: 'memory' }) %>
+
+  <div>
+    <%- include('../partials/topbar', { user, pageTitle: 'Memoria IA (Debug)' }) %>
+
+    <main class="mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+      <%- include('../components/breadcrumb/index', {
+        link: '/dashboard',
+        paginaAnterior: 'Dashboard',
+        paginaAtual: 'Memoria IA'
+      }) %>
+
+      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <h1 class="text-xl font-bold text-green-800">Memoria por sala (debug)</h1>
+        <p class="mt-1 text-sm text-gray-500">Visualize o contexto em memoria de cada sala e limpe rapidamente quando precisar.</p>
+
+        <div class="mt-4 grid gap-3 sm:grid-cols-3">
+          <label class="text-sm sm:col-span-2">
+            <span class="mb-1 block font-semibold text-gray-600">Buscar por sala/topico/intencao</span>
+            <input
+              id="searchInput"
+              type="text"
+              placeholder="roomId, topico ou intencao"
+              class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400"
+            >
+          </label>
+          <div class="text-sm">
+            <span class="mb-1 block font-semibold text-gray-600">Acoes</span>
+            <div class="flex items-center gap-2">
+              <button id="refreshBtn" type="button" class="rounded-full border border-green-300 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 transition hover:bg-green-100">
+                Atualizar
+              </button>
+              <button id="clearAllBtn" type="button" class="rounded-full border border-red-300 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-100">
+                Limpar tudo
+              </button>
+            </div>
+          </div>
+        </div>
+        <p id="statusText" class="mt-3 text-xs font-semibold text-gray-500">Carregando dados...</p>
+      </section>
+
+      <section class="overflow-hidden rounded-2xl border border-green-100 bg-white shadow-sm">
+        <div class="flex items-center justify-between border-b border-green-100 px-4 py-3">
+          <p class="text-sm font-semibold text-green-800">Salas em memoria</p>
+          <p id="countText" class="text-xs font-semibold text-gray-500">0 itens</p>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="min-w-full text-left text-sm">
+            <thead class="bg-green-50 text-xs uppercase tracking-wide text-green-800">
+              <tr>
+                <th class="px-3 py-2">Sala</th>
+                <th class="px-3 py-2">Intencao</th>
+                <th class="px-3 py-2">Topico</th>
+                <th class="px-3 py-2">Ultima atualizacao</th>
+                <th class="px-3 py-2">Acoes</th>
+              </tr>
+            </thead>
+            <tbody id="rows" class="divide-y divide-green-50"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <%- include('../partials/sidebar-script') %>
+
+  <script>
+    const searchInputEl = document.getElementById('searchInput');
+    const refreshBtnEl = document.getElementById('refreshBtn');
+    const clearAllBtnEl = document.getElementById('clearAllBtn');
+    const statusTextEl = document.getElementById('statusText');
+    const countTextEl = document.getElementById('countText');
+    const rowsEl = document.getElementById('rows');
+
+    let allItems = [];
+    let ttlMinutes = 30;
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function setStatus(text, type) {
+      const palette = {
+        info: 'text-gray-600',
+        success: 'text-emerald-700',
+        error: 'text-red-700'
+      };
+      statusTextEl.textContent = text;
+      statusTextEl.className = `mt-3 text-xs font-semibold ${palette[type] || palette.info}`;
+    }
+
+    function asDate(value) {
+      if (!value) return '-';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '-';
+      return date.toLocaleString('pt-BR');
+    }
+
+    function asAge(ageMs) {
+      const seconds = Math.max(0, Math.floor(Number(ageMs || 0) / 1000));
+      if (seconds < 60) return `${seconds}s`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}min`;
+      const hours = Math.floor(minutes / 60);
+      return `${hours}h`;
+    }
+
+    function renderRows() {
+      const query = String(searchInputEl.value || '').trim().toLowerCase();
+      const filtered = allItems.filter((item) => {
+        if (!query) return true;
+        const haystack = [
+          item.roomId,
+          item.topic,
+          item.intent,
+          item.summary,
+          item.lastUserMessage,
+          item.lastAiMessage
+        ].join(' ').toLowerCase();
+        return haystack.includes(query);
+      });
+
+      countTextEl.textContent = `${filtered.length} item(ns) | TTL: ${ttlMinutes} min`;
+
+      if (!filtered.length) {
+        rowsEl.innerHTML = `
+          <tr>
+            <td colspan="5" class="px-3 py-8 text-center text-sm text-gray-500">
+              Nenhuma memoria ativa para os filtros atuais.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      rowsEl.innerHTML = filtered.map((item) => `
+        <tr class="align-top">
+          <td class="px-3 py-3">
+            <p class="font-semibold text-slate-800">${escapeHtml(item.roomId)}</p>
+            <p class="mt-1 text-xs text-gray-500">Id da sala</p>
+          </td>
+          <td class="px-3 py-3">
+            <span class="inline-flex rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700">
+              ${escapeHtml(item.intent || 'geral')}
+            </span>
+            <p class="mt-2 text-xs text-gray-600">${escapeHtml((item.summary || '').slice(0, 120))}</p>
+          </td>
+          <td class="px-3 py-3">
+            <p class="font-medium text-slate-700">${escapeHtml(item.topic || '-')}</p>
+            <p class="mt-2 text-xs text-gray-500"><strong>Usuario:</strong> ${escapeHtml((item.lastUserMessage || '').slice(0, 90) || '-')}</p>
+            <p class="mt-1 text-xs text-gray-500"><strong>IA:</strong> ${escapeHtml((item.lastAiMessage || '').slice(0, 90) || '-')}</p>
+          </td>
+          <td class="px-3 py-3">
+            <p class="text-slate-700">${escapeHtml(asDate(item.updatedAt))}</p>
+            <p class="mt-1 text-xs text-gray-500">Ha ${escapeHtml(asAge(item.ageMs))}</p>
+          </td>
+          <td class="px-3 py-3">
+            <button
+              type="button"
+              class="rounded-full border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100"
+              data-action="clear-room"
+              data-room-id="${escapeHtml(item.roomId)}"
+            >
+              Limpar sala
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function fetchJson(url, init) {
+      const response = await fetch(url, init);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || `Falha HTTP ${response.status}`);
+      return data;
+    }
+
+    async function loadData() {
+      setStatus('Atualizando memoria em cache...', 'info');
+      try {
+        const result = await fetchJson('/dashboard/memory-debug/data');
+        allItems = Array.isArray(result.items) ? result.items : [];
+        ttlMinutes = Number(result.ttlMinutes || 30);
+        renderRows();
+        setStatus('Memoria carregada com sucesso', 'success');
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function clearRoom(roomId) {
+      const id = String(roomId || '').trim();
+      if (!id) return;
+      setStatus(`Limpando memoria da sala ${id}...`, 'info');
+      try {
+        await fetchJson(`/dashboard/memory-debug/clear-room/${encodeURIComponent(id)}`, { method: 'POST' });
+        allItems = allItems.filter((item) => String(item.roomId) !== id);
+        renderRows();
+        setStatus(`Memoria da sala ${id} removida`, 'success');
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    async function clearAll() {
+      setStatus('Limpando toda a memoria de salas...', 'info');
+      try {
+        const result = await fetchJson('/dashboard/memory-debug/clear-all', { method: 'POST' });
+        allItems = [];
+        renderRows();
+        setStatus(`Memoria limpa (${Number(result.removed || 0)} sala(s) removida(s))`, 'success');
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    }
+
+    rowsEl.addEventListener('click', (event) => {
+      const btn = event.target && event.target.closest('button[data-action="clear-room"]');
+      if (!btn) return;
+      clearRoom(btn.getAttribute('data-room-id'));
+    });
+
+    refreshBtnEl.addEventListener('click', loadData);
+    clearAllBtnEl.addEventListener('click', clearAll);
+    searchInputEl.addEventListener('input', renderRows);
+    loadData();
+  </script>
+</body>
+</html>

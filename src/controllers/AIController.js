@@ -1,3 +1,5 @@
+const settingsService = require('../services/settingsService');
+
 class AIController {
   logAiMetric(event, data = {}) {
     const payload = {
@@ -21,12 +23,53 @@ class AIController {
     return String(process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
   }
 
+  getAiSettings(overrides = {}) {
+    const settings = settingsService.load();
+    const personality = String(
+      overrides.aiPersonalityPrompt !== undefined
+        ? overrides.aiPersonalityPrompt
+        : (settings.aiPersonalityPrompt || '')
+    ).trim();
+    const nameRaw = overrides.aiAgentName !== undefined
+      ? overrides.aiAgentName
+      : (settings.aiAgentName || process.env.AI_USER_NAME || 'Marina');
+    const temperatureRaw = overrides.aiTemperature !== undefined ? overrides.aiTemperature : settings.aiTemperature;
+    const maxOutputTokensRaw = overrides.aiMaxOutputTokens !== undefined ? overrides.aiMaxOutputTokens : settings.aiMaxOutputTokens;
+    const maxReplyCharsRaw = overrides.aiMaxReplyChars !== undefined ? overrides.aiMaxReplyChars : settings.aiMaxReplyChars;
+    return {
+      agentName: String(nameRaw || 'Marina').trim() || 'Marina',
+      personalityPrompt: personality,
+      temperature: Number(temperatureRaw),
+      maxOutputTokens: Number(maxOutputTokensRaw),
+      maxReplyChars: Number(maxReplyCharsRaw)
+    };
+  }
+
   getOllamaBaseUrl() {
     return String(process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434').trim().replace(/\/+$/, '');
   }
 
   getOllamaModel() {
     return String(process.env.OLLAMA_MODEL || 'gemma3:1b').trim();
+  }
+
+  getOllamaApiToken() {
+    return String(process.env.OLLAMA_API_TOKEN || '').trim();
+  }
+
+  buildOllamaHeaders() {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = this.getOllamaApiToken();
+    if (!token) return headers;
+
+    const mode = String(process.env.OLLAMA_AUTH_MODE || 'bearer').trim().toLowerCase();
+    if (mode === 'x-api-key') {
+      headers['x-api-key'] = token;
+      return headers;
+    }
+
+    headers.Authorization = `Bearer ${token}`;
+    return headers;
   }
 
   getProviderOrder() {
@@ -49,32 +92,60 @@ class AIController {
     return sent && sent === required;
   }
 
-  buildSystemInstruction() {
+  buildSystemInstruction(overrides = {}) {
+    const ai = this.getAiSettings(overrides);
     return [
-      'Voce e a Assistente Marina da Taiksu IA para primeiro atendimento.',
+      `Voce e a Assistente ${ai.agentName} da Taiksu IA para primeiro atendimento.`,
       'Responda sempre em portugues do Brasil.',
       'Seja objetiva, clara e util.',
       'Cumprimente apenas na primeira interacao da conversa; depois responda direto ao ponto.',
+      'Nao repita saudacao, nome do usuario ou frase de abertura em toda resposta.',
+      'Nao repita o mesmo texto da resposta anterior; se houver repeticao, reformule com palavras diferentes.',
       'Nao invente nem altere o nome do usuario; se usar nome, use exatamente o nome informado no prompt.',
       'Quando houver base de conhecimento enviada, use essa base como fonte principal.',
       'Se a resposta nao estiver na base enviada, diga que precisa de mais informacoes ou ofereca humano.',
-      'Nao inclua link de abrir chamado quando ja houver base suficiente para responder.',
-      'Se o usuario pedir tutorial e nao houver base suficiente, indique abrir chamado no link oficial recebido no prompt.',
-      'Quando apropriado, ofereca opcao de falar com atendente humano.',
+      'Nunca coloque links no texto da resposta.',
+      'Nunca use placeholders como [](), [link], ou URL incompleta.',
+      'Quando precisar escalonar, diga em texto curto que vai encaminhar para atendente humano no proprio chat.',
+      'Nao inclua link de abrir chamado.',
+      'Se o usuario pedir tutorial e nao houver base suficiente, encaminhe para atendente humano.',
+      'Ofereca opcao de falar com atendente humano apenas quando houver bloqueio real ou pedido explicito do usuario.',
       'Nao invente dados; quando faltar contexto, peca informacao.',
-      'Mantenha no maximo 6 linhas e ate 650 caracteres.'
+      'Evite encerrar toda resposta com a mesma pergunta padrao.',
+      'Mantenha no maximo 5 linhas e ate 520 caracteres.'
+      ,
+      ai.personalityPrompt ? `Personalidade configurada: ${ai.personalityPrompt}` : ''
     ].join(' ');
   }
 
-  getMaxReplyChars() {
-    const value = Number(process.env.AI_MAX_REPLY_CHARS || 650);
-    return Number.isFinite(value) && value > 80 ? value : 650;
+  getMaxReplyChars(overrides = {}) {
+    const settingsValue = Number(this.getAiSettings(overrides).maxReplyChars);
+    if (Number.isFinite(settingsValue) && settingsValue >= 120) return settingsValue;
+    const envValue = Number(process.env.AI_MAX_REPLY_CHARS || 520);
+    return Number.isFinite(envValue) && envValue >= 120 ? envValue : 520;
   }
 
-  sanitizeReplyText(text) {
+  getTemperature(defaultValue = 0.35, overrides = {}) {
+    const n = Number(this.getAiSettings(overrides).temperature);
+    if (!Number.isFinite(n)) return defaultValue;
+    return Math.max(0, Math.min(2, n));
+  }
+
+  getMaxOutputTokens(defaultValue = 360, overrides = {}) {
+    const n = Number(this.getAiSettings(overrides).maxOutputTokens);
+    if (!Number.isFinite(n)) return defaultValue;
+    return Math.max(64, Math.min(2048, Math.floor(n)));
+  }
+
+  sanitizeReplyText(text, overrides = {}) {
     let safe = String(text || '').replace(/\s+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
     if (!safe) return '';
-    const maxChars = this.getMaxReplyChars();
+    safe = safe
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/gi, '$1')
+      .replace(/https?:\/\/\S+/gi, '')
+      .replace(/\[\]\(\)/g, '')
+      .trim();
+    const maxChars = this.getMaxReplyChars(overrides);
     if (safe.length > maxChars) {
       safe = `${safe.slice(0, maxChars - 3).trim()}...`;
     }
@@ -87,15 +158,16 @@ class AIController {
     const chatState = String(payload.chatState || 'IA');
     const userName = String(payload?.user?.name || 'Usuario');
     const message = String(payload.message || '');
-    const chamadoCreateUrl = String(payload?.options?.chamadoCreateUrl || 'https://ajuda.taiksu.com.br/chamados/criar/');
     const context = Array.isArray(payload.context) ? payload.context.slice(-10) : [];
     const contextDocs = Array.isArray(payload.contextDocs) ? payload.contextDocs.slice(0, 5) : [];
+    const memory = payload && typeof payload.memory === 'object' && payload.memory ? payload.memory : null;
 
     const history = context.map((item, idx) => {
       const role = String(item.role || 'user');
       const content = String(item.content || '');
       return `${idx + 1}. [${role}] ${content}`;
     }).join('\n');
+    const hadAssistantContext = context.some((item) => String(item?.role || '').toLowerCase() === 'assistant');
 
     const docsBlock = contextDocs.length
       ? contextDocs.map((doc, idx) => {
@@ -113,8 +185,11 @@ class AIController {
       `Estado atual: ${chatState}`,
       `Usuario: ${userName}`,
       `Nome exato do usuario: ${userName}`,
+      `Ja houve resposta da assistente neste chat: ${hadAssistantContext ? 'sim' : 'nao'}`,
+      memory
+        ? `Memoria curta da conversa:\n- topico: ${String(memory.topic || 'n/a')}\n- intencao: ${String(memory.intent || 'geral')}\n- resumo: ${String(memory.summary || 'n/a')}\n- ultima msg usuario: ${String(memory.lastUserMessage || 'n/a')}\n- ultima msg assistente: ${String(memory.lastAiMessage || 'n/a')}`
+        : 'Sem memoria curta registrada.',
       `Mensagem atual: ${message}`,
-      `Link oficial para abrir chamado: ${chamadoCreateUrl}`,
       docsBlock ? `Base de conhecimento recuperada:\n${docsBlock}` : 'Sem base de conhecimento recuperada.',
       history ? `Contexto recente:\n${history}` : 'Sem contexto previo.'
     ].join('\n\n');
@@ -156,7 +231,7 @@ class AIController {
     };
   }
 
-  async callGemini({ userPrompt, systemInstruction }) {
+  async callGemini({ userPrompt, systemInstruction, overrides = {} }) {
     const apiKey = this.getGeminiApiKey();
     if (!apiKey) throw new Error('missing_gemini_api_key');
 
@@ -170,8 +245,8 @@ class AIController {
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
           generationConfig: {
-            temperature: 0.35,
-            maxOutputTokens: 360
+            temperature: this.getTemperature(0.35, overrides),
+            maxOutputTokens: this.getMaxOutputTokens(360, overrides)
           }
         })
       }
@@ -182,7 +257,7 @@ class AIController {
       throw new Error(`gemini_http_${response.status}:${data?.error?.message || 'unknown'}`);
     }
 
-    const reply = this.sanitizeReplyText(this.extractTextFromGeminiResponse(data));
+    const reply = this.sanitizeReplyText(this.extractTextFromGeminiResponse(data), overrides);
     if (!reply) throw new Error('gemini_empty_reply');
 
     return {
@@ -193,21 +268,21 @@ class AIController {
     };
   }
 
-  async callOllama({ userPrompt, systemInstruction }) {
+  async callOllama({ userPrompt, systemInstruction, overrides = {} }) {
     const baseUrl = this.getOllamaBaseUrl();
     const model = this.getOllamaModel();
     const prompt = `${systemInstruction}\n\n${userPrompt}`;
 
     const response = await fetch(`${baseUrl}/api/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.buildOllamaHeaders(),
       body: JSON.stringify({
         model,
         prompt,
         stream: false,
         options: {
-          temperature: Number(process.env.OLLAMA_TEMPERATURE || 0.2),
-          num_predict: Number(process.env.OLLAMA_MAX_TOKENS || 160),
+          temperature: this.getTemperature(Number(process.env.OLLAMA_TEMPERATURE || 0.2), overrides),
+          num_predict: this.getMaxOutputTokens(Number(process.env.OLLAMA_MAX_TOKENS || 160), overrides),
           top_p: Number(process.env.OLLAMA_TOP_P || 0.9),
           repeat_penalty: Number(process.env.OLLAMA_REPEAT_PENALTY || 1.1)
         }
@@ -219,7 +294,7 @@ class AIController {
       throw new Error(`ollama_http_${response.status}:${data?.error || 'unknown'}`);
     }
 
-    const reply = this.sanitizeReplyText(this.extractTextFromOllama(data));
+    const reply = this.sanitizeReplyText(this.extractTextFromOllama(data), overrides);
     if (!reply) throw new Error('ollama_empty_reply');
 
     return {
@@ -230,15 +305,15 @@ class AIController {
     };
   }
 
-  async tryProviders({ providers, userPrompt, systemInstruction, roomId, chamadoId, chatState }) {
+  async tryProviders({ providers, userPrompt, systemInstruction, roomId, chamadoId, chatState, overrides = {} }) {
     const errors = [];
 
     for (const provider of providers) {
       const startedAt = Date.now();
       try {
         const result = provider === 'ollama'
-          ? await this.callOllama({ userPrompt, systemInstruction })
-          : await this.callGemini({ userPrompt, systemInstruction });
+          ? await this.callOllama({ userPrompt, systemInstruction, overrides })
+          : await this.callGemini({ userPrompt, systemInstruction, overrides });
 
         this.logAiMetric('provider_success', {
           provider,
@@ -290,7 +365,8 @@ class AIController {
         systemInstruction,
         roomId,
         chamadoId,
-        chatState
+        chatState,
+        overrides: {}
       });
 
       const latencyMs = Date.now() - startedAt;
@@ -321,6 +397,43 @@ class AIController {
       });
       return res.status(502).json({ error: error.message || 'Falha nos provedores de IA' });
     }
+  }
+
+  async previewReply(payload = {}, overrides = {}) {
+    const providers = this.getProviderOrder();
+    const previewPayload = {
+      roomId: 'preview-room',
+      chamadoId: null,
+      chatState: 'IA',
+      message: String(payload.message || '').trim() || 'Olá, preciso de ajuda.',
+      user: {
+        id: 'preview-user',
+        name: String(payload.userName || 'Usuario Teste'),
+        role: 'user'
+      },
+      context: Array.isArray(payload.context) ? payload.context : [],
+      contextDocs: Array.isArray(payload.contextDocs) ? payload.contextDocs : [],
+      options: { offerHumanHandoff: true }
+    };
+    const userPrompt = this.buildUserPrompt(previewPayload);
+    const systemInstruction = this.buildSystemInstruction(overrides);
+    const startedAt = Date.now();
+    const result = await this.tryProviders({
+      providers,
+      userPrompt,
+      systemInstruction,
+      roomId: previewPayload.roomId,
+      chamadoId: '',
+      chatState: 'IA',
+      overrides
+    });
+    return {
+      provider: result.provider,
+      model: result.model,
+      reply: result.reply,
+      usage: result.usage || null,
+      latencyMs: Date.now() - startedAt
+    };
   }
 }
 

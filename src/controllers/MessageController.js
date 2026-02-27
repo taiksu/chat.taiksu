@@ -73,6 +73,7 @@ class MessageController {
   constructor() {
     this.bootstrapLocks = new Set();
     this.pendingDialog = new Map();
+    this.roomMemory = new Map();
   }
 
   logAiMetric(event, data = {}) {
@@ -95,15 +96,35 @@ class MessageController {
     return enabledBySettings && Boolean(this.getAiApiUrl());
   }
 
+  isAiAllowedForUser(user) {
+    if (!this.isAiEnabled()) return false;
+    const settings = settingsService.load();
+    const betaEnabled = Boolean(settings.aiBetaModeEnabled);
+    if (!betaEnabled) return true;
+
+    const allowlist = Array.isArray(settings.aiBetaAllowlist)
+      ? settings.aiBetaAllowlist.map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean)
+      : [];
+    if (!allowlist.length) return false;
+
+    const userId = String(user?.id || '').trim().toLowerCase();
+    const email = String(user?.email || '').trim().toLowerCase();
+    return Boolean((userId && allowlist.includes(userId)) || (email && allowlist.includes(email)));
+  }
+
   getAiUserId() {
     return String(process.env.AI_USER_ID || 'ai-assistant');
   }
 
   getAiUserName() {
-    return String(process.env.AI_USER_NAME || 'Marina');
+    const settings = settingsService.load();
+    return String(settings.aiAgentName || process.env.AI_USER_NAME || 'Marina').trim() || 'Marina';
   }
 
   getAiUserAvatar() {
+    const settings = settingsService.load();
+    const configured = String(settings.aiAgentAvatar || '').trim();
+    if (configured) return configured;
     const envAvatar = String(process.env.AI_USER_AVATAR || '').trim();
     if (envAvatar) return envAvatar;
     return '/images/system.png';
@@ -126,10 +147,11 @@ class MessageController {
   }
 
   getWelcomeMessage(isChamadoRoom) {
+    const agentName = this.getAiUserName();
     if (isChamadoRoom) {
-      return 'Olá! Eu sou a Assistente Marina da Taiksu IA. Este chat já está vinculado ao seu chamado. Posso te ajudar por aqui agora.';
+      return `Olá! Eu sou a Assistente ${agentName} da Taiksu IA. Vamos resolver por aqui no chat. Se precisar, eu te encaminho para um atendente humano.`;
     }
-    return 'Olá! Eu sou a Assistente Marina da Taiksu IA. Posso te ajudar agora ou, se preferir, te encaminho para um atendente humano.';
+    return `Olá! Eu sou a Assistente ${agentName} da Taiksu IA. Posso te ajudar agora e, se precisar, te encaminho para um atendente humano.`;
   }
 
   isHumanRequest(text) {
@@ -166,6 +188,158 @@ class MessageController {
     if (normalized.length < 8) return false;
     if (this.isYesAnswer(normalized) || this.isNoAnswer(normalized)) return false;
     return true;
+  }
+
+  getMemoryTtlMs() {
+    const minutes = Number(process.env.AI_MEMORY_TTL_MINUTES || 30);
+    const safeMinutes = Number.isFinite(minutes) && minutes > 0 ? minutes : 30;
+    return safeMinutes * 60 * 1000;
+  }
+
+  getRoomMemory(roomId) {
+    if (!roomId) return null;
+    const key = String(roomId);
+    const memory = this.roomMemory.get(key);
+    if (!memory) return null;
+    if ((Date.now() - Number(memory.updatedAt || 0)) > this.getMemoryTtlMs()) {
+      this.roomMemory.delete(key);
+      return null;
+    }
+    return memory;
+  }
+
+  setRoomMemory(roomId, patch = {}) {
+    if (!roomId) return null;
+    const key = String(roomId);
+    const current = this.getRoomMemory(key) || {
+      roomId: key,
+      topic: '',
+      intent: 'geral',
+      summary: '',
+      lastUserMessage: '',
+      lastAiMessage: '',
+      updatedAt: Date.now()
+    };
+    const next = {
+      ...current,
+      ...patch,
+      updatedAt: Date.now()
+    };
+    this.roomMemory.set(key, next);
+    return next;
+  }
+
+  inferMemoryIntent(text) {
+    const normalized = String(text || '').toLowerCase();
+    if (!normalized) return 'geral';
+    if (this.isHumanRequest(normalized)) return 'falar_humano';
+    if (this.isTutorialRequest(normalized)) return 'tutorial';
+    if (this.isOpenChamadoIntent(normalized)) return 'chamado';
+    if (/(auditoria|modo estrito|financeiro|dre)/i.test(normalized)) return 'auditoria';
+    if (/(erro|bug|falha|problema|nao funciona|não funciona)/i.test(normalized)) return 'suporte_tecnico';
+    return 'geral';
+  }
+
+  extractTopicFromText(text) {
+    const cleaned = String(text || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!cleaned) return '';
+    if (cleaned.length <= 6) return '';
+    if (this.isYesAnswer(cleaned) || this.isNoAnswer(cleaned)) return '';
+    return cleaned.slice(0, 140);
+  }
+
+  updateMemoryFromUserMessage(roomId, text) {
+    const content = String(text || '').trim();
+    if (!content) return;
+    const current = this.getRoomMemory(roomId) || {};
+    const topic = this.extractTopicFromText(content) || current.topic || '';
+    const intent = this.inferMemoryIntent(content) || current.intent || 'geral';
+    const summary = topic
+      ? `Topico atual: ${topic}. Intencao: ${intent}.`
+      : (current.summary || `Intencao: ${intent}.`);
+    this.setRoomMemory(roomId, {
+      topic,
+      intent,
+      summary,
+      lastUserMessage: content.slice(0, 260)
+    });
+  }
+
+  updateMemoryFromAiMessage(roomId, text) {
+    const content = String(text || '').trim();
+    if (!content) return;
+    const current = this.getRoomMemory(roomId) || {};
+    this.setRoomMemory(roomId, {
+      ...current,
+      lastAiMessage: content.slice(0, 260)
+    });
+  }
+
+  buildMemoryPayload(roomId) {
+    const memory = this.getRoomMemory(roomId);
+    if (!memory) return null;
+    return {
+      topic: String(memory.topic || ''),
+      intent: String(memory.intent || 'geral'),
+      summary: String(memory.summary || ''),
+      lastUserMessage: String(memory.lastUserMessage || ''),
+      lastAiMessage: String(memory.lastAiMessage || '')
+    };
+  }
+
+  getMemoryDebugList() {
+    const ttlMs = this.getMemoryTtlMs();
+    const now = Date.now();
+    const rows = [];
+    this.roomMemory.forEach((memory, roomId) => {
+      const updatedAtMs = Number(memory?.updatedAt || 0);
+      const ageMs = now - updatedAtMs;
+      if (!updatedAtMs || ageMs > ttlMs) return;
+      rows.push({
+        roomId: String(roomId),
+        topic: String(memory?.topic || ''),
+        intent: String(memory?.intent || 'geral'),
+        summary: String(memory?.summary || ''),
+        lastUserMessage: String(memory?.lastUserMessage || ''),
+        lastAiMessage: String(memory?.lastAiMessage || ''),
+        updatedAt: new Date(updatedAtMs).toISOString(),
+        ageMs
+      });
+    });
+    return rows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  }
+
+  clearRoomMemory(roomId) {
+    if (!roomId) return false;
+    return this.roomMemory.delete(String(roomId));
+  }
+
+  clearAllMemory() {
+    const count = this.roomMemory.size;
+    this.roomMemory.clear();
+    return count;
+  }
+
+  expandShortUserMessage(content, roomId) {
+    const text = String(content || '').trim();
+    if (!text) return '';
+    const memory = this.getRoomMemory(roomId);
+    if (!memory) return text;
+
+    const short = text.length <= 18;
+    const isContextual = this.isYesAnswer(text)
+      || this.isNoAnswer(text)
+      || /^(entendi|ok|certo|isso|e ai|e agora|como assim|sobre isso|sobre ele)\??$/i.test(text)
+      || short;
+    if (!isContextual) return text;
+
+    const topic = String(memory.topic || '').trim();
+    const intent = String(memory.intent || 'geral');
+    const lastUser = String(memory.lastUserMessage || '').trim();
+    if (!topic && !lastUser) return text;
+    return `Contexto da conversa: topico="${topic || lastUser}", intencao="${intent}". Mensagem atual do usuario: ${text}`;
   }
 
   getPendingDialog(roomId) {
@@ -221,9 +395,20 @@ class MessageController {
       .filter(Boolean);
   }
 
+  stripLinksFromText(text) {
+    return String(text || '')
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/gi, '$1')
+      .replace(/https?:\/\/\S+/gi, '')
+      .replace(/\[\]\(\)/g, '')
+      .replace(/\s+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
   sanitizeAiReply(text) {
     let safe = String(text || '').trim();
     if (!safe) return '';
+    safe = this.stripLinksFromText(safe);
     safe = safe.replace(/\s+\n/g, '\n').replace(/\n{3,}/g, '\n\n');
 
     const lower = safe.toLowerCase();
@@ -233,6 +418,88 @@ class MessageController {
       safe = `${safe}\n\nSe preferir, posso te encaminhar para um atendente humano agora.`;
     }
     if (!/[.!?]$/.test(safe)) safe = `${safe}.`;
+    return safe;
+  }
+
+  normalizeCompareText(text) {
+    return String(text || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  stripLeadingGreeting(replyText) {
+    let safe = String(replyText || '').trim();
+    if (!safe) return safe;
+    safe = safe
+      .replace(/^ol[aá][,!.\s-]+/i, '')
+      .replace(/^(oi|ola)[,!.\s-]+/i, '')
+      .replace(/^(bom dia|boa tarde|boa noite)[,!.\s-]+/i, '')
+      .trim();
+    return safe;
+  }
+
+  isPurposeQuestion(text) {
+    const normalized = this.normalizeCompareText(text);
+    if (!normalized) return false;
+    return /(qual objetivo|pra que serve|para que serve|serve pra que|qual a finalidade|objetivo dessa funcao|objetivo dessa funcao)/i.test(normalized);
+  }
+
+  isVerySimilarReply(currentReply, previousReply) {
+    const a = this.normalizeCompareText(currentReply);
+    const b = this.normalizeCompareText(previousReply);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    if (a.length < 40 || b.length < 40) return false;
+    return a.includes(b) || b.includes(a);
+  }
+
+  buildContextAwareFallback({ userMessage, roomId }) {
+    const message = String(userMessage || '').trim();
+    const memory = this.getRoomMemory(roomId);
+    const topic = String(memory?.topic || '').toLowerCase();
+    if (!this.isPurposeQuestion(message)) return '';
+
+    if (/(modo estrito|auditoria)/i.test(topic) || /(modo estrito|auditoria)/i.test(message)) {
+      return 'Em resumo, o Modo Estrito existe para garantir confianca nos numeros: ele usa somente dados auditados nos calculos e relatorios. Assim voce evita distorcoes por registros ainda nao validados.';
+    }
+
+    return 'O objetivo dessa funcao e reduzir erro e dar previsibilidade no processo. Se voce quiser, eu explico com um exemplo pratico do seu caso.';
+  }
+
+  adaptAiReplyForConversation({ replyText, userMessage, roomId }) {
+    let safe = this.sanitizeAiReply(replyText);
+    const memory = this.getRoomMemory(roomId);
+    const hasAssistantHistory = Boolean(String(memory?.lastAiMessage || '').trim());
+
+    if (hasAssistantHistory) {
+      safe = this.stripLeadingGreeting(safe);
+    }
+
+    if (!safe) {
+      safe = 'Recebi sua mensagem. Posso te ajudar com isso agora.';
+    }
+
+    const fallback = this.buildContextAwareFallback({ userMessage, roomId });
+    if (fallback) {
+      safe = fallback;
+    } else if (this.isVerySimilarReply(safe, memory?.lastAiMessage || '')) {
+      const topic = String(memory?.topic || '').trim();
+      if (topic) {
+        safe = `Entendi. Sobre "${topic}", resumindo em uma frase: ${safe}`;
+      } else {
+        safe = `Entendi. Reformulando de forma direta: ${safe}`;
+      }
+    }
+
+    safe = this.sanitizeAiReply(safe);
+    if (!safe) {
+      safe = 'Recebi sua mensagem. Posso te ajudar com isso agora.';
+    }
     return safe;
   }
 
@@ -291,31 +558,12 @@ class MessageController {
     return String(room?.type || '').toLowerCase() === 'support_ticket';
   }
 
-  buildChamadoActions({ roomId, isChamadoRoom }) {
-    if (isChamadoRoom) {
-      return [
-        {
-          id: 'view_current_room',
-          label: 'Ver chamado atual',
-          type: 'open_url',
-          url: this.getChatRoomUrl(roomId),
-          target: '_blank'
-        }
-      ];
-    }
-    return [
-      {
-        id: 'open_chamado',
-        label: 'Abrir chamado',
-        type: 'open_url',
-        url: this.getChamadoCreateUrl(),
-        target: '_blank'
-      }
-    ];
+  buildChamadoActions() {
+    return [];
   }
 
   shouldRunAiFlow({ room, req, messageType, content }) {
-    if (!this.isAiEnabled()) return false;
+    if (!this.isAiAllowedForUser(req.session?.user)) return false;
     if (String(messageType || 'text').toLowerCase() !== 'text') return false;
     if (!String(content || '').trim()) return false;
     if (!room) return false;
@@ -336,7 +584,7 @@ class MessageController {
   }
 
   shouldNotifyUnsupportedMedia({ room, req, messageType }) {
-    if (!this.isAiEnabled()) return false;
+    if (!this.isAiAllowedForUser(req.session?.user)) return false;
     const normalizedType = String(messageType || 'text').toLowerCase();
     if (!['image', 'audio', 'video', 'document', 'file'].includes(normalizedType)) return false;
     if (!room) return false;
@@ -353,10 +601,16 @@ class MessageController {
     const aiEmail = String(process.env.AI_USER_EMAIL || `${this.getAiUserId()}@taiksu.local`);
     let aiUser = await User.findByEmail(aiEmail);
     if (aiUser) {
+      const desiredName = this.getAiUserName();
       const currentAvatar = String(aiUser.avatar || '').trim();
       const desiredAvatar = this.getAiUserAvatar();
-      if (desiredAvatar && currentAvatar !== desiredAvatar) {
-        await User.updateAvatar(aiUser.id, desiredAvatar);
+      const shouldUpdateName = String(aiUser.name || '').trim() !== desiredName;
+      const shouldUpdateAvatar = desiredAvatar && currentAvatar !== desiredAvatar;
+      if (shouldUpdateName || shouldUpdateAvatar) {
+        await User.update(aiUser.id, {
+          name: desiredName,
+          avatar: desiredAvatar || aiUser.avatar
+        });
         aiUser = await User.findByEmail(aiEmail);
       }
       return aiUser;
@@ -393,10 +647,10 @@ class MessageController {
         role: String(req.session.user?.role || 'user')
       },
       context,
+      memory: this.buildMemoryPayload(roomId),
       contextDocs,
       options: {
-        offerHumanHandoff: true,
-        chamadoCreateUrl: this.getChamadoCreateUrl()
+        offerHumanHandoff: true
       }
     };
 
@@ -452,7 +706,7 @@ class MessageController {
     if (/(atendente|humano)/i.test(safe)) return safe;
     const shouldOffer = /(nao encontrei|não encontrei|nao localizei|não localizei|nao sei|não sei|preciso de mais|sem base|sem contexto|tutorial)/i.test(safe);
     if (!shouldOffer) return safe;
-    return `${safe}\n\nSe preferir, posso te encaminhar para um atendente ou você pode abrir chamado em: ${this.getChamadoCreateUrl()}`;
+    return `${safe}\n\nSe quiser, eu te encaminho para um atendente humano aqui no chat.`;
   }
 
   async publishSseMessage(roomId, payload) {
@@ -461,6 +715,30 @@ class MessageController {
       client.write(`data: ${JSON.stringify({
         type: 'new_message',
         message: payload
+      })}\n\n`);
+    });
+  }
+
+  publishAiProcessing(roomId, active) {
+    const clients = this.getRoomClients(roomId);
+    const aiUserId = this.getAiUserId();
+    const aiUserName = this.getAiUserName();
+    const isTyping = Boolean(active);
+    clients.forEach((client) => {
+      client.write(`data: ${JSON.stringify({
+        type: 'ai_processing',
+        roomId,
+        active: isTyping,
+        aiUserId,
+        aiUserName
+      })}\n\n`);
+      client.write(`data: ${JSON.stringify({
+        type: 'typing_status',
+        roomId,
+        userId: aiUserId,
+        userName: aiUserName,
+        isTyping,
+        activity: isTyping ? 'typing' : 'idle'
       })}\n\n`);
     });
   }
@@ -508,11 +786,13 @@ class MessageController {
       feedback_by: null,
       actions: aiMessage.actions || normalizedActions
     });
+    this.updateMemoryFromAiMessage(roomId, content);
   }
 
   async processAiFirstContactFlow({ room, roomId, chamadoId, content, req }) {
     const roomState = this.normalizeChatState(room?.chat_state);
     const trimmedContent = String(content || '').trim();
+    const aiInputContent = this.expandShortUserMessage(trimmedContent, roomId);
     const askedHuman = this.isHumanRequest(content);
     const askedTutorial = this.isTutorialRequest(content);
     const askedOpenChamado = this.isOpenChamadoIntent(content);
@@ -531,6 +811,7 @@ class MessageController {
         const topic = this.getLastKnownTopic(trimmedContent, roomId) || 'o assunto anterior';
         let aiReply = '';
         try {
+          this.publishAiProcessing(roomId, true);
           const aiResult = await this.callAiApi({
             roomId,
             chamadoId,
@@ -539,7 +820,10 @@ class MessageController {
             roomState: 'IA'
           });
           aiReply = String(aiResult?.reply || '').trim();
-        } catch (_err) {}
+        } catch (_err) {
+        } finally {
+          this.publishAiProcessing(roomId, false);
+        }
         if (!aiReply) {
           aiReply = `Perfeito. Vou seguir com mais detalhes sobre ${topic}.`;
         }
@@ -565,11 +849,22 @@ class MessageController {
     }
 
     if (askedTutorial || askedOpenChamado) {
-      const actions = this.buildChamadoActions({ roomId, isChamadoRoom: alreadyInChamado });
-      const reply = alreadyInChamado
-        ? 'Este chat já está vinculado a um chamado. Pode continuar por aqui e, se quiser, abrir a visualização completa no botão abaixo.'
-        : `Para abrir um chamado, acesse o botão abaixo ou use este link oficial: ${this.getChamadoCreateUrl()}`;
-      await this.sendAiMessage({ roomId, content: reply, actions });
+      await ChatRoom.updateChatState(roomId, 'AGUARDANDO_HUMANO');
+      await alertService.emit({
+        type: 'human_requested',
+        level: 'warning',
+        roomId,
+        chamadoId: chamadoId ? String(chamadoId) : '',
+        chatState: 'AGUARDANDO_HUMANO',
+        actorId: String(req.session?.user?.id || ''),
+        actorName: String(req.session?.user?.name || ''),
+        message: 'Cliente pediu ajuda fora da base. Encaminhado para humano no chat.',
+        authToken: String(req.session?.ssoToken || '')
+      });
+      await this.sendAiMessage({
+        roomId,
+        content: 'Entendi. Vou te encaminhar para um atendente humano aqui no chat para continuar o suporte.'
+      });
       this.clearPendingDialog(roomId);
       return;
     }
@@ -609,7 +904,8 @@ class MessageController {
     let aiReply = '';
     let aiMeta = { kbHits: 0, kbDocIds: [] };
     try {
-      const aiResult = await this.callAiApi({ roomId, chamadoId, content, req, roomState: 'IA' });
+      this.publishAiProcessing(roomId, true);
+      const aiResult = await this.callAiApi({ roomId, chamadoId, content: aiInputContent, req, roomState: 'IA' });
       aiReply = String(aiResult?.reply || '').trim();
       aiMeta = {
         kbHits: Number(aiResult?.kbHits || 0),
@@ -631,11 +927,12 @@ class MessageController {
       });
       await this.sendAiMessage({
         roomId,
-        content: 'Estou com instabilidade no atendimento automatico agora. Vou te encaminhar para um atendente humano.',
-        actions: this.buildChamadoActions({ roomId, isChamadoRoom: alreadyInChamado })
+        content: 'Estou com instabilidade no atendimento automatico agora. Vou te encaminhar para um atendente humano aqui no chat.'
       });
       this.clearPendingDialog(roomId);
       return;
+    } finally {
+      this.publishAiProcessing(roomId, false);
     }
 
     if (!aiReply) {
@@ -649,7 +946,11 @@ class MessageController {
       askedOpenChamado,
       askedHuman
     });
-    aiReply = this.sanitizeAiReply(aiReply);
+    aiReply = this.adaptAiReplyForConversation({
+      replyText: aiReply,
+      userMessage: trimmedContent,
+      roomId
+    });
     if (this.shouldOfferChoiceFollowUp(aiReply)) {
       this.setPendingDialog(roomId, {
         ...(pending || {}),
@@ -658,9 +959,10 @@ class MessageController {
       });
     }
 
+    const finalContent = this.appendHumanHandoffOffer(aiReply);
     await this.sendAiMessage({
       roomId,
-      content: this.appendHumanHandoffOffer(aiReply)
+      content: finalContent
     });
   }
 
@@ -794,6 +1096,9 @@ class MessageController {
           fileUrl,
           fileType
         });
+        if (String(type || 'text').toLowerCase() === 'text') {
+          this.updateMemoryFromUserMessage(roomId, content || '');
+        }
 
         const clients = this.getRoomClients(roomId);
         const sseMessage = {
@@ -835,8 +1140,7 @@ class MessageController {
           });
           this.sendAiMessage({
             roomId,
-            content: 'No momento, eu ainda não consigo analisar imagens, áudios ou documentos automaticamente. Se você descrever em texto eu posso ajudar melhor, ou use o botão abaixo para suporte.',
-            actions
+            content: 'No momento, eu ainda não consigo analisar imagens, áudios ou documentos automaticamente. Se você descrever em texto eu posso ajudar melhor, ou posso te encaminhar para atendimento humano aqui no chat.'
           }).catch((aiError) => {
             console.error('[AI] Erro ao enviar aviso de midia nao suportada:', aiError.message);
           });
@@ -998,6 +1302,10 @@ class MessageController {
         return res.json({ success: true, created: false, reason: 'ai_disabled' });
       }
 
+      if (!this.isAiAllowedForUser(req.session?.user)) {
+        return res.json({ success: true, created: false, reason: 'ai_beta_not_allowed' });
+      }
+
       const role = String(req.session?.user?.role || '').toLowerCase();
       const humanRoles = ['admin', 'atendente', 'agent', 'suporte', 'support'];
       if (humanRoles.includes(role)) {
@@ -1032,8 +1340,7 @@ class MessageController {
       const isChamadoRoom = this.isChamadoRoom(room, null);
       await this.sendAiMessage({
         roomId,
-        content: this.getWelcomeMessage(isChamadoRoom),
-        actions: this.buildChamadoActions({ roomId, isChamadoRoom })
+        content: this.getWelcomeMessage(isChamadoRoom)
       });
       this.bootstrapLocks.delete(roomId);
 

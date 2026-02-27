@@ -39,6 +39,7 @@
   let headerParticipants = [];
   const selfAliases = new Set();
   let localTypingEchoUntil = 0;
+  let aiProcessingActive = false;
   const renderedIds = new Set();
   let templateCore = (typeof window !== "undefined" && window.ChatTemplateCore) ? window.ChatTemplateCore : null;
   let templateCoreLoader = null;
@@ -965,6 +966,8 @@
         scrollToBottom();
       } else if (payload.type === "typing_status") {
         renderTyping(payload);
+      } else if (payload.type === "ai_processing") {
+        renderAiProcessing(payload);
       } else if (payload.type === "messages_read") {
         applyReadReceipts(payload.messageIds);
       } else if (payload.type === "message_feedback") {
@@ -1131,6 +1134,11 @@
   function addMessage(rawMessage) {
     const message = normalizeMessage(rawMessage);
     if (!message) return;
+    if (Boolean(message.is_ai) || String(message.sender_role || "").toLowerCase() === "system") {
+      aiProcessingActive = false;
+      const typingEl = shadow && shadow.getElementById("tw-typing");
+      if (typingEl) typingEl.classList.remove("show");
+    }
     if (message.id && renderedIds.has(String(message.id))) return;
     if (message.id) renderedIds.add(String(message.id));
 
@@ -1458,6 +1466,7 @@
     const typingEl = shadow.getElementById("tw-typing");
     const chip = shadow.getElementById("tw-recording-chip");
     if (!typingEl) return;
+    if (aiProcessingActive) return;
     if (data && data.isTyping && Date.now() < localTypingEchoUntil) {
       typingEl.classList.remove("show");
       return;
@@ -1490,6 +1499,27 @@
     if (!recording && chip) chip.classList.remove("show");
     typingEl.innerHTML = `<strong>${escapeHtml(data.userName || "Alguem")}</strong> ${activity}... ${dots}`;
     typingEl.classList.add("show");
+  }
+
+  function renderAiProcessing(data) {
+    const typingEl = shadow.getElementById("tw-typing");
+    const chip = shadow.getElementById("tw-recording-chip");
+    if (!typingEl) return;
+    const active = Boolean(data && data.active);
+    aiProcessingActive = active;
+
+    if (!active) {
+      typingEl.classList.remove("show");
+      if (!recording && chip) chip.classList.remove("show");
+      return;
+    }
+
+    const aiName = String(data?.aiUserName || "Marina");
+    const dots = `<span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`;
+    if (!recording && chip) chip.classList.remove("show");
+    typingEl.innerHTML = `<strong>${escapeHtml(aiName)}</strong> esta respondendo... ${dots}`;
+    typingEl.classList.add("show");
+    scrollToBottom();
   }
 
   function scrollToBottom() {

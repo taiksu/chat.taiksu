@@ -74,6 +74,17 @@
             <h2 class="text-base font-bold text-green-800">Importar Markdown</h2>
             <form id="importForm" class="mt-3 space-y-3">
               <input id="mdFile" name="file" type="file" accept=".md,text/markdown" class="block w-full rounded-xl border border-green-200 bg-white px-3 py-2 text-sm text-green-800">
+              <div class="grid gap-2">
+                <label class="text-xs font-semibold text-gray-600">Modo de importacao</label>
+                <select id="importMode" class="rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                  <option value="replace" selected>Substituir draft atual</option>
+                  <option value="append">Adicionar ao draft atual</option>
+                </select>
+                <label class="flex items-center gap-2 text-xs font-semibold text-gray-600">
+                  <input id="importAutoPublish" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500">
+                  Publicar automaticamente apos importar
+                </label>
+              </div>
               <%- include('../components/buttons/default', {
                 id: 'importBtn',
                 label: 'Importar Arquivo'
@@ -91,6 +102,17 @@
               id: 'clearBtn',
               label: 'Limpar Draft'
             }) %>
+            <%- include('../components/buttons/default', {
+              id: 'cloneLiveBtn',
+              label: 'Trazer base publicada para draft'
+            }) %>
+            <div class="mt-2 space-y-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
+              <label class="block text-xs font-semibold text-amber-700">Restaurar versao publicada</label>
+              <select id="versionSelect" class="w-full rounded-lg border border-amber-200 bg-white px-2 py-1 text-xs text-slate-700">
+                <option value="">Selecione uma versao...</option>
+              </select>
+              <button id="restoreVersionBtn" type="button" class="w-full rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">Restaurar versao selecionada</button>
+            </div>
           </div>
         </article>
 
@@ -116,6 +138,14 @@
           <div id="draftList" class="mt-4 space-y-3"></div>
         </article>
       </section>
+
+      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="text-base font-bold text-green-800">Historico de importacoes</h2>
+          <button id="refreshHistoryBtn" type="button" class="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-50">Atualizar</button>
+        </div>
+        <div id="importHistoryList" class="mt-3 space-y-2"></div>
+      </section>
     </main>
   </div>
 
@@ -130,6 +160,10 @@
     const mdFileEl = document.getElementById('mdFile');
     const searchInputEl = document.getElementById('searchInput');
     const intentFilterEl = document.getElementById('intentFilter');
+    const importModeEl = document.getElementById('importMode');
+    const importAutoPublishEl = document.getElementById('importAutoPublish');
+    const importHistoryListEl = document.getElementById('importHistoryList');
+    const versionSelectEl = document.getElementById('versionSelect');
     let draftItems = [];
 
     function setStatus(text, type) {
@@ -223,6 +257,54 @@
       renderDraftList();
     }
 
+    function renderImportHistory(items) {
+      const rows = Array.isArray(items) ? items : [];
+      if (!rows.length) {
+        importHistoryListEl.innerHTML = '<p class="text-sm text-gray-500">Nenhuma importacao registrada.</p>';
+        return;
+      }
+      importHistoryListEl.innerHTML = rows.map((item) => {
+        const when = item.ts ? new Date(item.ts).toLocaleString('pt-BR') : '-';
+        const mode = String(item.mode || 'replace') === 'append' ? 'append' : 'replace';
+        return `
+          <article class="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-700">
+            <div class="flex flex-wrap items-center gap-2">
+              <strong class="text-green-800">${escapeHtml(item.sourceName || 'import.md')}</strong>
+              <span class="rounded-full bg-gray-100 px-2 py-0.5 font-semibold">importados: ${Number(item.imported || 0)}</span>
+              <span class="rounded-full bg-blue-100 px-2 py-0.5 font-semibold text-blue-700">modo: ${mode}</span>
+              ${item.autoPublished ? '<span class="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-700">publicado automaticamente</span>' : ''}
+            </div>
+            <div class="mt-1">autor: ${escapeHtml(item.author || '-')} | data: ${escapeHtml(when)} | draft: ${Number(item.draftCount || 0)} | publicados: ${Number(item.published || 0)}</div>
+          </article>
+        `;
+      }).join('');
+    }
+
+    async function refreshHistory() {
+      const result = await fetchJson('/api/kb/import-history?limit=20');
+      renderImportHistory(result.items || []);
+    }
+
+    async function refreshVersions() {
+      const result = await fetchJson('/api/kb/versions?limit=20');
+      const items = Array.isArray(result.items) ? result.items : [];
+      versionSelectEl.innerHTML = '<option value="">Selecione uma versao...</option>';
+      items.forEach((item) => {
+        const when = item.mtime ? new Date(item.mtime).toLocaleString('pt-BR') : '';
+        const option = document.createElement('option');
+        option.value = String(item.file || '');
+        option.textContent = `${item.file} (${when})`;
+        versionSelectEl.appendChild(option);
+      });
+    }
+
+    async function loadImportDefaults() {
+      try {
+        const settingsPayload = await fetchJson('/api/settings');
+        importAutoPublishEl.checked = Boolean(settingsPayload?.settings?.kbAutoPublishEnabled);
+      } catch (_err) {}
+    }
+
     window.saveItem = async function saveItem(itemId) {
       try {
         const fields = Array.from(document.querySelectorAll('[data-id]'))
@@ -268,9 +350,15 @@
       try {
         const formData = new FormData();
         formData.append('file', file);
-        const result = await fetchJson('/api/kb/import-md', { method: 'POST', body: formData });
-        setStatus(`Importação concluída: ${result.imported} itens`, 'success');
+        formData.append('mode', String(importModeEl.value || 'replace'));
+        formData.append('autoPublish', importAutoPublishEl.checked ? 'true' : 'false');
+        const result = await fetchJson('/api/kb/import-file', { method: 'POST', body: formData });
+        const summary = result.autoPublished
+          ? ('Importacao concluida: ' + result.imported + ' itens e ' + Number(result.published || 0) + ' publicados')
+          : ('Importacao concluida: ' + result.imported + ' itens no draft');
+        setStatus(summary, 'success');
         await refreshData();
+        await refreshHistory();
       } catch (error) {
         setStatus(error.message, 'error');
       }
@@ -304,6 +392,38 @@
       }
     });
 
+    document.getElementById('cloneLiveBtn').addEventListener('click', async () => {
+      if (!confirm('Copiar toda a base publicada para o draft atual?')) return;
+      try {
+        const result = await fetchJson('/api/kb/clone-live-to-draft', { method: 'POST' });
+        setStatus(`Base publicada copiada para draft (${Number(result.draftCount || 0)} itens)`, 'success');
+        await refreshData();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('restoreVersionBtn').addEventListener('click', async () => {
+      const versionFile = String(versionSelectEl.value || '').trim();
+      if (!versionFile) {
+        setStatus('Selecione uma versao para restaurar', 'warn');
+        return;
+      }
+      if (!confirm(`Restaurar a base publicada usando a versao ${versionFile}?`)) return;
+      try {
+        const result = await fetchJson('/api/kb/restore-version', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ versionFile })
+        });
+        setStatus(`Versao restaurada com sucesso (${Number(result.restoredCount || 0)} itens)`, 'success');
+        await refreshData();
+        await refreshVersions();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    });
+
     document.getElementById('refreshBtn').addEventListener('click', async () => {
       try {
         await refreshData();
@@ -313,10 +433,26 @@
       }
     });
 
+    document.getElementById('refreshHistoryBtn').addEventListener('click', async () => {
+      try {
+        await refreshHistory();
+        setStatus('Historico atualizado', 'info');
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    });
+
     searchInputEl.addEventListener('input', renderDraftList);
     intentFilterEl.addEventListener('change', renderDraftList);
 
-    refreshData().catch((error) => setStatus(error.message, 'error'));
+    Promise.all([
+      refreshData(),
+      refreshHistory(),
+      refreshVersions(),
+      loadImportDefaults()
+    ]).catch((error) => setStatus(error.message, 'error'));
   </script>
 </body>
 </html>
+
+

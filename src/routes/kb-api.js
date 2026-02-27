@@ -12,6 +12,16 @@ router.post(
   KnowledgeBaseController.upload.single('file'),
   KnowledgeBaseController.importMarkdown.bind(KnowledgeBaseController)
 );
+router.post(
+  '/import-file',
+  requireApiAuth,
+  KnowledgeBaseController.upload.single('file'),
+  KnowledgeBaseController.importMarkdown.bind(KnowledgeBaseController)
+);
+router.get('/import-history', requireApiAuth, KnowledgeBaseController.listImportHistory.bind(KnowledgeBaseController));
+router.get('/versions', requireApiAuth, KnowledgeBaseController.listVersions.bind(KnowledgeBaseController));
+router.post('/restore-version', requireApiAuth, KnowledgeBaseController.restoreVersion.bind(KnowledgeBaseController));
+router.post('/clone-live-to-draft', requireApiAuth, KnowledgeBaseController.cloneLiveToDraft.bind(KnowledgeBaseController));
 router.patch('/draft/:id', requireApiAuth, KnowledgeBaseController.updateDraftItem.bind(KnowledgeBaseController));
 router.delete('/draft/:id', requireApiAuth, KnowledgeBaseController.deleteDraftItem.bind(KnowledgeBaseController));
 router.delete('/draft', requireApiAuth, KnowledgeBaseController.clearDraft.bind(KnowledgeBaseController));

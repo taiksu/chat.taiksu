@@ -48,6 +48,8 @@
 <script>
   (() => {
     const badge = document.getElementById('pending-human-badge');
+    const navbarBadge = document.getElementById('pending-human-navbar-badge');
+    const menuDot = document.getElementById('pending-human-menu-dot');
     let lastSince = Date.now();
 
     function ensureToastHost() {
@@ -95,15 +97,29 @@
     }
 
     async function refreshPendingBadge() {
-      if (!badge) return;
+      if (!badge && !navbarBadge && !menuDot) return;
       try {
         const response = await fetch('/dashboard/alerts/pending', { credentials: 'include' });
         if (!response.ok) return;
         const data = await response.json();
         const count = Number(data?.count || 0);
-        badge.textContent = String(count);
-        if (count > 0) badge.classList.remove('hidden');
-        else badge.classList.add('hidden');
+
+        if (badge) {
+          badge.textContent = String(count);
+          if (count > 0) badge.classList.remove('hidden');
+          else badge.classList.add('hidden');
+        }
+
+        if (navbarBadge) {
+          navbarBadge.textContent = String(count);
+          if (count > 0) navbarBadge.classList.remove('hidden');
+          else navbarBadge.classList.add('hidden');
+        }
+
+        if (menuDot) {
+          if (count > 0) menuDot.classList.remove('hidden');
+          else menuDot.classList.add('hidden');
+        }
       } catch (_err) {}
     }
 

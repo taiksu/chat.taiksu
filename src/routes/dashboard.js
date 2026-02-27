@@ -3,6 +3,7 @@ const DashboardController = require('../controllers/DashboardController');
 const KnowledgeBaseController = require('../controllers/KnowledgeBaseController');
 const SettingsController = require('../controllers/SettingsController');
 const FeedbackInsightsController = require('../controllers/FeedbackInsightsController');
+const MemoryDebugController = require('../controllers/MemoryDebugController');
 const { requireWebAuth } = require('../middleware/requireAuth');
 
 const router = express.Router();
@@ -18,5 +19,9 @@ router.get('/settings', requireWebAuth, SettingsController.page.bind(SettingsCon
 router.get('/feedback-insights', requireWebAuth, FeedbackInsightsController.page.bind(FeedbackInsightsController));
 router.get('/feedback-insights/data', requireWebAuth, FeedbackInsightsController.data.bind(FeedbackInsightsController));
 router.post('/feedback-insights/suggest/:messageId', requireWebAuth, FeedbackInsightsController.suggestToKnowledge.bind(FeedbackInsightsController));
+router.get('/memory-debug', requireWebAuth, MemoryDebugController.page.bind(MemoryDebugController));
+router.get('/memory-debug/data', requireWebAuth, MemoryDebugController.data.bind(MemoryDebugController));
+router.post('/memory-debug/clear-room/:roomId', requireWebAuth, MemoryDebugController.clearRoom.bind(MemoryDebugController));
+router.post('/memory-debug/clear-all', requireWebAuth, MemoryDebugController.clearAll.bind(MemoryDebugController));
 
 module.exports = router;

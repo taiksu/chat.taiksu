@@ -6,10 +6,25 @@
     </a>
   </div>
 
-  <button type="button" data-sidebar-toggle class="flex h-11 w-11 items-center justify-center rounded-xl text-green-600 transition hover:bg-green-50 hover:text-green-700">
-    <span class="sr-only">Abrir menu</span>
-    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h16" />
-    </svg>
-  </button>
+  <div class="flex items-center gap-2">
+    <a
+      href="/chat/chamados"
+      class="relative inline-flex h-11 min-w-[44px] items-center justify-center rounded-xl border border-green-100 px-2 text-green-600 transition hover:bg-green-50 hover:text-green-700"
+      title="Demandas de chat"
+    >
+      <span class="sr-only">Abrir demandas de chat</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h8M8 14h5"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5h14a2 2 0 012 2v9a2 2 0 01-2 2H9l-4 3v-3H5a2 2 0 01-2-2V7a2 2 0 012-2z"/>
+      </svg>
+      <span id="pending-human-navbar-badge" class="hidden absolute -right-1 -top-1 min-w-[18px] rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[10px] font-bold leading-none text-white">0</span>
+    </a>
+
+    <button type="button" data-sidebar-toggle class="relative flex h-11 w-11 items-center justify-center rounded-xl text-green-600 transition hover:bg-green-50 hover:text-green-700">
+      <span class="sr-only">Abrir menu</span>
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+      <span id="pending-human-menu-dot" class="hidden absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-red-500"></span>
+    </button>
+  </div>
 </header>
