@@ -4,18 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title id="title-tag"><%= title %></title>
-    <link rel="shortcut icon" href="/images/logo.pngfrontend/img/favicone.png" type="image/x-icon">
-    <link rel="stylesheet" href="/stylesheets/tailwind.css?v4.1">
+    <link rel="shortcut icon" href="/images/logo.png" type="image/x-icon">
+    <link rel="stylesheet" href="/css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@100;200;300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="/javascripts/fadein.js" defer></script>
     <script src="/javascripts/menu.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/autonumeric/4.8.1/autoNumeric.min.js"></script>
   </head>
-
-  <%- include('partials/header') %>
-  <%- include('partials/menu') %>
   <body class="max-w-3xl min-h-screen mx-auto mt-28 md:px-2 px-8 mb-32">
+    <%- include('partials/header') %>
+    <%- include('partials/menu') %>
     <%- body %>
+    <%- include('partials/footer') %>
   </body>
-  <%- include('partials/footer') %>
 </html>
