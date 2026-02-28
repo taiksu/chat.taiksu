@@ -152,6 +152,7 @@ const aiRoutes = require('./routes/ai');
 const kbApiRoutes = require('./routes/kb-api');
 const settingsApiRoutes = require('./routes/settings-api');
 const aiToolsApiRoutes = require('./routes/ai-tools-api');
+const eventsRoutes = require('./routes/events');
 const ssoRoutes = require('./routes/sso');
 const SSOController = require('./controllers/SSOController');
 
@@ -166,6 +167,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/kb', kbApiRoutes);
 app.use('/api/settings', settingsApiRoutes);
 app.use('/api/ai-tools', aiToolsApiRoutes);
+app.use('/events', eventsRoutes);
 
 app.get('/', (req, res) => {
   if (isDev && startupError) {
