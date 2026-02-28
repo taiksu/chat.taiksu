@@ -1,5 +1,6 @@
 const ChatRoom = require('../models/ChatRoom');
 const settingsService = require('./settingsService');
+const eventBrokerService = require('./eventBrokerService');
 
 class AlertService {
   constructor() {
@@ -194,7 +195,22 @@ class AlertService {
     this.pushRecent(event);
     const webhookResult = await this.postWebhook(event);
     const emailResult = await this.sendEmail(event, params.authToken || '');
-    return { emitted: true, webhook: webhookResult, email: emailResult, event };
+    let brokerResult = { ok: false, reason: 'not_applicable' };
+    if (event.type === 'human_requested') {
+      brokerResult = await eventBrokerService.publishAlias('HUMAN_REQUESTED', {
+        userId: params.actorId || 0,
+        priority: event.level === 'critical' ? 'high' : 'normal',
+        payload: {
+          roomId: event.roomId || '',
+          chamadoId: event.chamadoId || '',
+          chatState: event.chatState || '',
+          message: event.message || '',
+          source: 'chat-taiksu',
+          actorName: event.actorName || ''
+        }
+      });
+    }
+    return { emitted: true, webhook: webhookResult, email: emailResult, broker: brokerResult, event };
   }
 
   getRecentSince(sinceMs = 0, limit = 40) {

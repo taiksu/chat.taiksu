@@ -3,6 +3,7 @@ const Message = require('../models/Message');
 const User = require('../models/User');
 const ChatQueue = require('../models/ChatQueue');
 const alertService = require('../services/alertService');
+const eventBrokerService = require('../services/eventBrokerService');
 const path = require('path');
 const fs = require('fs');
 
@@ -119,6 +120,16 @@ class ChatController {
       agentId: String(agentId),
       chatState: 'HUMANO'
     });
+    eventBrokerService.publishAlias('HUMAN_ASSIGNED', {
+      userId: agentId,
+      priority: 'normal',
+      payload: {
+        roomId: String(roomId || ''),
+        chamadoId: chamadoId ? String(chamadoId) : '',
+        agentId: String(agentId || ''),
+        source: 'chat-taiksu'
+      }
+    }).catch(() => {});
   }
 
   async dispatchNextWaitingForAgent(agentId) {
@@ -245,6 +256,15 @@ class ChatController {
       });
 
       await ChatRoom.addParticipant(room.id, req.session.user.id);
+      eventBrokerService.publishAlias('ROOM_OPENED_BY_USER', {
+        userId: req.session.user.id,
+        priority: 'normal',
+        payload: {
+          roomId: String(room.id || ''),
+          roomName: String(room.name || ''),
+          source: 'chat-taiksu'
+        }
+      }).catch(() => {});
       res.json({ success: true, room });
     } catch (error) {
       console.error('Error creating room:', error);
@@ -284,6 +304,19 @@ class ChatController {
             await ChatRoom.addParticipant(result.room.id, String(participantId));
           }
         }
+      }
+
+      if (result.created) {
+        eventBrokerService.publishAlias('CHAMADO_CHAT_OPENED', {
+          userId: req.session.user.id,
+          priority: 'high',
+          payload: {
+            roomId: String(result.room.id || ''),
+            chamadoId: String(chamadoId || ''),
+            roomName: String(result.room.name || ''),
+            source: 'chat-taiksu'
+          }
+        }).catch(() => {});
       }
 
       res.json({
@@ -361,6 +394,16 @@ class ChatController {
           position: queueItem.position,
           chatState: 'FILA'
         });
+        eventBrokerService.publishAlias('HUMAN_QUEUE_JOINED', {
+          userId: user.id,
+          priority: 'normal',
+          payload: {
+            roomId: String(room.id || ''),
+            chamadoId: String(chamadoId || ''),
+            position: Number(queueItem.position || 0),
+            source: 'chat-taiksu'
+          }
+        }).catch(() => {});
         await alertService.emit({
           type: 'human_requested',
           level: 'warning',
@@ -442,6 +485,16 @@ class ChatController {
           await this.dispatchNextWaitingForAgent(String(updatedRoom.assigned_agent_id));
           await ChatRoom.setAssignedAgent(updatedRoom.id, null);
         }
+        eventBrokerService.publishAlias('CHAT_CLOSED_MANUAL', {
+          userId: req.session.user.id,
+          priority: 'high',
+          payload: {
+            roomId: String(updatedRoom.id || ''),
+            chamadoId: String(chamadoId || ''),
+            status: 'fechado',
+            source: 'chat-taiksu'
+          }
+        }).catch(() => {});
       } else {
         await ChatRoom.updateChatState(updatedRoom.id, 'NEW');
         await ChatRoom.setAssignedAgent(updatedRoom.id, null);
@@ -508,6 +561,16 @@ class ChatController {
           await this.dispatchNextWaitingForAgent(String(room.assigned_agent_id));
           await ChatRoom.setAssignedAgent(roomId, null);
         }
+        eventBrokerService.publishAlias('CHAT_CLOSED_MANUAL', {
+          userId: actor.id,
+          priority: 'high',
+          payload: {
+            roomId: String(roomId || ''),
+            chamadoId: room.chamado_id ? String(room.chamado_id) : '',
+            status: 'fechado',
+            source: 'chat-taiksu'
+          }
+        }).catch(() => {});
       } else {
         await ChatRoom.updateChatState(roomId, 'NEW');
         await ChatRoom.setAssignedAgent(roomId, null);
@@ -589,12 +652,31 @@ class ChatController {
       if (agentId) {
         await this.dispatchNextWaitingForAgent(agentId);
       }
+      eventBrokerService.publishAlias('CHAT_CLOSED_MANUAL', {
+        userId: actor.id,
+        priority: 'high',
+        payload: {
+          roomId: String(roomId || ''),
+          chamadoId: room.chamado_id ? String(room.chamado_id) : '',
+          status: 'fechado',
+          source: 'chat-taiksu'
+        }
+      }).catch(() => {});
 
       this.broadcastRoomEvent(roomId, {
         type: 'human_finished',
         roomId,
         chatState: 'FECHADO'
       });
+      eventBrokerService.publishAlias('HUMAN_FINISHED', {
+        userId: actor.id,
+        priority: 'normal',
+        payload: {
+          roomId: String(roomId || ''),
+          chamadoId: room.chamado_id ? String(room.chamado_id) : '',
+          source: 'chat-taiksu'
+        }
+      }).catch(() => {});
 
       return res.json({
         success: true,

@@ -1,5 +1,6 @@
-const settingsService = require('../services/settingsService');
+﻿const settingsService = require('../services/settingsService');
 const aiToolService = require('../services/aiToolService');
+const eventBrokerService = require('../services/eventBrokerService');
 
 class AIController {
   logAiMetric(event, data = {}) {
@@ -565,6 +566,17 @@ class AIController {
           success: Boolean(toolExecution?.result?.success),
           latencyMs: toolLatencyMs
         });
+        eventBrokerService.publishAlias('AI_TOOL_EXECUTED', {
+          userId: String(payload?.user?.id || ''),
+          priority: toolExecution?.result?.success ? 'normal' : 'high',
+          payload: {
+            roomId: String(roomId || ''),
+            chamadoId: String(chamadoId || ''),
+            tool: String(toolExecution?.tool?.slug || ''),
+            ok: Boolean(toolExecution?.result?.success),
+            source: 'chat-taiksu'
+          }
+        }).catch(() => {});
 
         return {
           success: true,
@@ -657,7 +669,7 @@ class AIController {
       roomId: 'preview-room',
       chamadoId: null,
       chatState: 'IA',
-      message: String(payload.message || '').trim() || 'Ol�, preciso de ajuda.',
+      message: String(payload.message || '').trim() || 'Olá, preciso de ajuda.',
       user: {
         id: 'preview-user',
         name: String(payload.userName || 'Usuario Teste'),
@@ -672,3 +684,4 @@ class AIController {
 }
 
 module.exports = new AIController();
+

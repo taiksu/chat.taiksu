@@ -4,6 +4,7 @@ const User = require('../models/User');
 const AIController = require('./AIController');
 const knowledgeBase = require('../services/knowledgeBase');
 const alertService = require('../services/alertService');
+const eventBrokerService = require('../services/eventBrokerService');
 const settingsService = require('../services/settingsService');
 const multer = require('multer');
 const path = require('path');
@@ -918,6 +919,9 @@ class MessageController {
 
   async sendAiMessage({ roomId, content, actions = [] }) {
     const aiUser = await this.ensureAiUser();
+    const previous = await Message.findByRoomId(roomId, 120);
+    const hadAiBefore = Array.isArray(previous)
+      && previous.some((item) => String(item?.user_id || '') === String(aiUser.id || ''));
     const normalizedActions = this.normalizeActions(actions);
     const aiMessage = await Message.create({
       roomId,
@@ -947,6 +951,27 @@ class MessageController {
       actions: aiMessage.actions || normalizedActions
     });
     this.updateMemoryFromAiMessage(roomId, content);
+    eventBrokerService.publishAlias('IA_REPLIED_SUCCESS', {
+      userId: String(aiUser.id || ''),
+      priority: 'normal',
+      payload: {
+        roomId: String(roomId || ''),
+        messageId: String(aiMessage?.id || ''),
+        source: 'chat-taiksu'
+      }
+    }).catch(() => {});
+
+    if (!hadAiBefore) {
+      eventBrokerService.publishAlias('IA_FIRST_REPLY', {
+        userId: String(aiUser.id || ''),
+        priority: 'normal',
+        payload: {
+          roomId: String(roomId || ''),
+          firstMessageId: String(aiMessage?.id || ''),
+          source: 'chat-taiksu'
+        }
+      }).catch(() => {});
+    }
   }
 
   async processAiFirstContactFlow({ room, roomId, chamadoId, content, req }) {
@@ -1087,6 +1112,16 @@ class MessageController {
     } catch (error) {
       console.error('[AI] Falha ao consultar API_AI_URL:', error.message);
       await ChatRoom.updateChatState(roomId, 'AGUARDANDO_HUMANO');
+      eventBrokerService.publishAlias('AI_MODEL_FAILURE', {
+        userId: String(req.session?.user?.id || ''),
+        priority: 'high',
+        payload: {
+          roomId: String(roomId || ''),
+          chamadoId: chamadoId ? String(chamadoId) : '',
+          error: String(error.message || ''),
+          source: 'chat-taiksu'
+        }
+      }).catch(() => {});
       await alertService.emit({
         type: 'ai_model_failure_handoff',
         level: 'critical',
@@ -1238,6 +1273,28 @@ class MessageController {
 
         const closureState = await this.getRoomClosureState(finalRoom);
         if (this.isRoomOrChamadoClosed(finalRoom, req) || closureState.closed) {
+          eventBrokerService.publishAlias('CHAT_MESSAGE_BLOCKED_CLOSED', {
+            userId,
+            priority: 'normal',
+            payload: {
+              roomId: String(roomId || ''),
+              chamadoId: chamadoId ? String(chamadoId) : (finalRoom.chamado_id ? String(finalRoom.chamado_id) : ''),
+              reason: String(closureState.reason || 'Chat fechado'),
+              source: 'chat-taiksu'
+            }
+          }).catch(() => {});
+          if (/inatividade/i.test(String(closureState.reason || ''))) {
+            eventBrokerService.publishAlias('CHAT_CLOSED_INACTIVITY', {
+              userId,
+              priority: 'normal',
+              payload: {
+                roomId: String(roomId || ''),
+                chamadoId: chamadoId ? String(chamadoId) : (finalRoom.chamado_id ? String(finalRoom.chamado_id) : ''),
+                reason: String(closureState.reason || ''),
+                source: 'chat-taiksu'
+              }
+            }).catch(() => {});
+          }
           return res.status(409).json({
             error: closureState.reason || 'Chat fechado para novas mensagens',
             code: 'chat_closed',
@@ -1390,6 +1447,16 @@ class MessageController {
       }
 
       await Message.setFeedback({ messageId, value, userId });
+      eventBrokerService.publishAlias(value === 'up' ? 'AI_FEEDBACK_UP' : 'AI_FEEDBACK_DOWN', {
+        userId,
+        priority: 'normal',
+        payload: {
+          roomId: String(message.room_id || ''),
+          messageId: String(messageId),
+          feedbackValue: String(value),
+          source: 'chat-taiksu'
+        }
+      }).catch(() => {});
 
       const payload = {
         type: 'message_feedback',
