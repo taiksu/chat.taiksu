@@ -537,6 +537,75 @@ class AIController {
     throw new Error(joined || 'all_providers_failed');
   }
 
+  async generateFirstContact(payload = {}, overrides = {}) {
+    const startedAt = Date.now();
+    const roomId = String(payload.roomId || '');
+    const chamadoId = payload.chamadoId ? String(payload.chamadoId) : '';
+    const chatState = String(payload.chatState || 'IA');
+
+    const providers = this.getProviderOrder();
+    const userPrompt = this.buildUserPrompt(payload);
+    const systemInstruction = this.buildSystemInstruction(overrides);
+
+    let toolExecution = null;
+    try {
+      toolExecution = await this.runAutoToolIfNeeded(payload);
+      if (toolExecution) {
+        const toolLatencyMs = Date.now() - startedAt;
+        const toolReply = this.sanitizeReplyText(
+          this.renderToolResultReply({ tool: toolExecution.tool, result: toolExecution.result }),
+          overrides
+        );
+        this.logAiMetric('tool_auto_execution', {
+          roomId,
+          chamadoId,
+          chatState,
+          tool: toolExecution.tool,
+          score: toolExecution.score,
+          success: Boolean(toolExecution?.result?.success),
+          latencyMs: toolLatencyMs
+        });
+
+        return {
+          success: true,
+          provider: 'tool',
+          model: `tool:${toolExecution.tool.slug}`,
+          reply: toolReply,
+          usage: null,
+          latencyMs: toolLatencyMs,
+          tool: toolExecution.tool,
+          toolResult: toolExecution.result
+        };
+      }
+    } catch (toolError) {
+      this.logAiMetric('tool_auto_execution_error', {
+        roomId,
+        chamadoId,
+        chatState,
+        error: toolError.message
+      });
+    }
+
+    const result = await this.tryProviders({
+      providers,
+      userPrompt,
+      systemInstruction,
+      roomId,
+      chamadoId,
+      chatState,
+      overrides
+    });
+
+    return {
+      success: true,
+      provider: result.provider,
+      model: result.model,
+      reply: result.reply,
+      usage: result.usage || null,
+      latencyMs: Date.now() - startedAt
+    };
+  }
+
   async firstContact(req, res) {
     const startedAt = Date.now();
     try {
@@ -551,58 +620,7 @@ class AIController {
         return res.status(401).json({ error: 'Nao autorizado para API de IA' });
       }
 
-      const providers = this.getProviderOrder();
-      const userPrompt = this.buildUserPrompt(payload);
-      const systemInstruction = this.buildSystemInstruction();
-
-      let toolExecution = null;
-      try {
-        toolExecution = await this.runAutoToolIfNeeded(payload);
-        if (toolExecution) {
-          const toolLatencyMs = Date.now() - startedAt;
-          const toolReply = this.sanitizeReplyText(
-            this.renderToolResultReply({ tool: toolExecution.tool, result: toolExecution.result }),
-            {}
-          );
-          this.logAiMetric('tool_auto_execution', {
-            roomId,
-            chamadoId,
-            chatState,
-            tool: toolExecution.tool,
-            score: toolExecution.score,
-            success: Boolean(toolExecution?.result?.success),
-            latencyMs: toolLatencyMs
-          });
-
-          return res.json({
-            success: true,
-            provider: 'tool',
-            model: `tool:${toolExecution.tool.slug}`,
-            reply: toolReply,
-            usage: null,
-            latencyMs: toolLatencyMs,
-            tool: toolExecution.tool,
-            toolResult: toolExecution.result
-          });
-        }
-      } catch (toolError) {
-        this.logAiMetric('tool_auto_execution_error', {
-          roomId,
-          chamadoId,
-          chatState,
-          error: toolError.message
-        });
-      }
-
-      const result = await this.tryProviders({
-        providers,
-        userPrompt,
-        systemInstruction,
-        roomId,
-        chamadoId,
-        chatState,
-        overrides: {}
-      });
+      const result = await this.generateFirstContact(payload, {});
 
       const latencyMs = Date.now() - startedAt;
       this.logAiMetric('success', {
@@ -635,12 +653,11 @@ class AIController {
   }
 
   async previewReply(payload = {}, overrides = {}) {
-    const providers = this.getProviderOrder();
     const previewPayload = {
       roomId: 'preview-room',
       chamadoId: null,
       chatState: 'IA',
-      message: String(payload.message || '').trim() || 'Ol√°, preciso de ajuda.',
+      message: String(payload.message || '').trim() || 'Ol·, preciso de ajuda.',
       user: {
         id: 'preview-user',
         name: String(payload.userName || 'Usuario Teste'),
@@ -650,25 +667,7 @@ class AIController {
       contextDocs: Array.isArray(payload.contextDocs) ? payload.contextDocs : [],
       options: { offerHumanHandoff: true }
     };
-    const userPrompt = this.buildUserPrompt(previewPayload);
-    const systemInstruction = this.buildSystemInstruction(overrides);
-    const startedAt = Date.now();
-    const result = await this.tryProviders({
-      providers,
-      userPrompt,
-      systemInstruction,
-      roomId: previewPayload.roomId,
-      chamadoId: '',
-      chatState: 'IA',
-      overrides
-    });
-    return {
-      provider: result.provider,
-      model: result.model,
-      reply: result.reply,
-      usage: result.usage || null,
-      latencyMs: Date.now() - startedAt
-    };
+    return this.generateFirstContact(previewPayload, overrides);
   }
 }
 

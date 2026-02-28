@@ -16,7 +16,7 @@ class SettingsService {
       aiBetaModeEnabled: String(process.env.AI_BETA_MODE_ENABLED || 'false').toLowerCase() === 'true',
       aiBetaAllowlist: this.parseAllowlist(process.env.AI_BETA_ALLOWLIST || ''),
       aiAgentName: String(process.env.AI_USER_NAME || 'Marina').trim() || 'Marina',
-      aiAgentAvatar: String(process.env.AI_USER_AVATAR || '/images/seta.png').trim() || '/images/seta.png',
+      aiAgentAvatar: String(process.env.AI_USER_AVATAR || '/images/marina.png').trim() || '/images/marina.png',
       aiPersonalityPrompt: String(
         process.env.AI_PERSONALITY_PROMPT
         || 'Seja profissional, objetiva e acolhedora. Foque em resolver no chat e escalar para humano quando necessario.'
@@ -103,8 +103,8 @@ class SettingsService {
         ? (String(input.aiAgentName || '').trim() || 'Marina')
         : String(current.aiAgentName || 'Marina'),
       aiAgentAvatar: input.aiAgentAvatar !== undefined
-        ? (String(input.aiAgentAvatar || '').trim() || '/images/seta.png')
-        : String(current.aiAgentAvatar || '/images/seta.png'),
+        ? (String(input.aiAgentAvatar || '').trim() || '/images/marina.png')
+        : String(current.aiAgentAvatar || '/images/marina.png'),
       aiPersonalityPrompt: input.aiPersonalityPrompt !== undefined
         ? String(input.aiPersonalityPrompt || '').trim()
         : String(current.aiPersonalityPrompt || ''),
@@ -147,7 +147,7 @@ class SettingsService {
       aiBetaModeEnabled: Boolean(current.aiBetaModeEnabled),
       aiBetaAllowlist: this.parseAllowlist(current.aiBetaAllowlist || []),
       aiAgentName: String(current.aiAgentName || 'Marina'),
-      aiAgentAvatar: String(current.aiAgentAvatar || '/images/seta.png'),
+      aiAgentAvatar: String(current.aiAgentAvatar || '/images/marina.png'),
       aiPersonalityPrompt: String(current.aiPersonalityPrompt || ''),
       aiTemperature: this.clampNumber(current.aiTemperature, 0, 2, 0.25),
       aiMaxOutputTokens: this.clampInt(current.aiMaxOutputTokens, 64, 2048, 280),

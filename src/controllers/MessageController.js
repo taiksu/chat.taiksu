@@ -1,6 +1,7 @@
 const Message = require('../models/Message');
 const ChatRoom = require('../models/ChatRoom');
 const User = require('../models/User');
+const AIController = require('./AIController');
 const knowledgeBase = require('../services/knowledgeBase');
 const alertService = require('../services/alertService');
 const settingsService = require('../services/settingsService');
@@ -93,7 +94,7 @@ class MessageController {
   isAiEnabled() {
     const settings = settingsService.load();
     const enabledBySettings = Boolean(settings.aiAttendantEnabled);
-    return enabledBySettings && Boolean(this.getAiApiUrl());
+    return enabledBySettings;
   }
 
   isAiAllowedForUser(user) {
@@ -127,7 +128,7 @@ class MessageController {
     if (configured) return configured;
     const envAvatar = String(process.env.AI_USER_AVATAR || '').trim();
     if (envAvatar) return envAvatar;
-    return '/images/seta.png';
+    return '/images/marina.png';
   }
 
   getChamadoCreateUrl() {
@@ -704,6 +705,7 @@ class MessageController {
   async callAiApi({ roomId, chamadoId, content, req, roomState }) {
     const startedAt = Date.now();
     const apiUrl = this.getAiApiUrl();
+    const internalFallbackEnabled = String(process.env.AI_INTERNAL_FALLBACK || 'true').trim().toLowerCase() !== 'false';
     const internalToken = String(process.env.API_AI_TOKEN || '').trim();
     const kbTopK = Number(process.env.KB_TOP_K || 3);
     const kbMinScore = Number(process.env.KB_MIN_SCORE || 2);
@@ -735,13 +737,92 @@ class MessageController {
       headers['x-ai-token'] = internalToken;
     }
 
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    });
+    if (!apiUrl) {
+      const direct = await AIController.generateFirstContact(payload, {});
+      const directReply = this.sanitizeAiReply(direct?.reply || '');
+      this.logAiMetric('proxy_success', {
+        roomId,
+        chamadoId: chamadoId ? String(chamadoId) : '',
+        chatState: roomState,
+        apiUrl: 'internal:direct',
+        latencyMs: Date.now() - startedAt,
+        inputChars: String(content || '').length,
+        outputChars: directReply.length,
+        kbHits: contextDocs.length,
+        kbDocIds: contextDocs.map((doc) => doc.id),
+        usage: direct?.usage || null
+      });
+      return {
+        reply: directReply,
+        kbHits: contextDocs.length,
+        kbDocIds: contextDocs.map((doc) => doc.id),
+        kbLinks: contextDocs
+          .filter((doc) => this.isValidKbUrl(doc?.url))
+          .map((doc) => ({ id: String(doc.id || ''), title: String(doc.title || ''), url: String(doc.url || '') })),
+        usage: direct?.usage || null
+      };
+    }
+
+    let response;
+    try {
+      response = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      });
+    } catch (fetchError) {
+      if (!internalFallbackEnabled) throw fetchError;
+      const direct = await AIController.generateFirstContact(payload, {});
+      const directReply = this.sanitizeAiReply(direct?.reply || '');
+      this.logAiMetric('proxy_success', {
+        roomId,
+        chamadoId: chamadoId ? String(chamadoId) : '',
+        chatState: roomState,
+        apiUrl: 'internal:fallback_after_fetch_error',
+        latencyMs: Date.now() - startedAt,
+        inputChars: String(content || '').length,
+        outputChars: directReply.length,
+        kbHits: contextDocs.length,
+        kbDocIds: contextDocs.map((doc) => doc.id),
+        usage: direct?.usage || null
+      });
+      return {
+        reply: directReply,
+        kbHits: contextDocs.length,
+        kbDocIds: contextDocs.map((doc) => doc.id),
+        kbLinks: contextDocs
+          .filter((doc) => this.isValidKbUrl(doc?.url))
+          .map((doc) => ({ id: String(doc.id || ''), title: String(doc.title || ''), url: String(doc.url || '') })),
+        usage: direct?.usage || null
+      };
+    }
 
     if (!response.ok) {
+      if (internalFallbackEnabled) {
+        const direct = await AIController.generateFirstContact(payload, {});
+        const directReply = this.sanitizeAiReply(direct?.reply || '');
+        this.logAiMetric('proxy_success', {
+          roomId,
+          chamadoId: chamadoId ? String(chamadoId) : '',
+          chatState: roomState,
+          apiUrl: `internal:fallback_after_http_${response.status}`,
+          latencyMs: Date.now() - startedAt,
+          inputChars: String(content || '').length,
+          outputChars: directReply.length,
+          kbHits: contextDocs.length,
+          kbDocIds: contextDocs.map((doc) => doc.id),
+          usage: direct?.usage || null
+        });
+        return {
+          reply: directReply,
+          kbHits: contextDocs.length,
+          kbDocIds: contextDocs.map((doc) => doc.id),
+          kbLinks: contextDocs
+            .filter((doc) => this.isValidKbUrl(doc?.url))
+            .map((doc) => ({ id: String(doc.id || ''), title: String(doc.title || ''), url: String(doc.url || '') })),
+          usage: direct?.usage || null
+        };
+      }
       this.logAiMetric('proxy_http_error', {
         roomId,
         chamadoId: chamadoId ? String(chamadoId) : '',

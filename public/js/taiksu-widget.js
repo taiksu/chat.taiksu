@@ -459,7 +459,7 @@
       <style>${styles()}</style>
       <div class="tw-root">
         <button class="tw-toggle" id="tw-toggle-btn" title="Abrir chat" aria-label="Abrir chat">
-          <img class="tw-toggle-icon" src="${escapeAttr(resolveMediaUrl('/images/icon-chat.svg'))}" alt="Abrir chat" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+          <img class="tw-toggle-icon" src="${escapeAttr(resolveMediaUrl('/images/svgdamassa.svg'))}" alt="Abrir chat" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
           <span style="display:none;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
           </span>
