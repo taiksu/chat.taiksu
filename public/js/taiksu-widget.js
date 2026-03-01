@@ -5,6 +5,9 @@
   const DEFAULTS = {
     serverUrl: "http://localhost:3000",
     roomId: "",
+    clientAppId: "",
+    clientAppName: "",
+    externalUserId: "",
     userId: "",
     title: "Chat de Atendimento",
     position: "bottom-right",
@@ -16,7 +19,8 @@
     userName: "",
     placeholder: "sua mensagem...",
     mode: "floating",
-    mountSelector: ""
+    mountSelector: "",
+    supportInbox: false
   };
 
   let config = { ...DEFAULTS };
@@ -25,6 +29,8 @@
   let widgetOpen = false;
   let eventSource = null;
   let reconnectTimer = null;
+  let supportInboxRefreshTimer = null;
+  let supportInboxExpanded = false;
   let typingTimer = null;
   let typingActive = false;
   let selectedUploadType = "";
@@ -81,6 +87,10 @@
 
   function normalizeMode(mode) {
     return mode === "inline" ? "inline" : "floating";
+  }
+
+  function isTruthy(value) {
+    return value === true || String(value || "").trim().toLowerCase() === "true" || String(value || "") === "1";
   }
 
   function ensureTemplateCoreLoaded() {
@@ -244,7 +254,53 @@
       .tw-header-btn { width:32px; height:32px; border-radius:9999px; border:0; background:transparent; color:#fff; cursor:pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
       .tw-header-btn:hover { background: rgba(255,255,255,0.1); }
 
+      .tw-root { display: flex; align-items: stretch; gap: 10px; }
       .tw-main-content { flex: 1; display:flex; overflow:hidden; position: relative; }
+      .tw-support-dock {
+        width: 72px;
+        border: 1px solid rgba(0,0,0,0.12);
+        background: #f8fafc;
+        border-radius: 16px;
+        overflow: hidden;
+        display: none;
+        flex-direction: column;
+        transition: width 0.25s ease;
+      }
+      .tw-support-dock.show { display: flex; }
+      .tw-support-dock.expanded { width: 320px; }
+      .tw-inbox-head {
+        padding: 12px;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .tw-inbox-head strong { display: block; font-size: 18px; color: #1f2937; }
+      .tw-inbox-head span { display: block; margin-top: 4px; font-size: 12px; color: #64748b; }
+      .tw-inbox-head-text { display: none; min-width: 0; }
+      .tw-support-dock.expanded .tw-inbox-head-text { display: block; }
+      .tw-inbox-toggle {
+        width: 36px; height: 36px; border-radius: 9999px;
+        border: 1px solid #cbd5e1; background: #fff; color: #0f172a;
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
+      }
+      .tw-inbox-list { flex: 1; overflow-y: auto; }
+      .tw-inbox-item {
+        width: 100%; border: 0; border-bottom: 1px solid #e5e7eb; background: transparent;
+        display: flex; gap: 10px; align-items: center; padding: 10px 12px; cursor: pointer; text-align: left;
+      }
+      .tw-inbox-item:hover { background: #ecfdf5; }
+      .tw-inbox-item.active { background: #d1fae5; }
+      .tw-inbox-avatar { width: 42px; height: 42px; border-radius: 9999px; overflow: hidden; background: #bbf7d0; flex-shrink: 0; display:flex; align-items:center; justify-content:center; font-weight: 700; color: #065f46; }
+      .tw-inbox-avatar img { width: 100%; height: 100%; object-fit: cover; }
+      .tw-inbox-body { min-width: 0; flex: 1; display: none; }
+      .tw-support-dock.expanded .tw-inbox-body { display: block; }
+      .tw-inbox-name { margin: 0; font-size: 14px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tw-inbox-preview { margin: 2px 0 0; font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .tw-inbox-unread { min-width: 24px; height: 24px; border-radius: 9999px; background: #0ea5e9; color: #fff; font-size: 12px; font-weight: 700; display:flex; align-items:center; justify-content:center; padding: 0 6px; }
+      .tw-inbox-empty { padding: 20px 16px; font-size: 12px; color: #64748b; }
+      .tw-support-dock:not(.expanded) .tw-inbox-empty { display: none; }
 
       /* Floating Attach Menu */
       .tw-attach-menu {
@@ -448,8 +504,10 @@
       .tw-audio-time { font-size: 10px; color: #555; }
 
       @media (max-width: 480px) {
+        .tw-root { gap: 0; }
         .tw-widget { width: 100vw; height: 100vh; border-radius: 0; }
         .tw-widget.expanded { width: 100vw; height: 100vh; border-radius: 0; max-width: none; }
+        .tw-support-dock { display: none !important; }
       }
     `;
   }
@@ -547,11 +605,25 @@
       <div class="tw-root" id="tw-root">
         <div class="tw-widget" id="tw-widget">
           <div id="tw-header-host">${headerMarkup}</div>
-          <div class="tw-main-content">
+          <div class="tw-main-content" id="tw-main-content">
             <div class="tw-messages" id="tw-messages"></div>
           </div>
           ${composerMarkup}
         </div>
+        <aside class="tw-support-dock" id="tw-support-dock">
+          <div class="tw-inbox-head">
+            <button type="button" class="tw-inbox-toggle" id="tw-inbox-toggle" title="Expandir/Recolher conversas">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="tw-inbox-head-text">
+              <strong>Conversas</strong>
+              <span>Suporte (dev/admin)</span>
+            </div>
+          </div>
+          <div class="tw-inbox-list" id="tw-inbox-list">
+            <div class="tw-inbox-empty">Carregando conversas...</div>
+          </div>
+        </aside>
         <div class="tw-lightbox" id="tw-lightbox">
           <button class="tw-lightbox-close" id="tw-lightbox-close">&times;</button>
           <img src="" id="tw-lightbox-img" alt="Zoom">
@@ -564,6 +636,13 @@
 
   function setupEventListeners() {
     bindHeaderButtons();
+    const inboxToggle = shadow.getElementById("tw-inbox-toggle");
+    if (inboxToggle) {
+      inboxToggle.addEventListener("click", () => {
+        supportInboxExpanded = !supportInboxExpanded;
+        updateSupportDockState();
+      });
+    }
 
     const actionBtn = shadow.getElementById("tw-action-btn");
     if (actionBtn) actionBtn.addEventListener("click", handleAction);
@@ -577,6 +656,7 @@
     const input = shadow.getElementById("tw-input");
     if (input) {
       input.addEventListener("input", onInputUpdate);
+      input.addEventListener("paste", onInputPaste);
       input.addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
@@ -639,6 +719,17 @@
     if (lightbox) {
       lightbox.addEventListener("click", (event) => {
         if (event.target === lightbox) closeLightbox();
+      });
+    }
+
+    const inboxList = shadow.getElementById("tw-inbox-list");
+    if (inboxList) {
+      inboxList.addEventListener("click", (event) => {
+        const roomBtn = event.target && event.target.closest("[data-room-id]");
+        if (!roomBtn) return;
+        const nextRoomId = String(roomBtn.getAttribute("data-room-id") || "");
+        const nextRoomName = String(roomBtn.getAttribute("data-room-name") || "");
+        switchToRoom(nextRoomId, nextRoomName).catch(() => {});
       });
     }
 
@@ -878,6 +969,7 @@
   }
   function init(options) {
     config = { ...DEFAULTS, ...(options || {}) };
+    supportInboxExpanded = false;
     config.position = normalizePosition(config.position);
     config.mode = normalizeMode(config.mode);
     localUserName = String(config.userName || "").trim();
@@ -889,8 +981,11 @@
       config.userId = parseJwtSub(config.authToken);
       addSelfAlias(config.userId);
     }
-    if (!config.roomId) {
-      console.error("TaiksuChat: roomId é obrigatório.");
+    if (!config.externalUserId) {
+      config.externalUserId = config.userId || "";
+    }
+    if (!config.roomId && !config.clientAppId) {
+      console.error("TaiksuChat: informe roomId ou clientAppId.");
       return;
     }
     ensureTemplateCoreLoaded().catch(() => {});
@@ -903,10 +998,150 @@
     widgetOpen = true;
     await ensureTemplateCoreLoaded().catch(() => null);
     renderOpen();
+    const roomReady = await resolveRoomIdIfNeeded();
+    if (!roomReady) {
+      setComposerDisabled(true, "Nao foi possivel iniciar o chat agora.");
+      return;
+    }
     fetchRoomState();
     connectSSE();
     await bootstrapInitialGreeting();
     loadMessages();
+    loadSupportInbox().catch(() => {});
+    startSupportInboxRefresh();
+  }
+
+  async function resolveRoomIdIfNeeded() {
+    if (config.roomId) return true;
+    if (!config.clientAppId) return false;
+    try {
+      const response = await fetch(buildApiUrl("/api/chat/client/room"), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientAppId: String(config.clientAppId || ""),
+          clientAppName: String(config.clientAppName || ""),
+          externalUserId: String(config.externalUserId || config.userId || "")
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) return false;
+      const nextRoomId = String(data.roomId || data.room?.id || "").trim();
+      if (!nextRoomId) return false;
+      config.roomId = nextRoomId;
+      if (!config.title || config.title === DEFAULTS.title) {
+        config.title = String(data.room?.name || config.title || DEFAULTS.title);
+      }
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  function shouldUseSupportInbox() {
+    return isTruthy(config.supportInbox);
+  }
+
+  function stopSupportInboxRefresh() {
+    if (supportInboxRefreshTimer) {
+      clearInterval(supportInboxRefreshTimer);
+      supportInboxRefreshTimer = null;
+    }
+  }
+
+  function startSupportInboxRefresh() {
+    stopSupportInboxRefresh();
+    if (!shouldUseSupportInbox()) return;
+    supportInboxRefreshTimer = setInterval(() => {
+      loadSupportInbox().catch(() => {});
+    }, 12000);
+  }
+
+  function updateSupportDockState() {
+    const dock = shadow.getElementById("tw-support-dock");
+    const toggle = shadow.getElementById("tw-inbox-toggle");
+    if (!dock) return;
+    dock.classList.toggle("expanded", Boolean(supportInboxExpanded));
+    if (toggle) {
+      toggle.innerHTML = supportInboxExpanded
+        ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>`
+        : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>`;
+    }
+  }
+
+  function renderSupportInbox(rooms) {
+    const dock = shadow.getElementById("tw-support-dock");
+    const list = shadow.getElementById("tw-inbox-list");
+    if (!dock || !list) return;
+
+    if (!Array.isArray(rooms)) {
+      dock.classList.remove("show");
+      return;
+    }
+
+    dock.classList.add("show");
+    updateSupportDockState();
+    if (!rooms.length) {
+      list.innerHTML = `<div class="tw-inbox-empty">Nenhuma conversa encontrada.</div>`;
+      return;
+    }
+
+    list.innerHTML = rooms.map((room) => {
+      const roomId = String(room?.id || "");
+      const name = escapeHtml(String(room?.name || "Sala"));
+      const preview = escapeHtml(String(room?.lastMessagePreview || "Sem mensagens"));
+      const avatar = String(room?.avatar || "").trim();
+      const unread = Number(room?.unreadCount || 0);
+      const active = String(roomId) === String(config.roomId || "");
+      const avatarHtml = avatar
+        ? `<img src="${escapeAttr(resolveMediaUrl(avatar))}" alt="${name}">`
+        : `<span>${escapeHtml(String(name).charAt(0).toUpperCase() || "U")}</span>`;
+      return `
+        <button type="button" class="tw-inbox-item ${active ? "active" : ""}" data-room-id="${escapeAttr(roomId)}" data-room-name="${escapeAttr(String(room?.name || "Sala"))}">
+          <div class="tw-inbox-avatar">${avatarHtml}</div>
+          <div class="tw-inbox-body">
+            <p class="tw-inbox-name">${name}</p>
+            <p class="tw-inbox-preview">${preview}</p>
+          </div>
+          ${unread > 0 ? `<div class="tw-inbox-unread">${escapeHtml(String(unread > 99 ? "99+" : unread))}</div>` : ""}
+        </button>
+      `;
+    }).join("");
+  }
+
+  async function loadSupportInbox() {
+    if (!shouldUseSupportInbox()) return;
+    const response = await fetch(buildApiUrl("/api/chat/rooms/inbox"), {
+      method: "GET",
+      credentials: "include"
+    });
+    if (!response.ok) {
+      renderSupportInbox(null);
+      return;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!data || data.success !== true) return;
+    renderSupportInbox(Array.isArray(data.rooms) ? data.rooms : []);
+  }
+
+  async function switchToRoom(nextRoomId, nextRoomName = "") {
+    const safeNext = String(nextRoomId || "").trim();
+    if (!safeNext || safeNext === String(config.roomId || "")) return;
+    closeSSE();
+    renderedIds.clear();
+    const messagesEl = shadow.getElementById("tw-messages");
+    if (messagesEl) messagesEl.innerHTML = "";
+    config.roomId = safeNext;
+    if (String(nextRoomName || "").trim()) {
+      config.title = String(nextRoomName).trim();
+      updateWidgetHeader(headerParticipants);
+    }
+    fetchRoomState();
+    connectSSE();
+    await bootstrapInitialGreeting();
+    loadMessages();
+    loadSupportInbox().catch(() => {});
   }
 
   async function bootstrapInitialGreeting() {
@@ -945,6 +1180,7 @@
     clearAiProcessingTimer();
     stopRecording();
     closeSSE();
+    stopSupportInboxRefresh();
     renderClosed();
   }
 
@@ -989,12 +1225,14 @@
           markRoomAsRead();
         }
         scrollToBottom();
+        loadSupportInbox().catch(() => {});
       } else if (payload.type === "typing_status") {
         renderTyping(payload);
       } else if (payload.type === "ai_processing") {
         renderAiProcessing(payload);
       } else if (payload.type === "messages_read") {
         applyReadReceipts(payload.messageIds);
+        loadSupportInbox().catch(() => {});
       } else if (payload.type === "message_feedback") {
         applyMessageFeedback({
           messageId: payload.messageId,
@@ -1411,13 +1649,15 @@
   function sendFile(file, type) {
     if (!file || chatClosed) return;
     showSystemMessage("Enviando arquivo...");
-    
+    const fallbackName = String(file?.name || "").trim() || buildClipboardFilename(file, 1);
+    const fallbackSize = Number(file?.size || 0);
+
     const form = new FormData();
     form.append("roomId", config.roomId);
     form.append("file", file);
     form.append("type", type || inferFileType(file.type));
-    form.append("filename", file.name);
-    form.append("filesize", file.size);
+    form.append("filename", fallbackName);
+    form.append("filesize", String(fallbackSize));
 
     fetch(buildApiUrl("/api/messages/send"), { method: "POST", credentials: "include", body: form })
       .then((res) => res.json())
@@ -1433,6 +1673,78 @@
         console.error("TaiksuChat: erro ao enviar arquivo:", err);
         showSystemMessage("Erro ao enviar arquivo.", "error");
       });
+  }
+
+  function mimeToExtension(mime) {
+    const value = String(mime || "").toLowerCase();
+    if (!value) return ".bin";
+    const map = {
+      "image/png": ".png",
+      "image/jpeg": ".jpg",
+      "image/jpg": ".jpg",
+      "image/gif": ".gif",
+      "image/webp": ".webp",
+      "audio/mpeg": ".mp3",
+      "audio/mp3": ".mp3",
+      "audio/ogg": ".ogg",
+      "audio/wav": ".wav",
+      "audio/x-wav": ".wav",
+      "audio/webm": ".webm",
+      "application/pdf": ".pdf",
+      "text/plain": ".txt"
+    };
+    if (map[value]) return map[value];
+    const slashIdx = value.indexOf("/");
+    if (slashIdx > 0 && slashIdx < value.length - 1) {
+      const tail = value.slice(slashIdx + 1).replace(/[^a-z0-9.+-]/g, "");
+      if (tail) return `.${tail}`;
+    }
+    return ".bin";
+  }
+
+  function buildClipboardFilename(file, index = 1) {
+    const currentName = String(file?.name || "").trim();
+    if (currentName) return currentName;
+    const now = Date.now();
+    const safeIndex = Number.isFinite(index) ? Math.max(1, Number(index)) : 1;
+    const ext = mimeToExtension(file?.type);
+    return `clipboard-${now}-${safeIndex}${ext}`;
+  }
+
+  function collectClipboardFiles(clipboardData) {
+    if (!clipboardData) return [];
+    const files = [];
+    const items = clipboardData.items ? Array.from(clipboardData.items) : [];
+    items.forEach((item) => {
+      if (!item || item.kind !== "file") return;
+      const file = item.getAsFile ? item.getAsFile() : null;
+      if (file && Number(file.size || 0) > 0) files.push(file);
+    });
+    if (files.length) return files;
+    const fallbackFiles = clipboardData.files ? Array.from(clipboardData.files) : [];
+    return fallbackFiles.filter((file) => file && Number(file.size || 0) > 0);
+  }
+
+  function onInputPaste(event) {
+    if (chatClosed) return;
+    const clipboardData = event && event.clipboardData ? event.clipboardData : null;
+    const files = collectClipboardFiles(clipboardData);
+    if (!files.length) return;
+
+    event.preventDefault();
+    const maxPasteFiles = 3;
+    files.slice(0, maxPasteFiles).forEach((file, idx) => {
+      const syntheticName = buildClipboardFilename(file, idx + 1);
+      let uploadFile = file;
+      if (!String(file?.name || "").trim() && typeof File !== "undefined") {
+        try {
+          uploadFile = new File([file], syntheticName, { type: file.type || "application/octet-stream" });
+        } catch (_err) {
+          uploadFile = file;
+        }
+      }
+      sendFile(uploadFile, inferFileType(file?.type || ""));
+    });
   }
 
 
@@ -1555,11 +1867,12 @@
     const source = String(content || "");
     const escaped = escapeHtml(source);
     const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
-    return escaped.replace(urlRegex, (url) => {
+    const html = escaped.replace(urlRegex, (url) => {
       const safeUrl = String(url || "").trim();
       if (!/^https?:\/\//i.test(safeUrl)) return safeUrl;
       return `<a class="tw-link" href="${escapeAttr(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(safeUrl)}</a>`;
     });
+    return html.replace(/\r?\n/g, "<br>");
   }
 
   function renderAiProcessing(data) {
@@ -1868,6 +2181,7 @@
   function destroy() {
     stopRecording();
     closeSSE();
+    stopSupportInboxRefresh();
     if (host && host.parentNode) host.parentNode.removeChild(host);
     host = null;
     shadow = null;

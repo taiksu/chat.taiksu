@@ -63,10 +63,10 @@ Toda a documentacao detalhada esta em [`doc/`](c:/apps/chat.taiksu/doc):
 - [Fluxos de Uso](c:/apps/chat.taiksu/doc/FLUXOS_DE_USO.md)
 - [Banco de Dados](c:/apps/chat.taiksu/doc/BANCO_DE_DADOS.md)
 - [Operacao e Manutencao](c:/apps/chat.taiksu/doc/OPERACAO_E_MANUTENCAO.md)
+- [Componente Widget para Microservice](c:/apps/chat.taiksu/doc/WIDGET_COMPONENTE_MICROSERVICE.md)
 
 ## Observacoes
 
 - O fluxo principal de autenticacao e SSO.
 - `auth/login` e `auth/register` redirecionam para o SSO.
 - Para troubleshooting, use primeiro o endpoint `/health`.
-

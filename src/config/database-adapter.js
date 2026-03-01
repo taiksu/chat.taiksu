@@ -290,6 +290,19 @@ async function createTables() {
       )
     `,
     `
+      CREATE TABLE IF NOT EXISTS external_client_rooms (
+        id VARCHAR(64) PRIMARY KEY,
+        client_app_id VARCHAR(120) NOT NULL,
+        client_user_id VARCHAR(120) NOT NULL,
+        room_id VARCHAR(64) NOT NULL UNIQUE,
+        created_by VARCHAR(64) NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (client_app_id, client_user_id),
+        FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
+        FOREIGN KEY (created_by) REFERENCES users(id)
+      )
+    `,
+    `
       CREATE TABLE IF NOT EXISTS typing_status (
         id VARCHAR(64) PRIMARY KEY,
         room_id VARCHAR(64) NOT NULL,

@@ -5,6 +5,7 @@ const { requireApiAuth } = require('../middleware/requireAuth');
 const router = express.Router();
 
 router.get('/chamados/rooms', requireApiAuth, ChatController.listChamadoRoomsApi.bind(ChatController));
+router.get('/rooms/inbox', requireApiAuth, ChatController.listSupportInboxApi.bind(ChatController));
 router.post('/client/room', requireApiAuth, ChatController.createOrGetClientRoom.bind(ChatController));
 router.post('/chamados/:chamadoId/room', requireApiAuth, ChatController.createOrGetChamadoRoom.bind(ChatController));
 router.post('/chamados/:chamadoId/request-human', requireApiAuth, ChatController.requestHumanForChamado.bind(ChatController));

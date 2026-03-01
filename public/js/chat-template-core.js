@@ -17,11 +17,12 @@
     const source = String(content || "");
     const escaped = escapeHtml(source);
     const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
-    return escaped.replace(urlRegex, (url) => {
+    const html = escaped.replace(urlRegex, (url) => {
       const safeUrl = String(url || "").trim();
       if (!/^https?:\/\//i.test(safeUrl)) return safeUrl;
       return `<a class="tw-link" href="${escapeAttr(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(safeUrl)}</a>`;
     });
+    return html.replace(/\r?\n/g, "<br>");
   }
 
   function formatTimePtBr(dateValue) {

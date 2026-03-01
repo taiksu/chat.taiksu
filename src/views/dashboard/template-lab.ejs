@@ -27,6 +27,13 @@
         <p class="mt-1 text-sm text-gray-500">Use esta tela para validar o widget e abrir a mesma sala no chat real com usuarios diferentes.</p>
 
         <div class="mt-4 grid gap-3 md:grid-cols-3">
+          <label class="text-sm md:col-span-3">
+            <span class="mb-1 block font-semibold text-gray-500">Modo de teste</span>
+            <label class="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">
+              <input id="autoRoomMode" type="checkbox" class="h-4 w-4 rounded border-blue-300 text-blue-600 focus:ring-blue-400">
+              Auto-sala por app cliente (sem selecionar roomId manual)
+            </label>
+          </label>
           <label class="text-sm md:col-span-2">
             <span class="mb-1 block font-semibold text-gray-500">Sala ou chamado</span>
             <select id="roomSelect" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
@@ -36,6 +43,18 @@
                 </option>
               <% }); %>
             </select>
+          </label>
+          <label class="text-sm">
+            <span class="mb-1 block font-semibold text-gray-500">clientAppId</span>
+            <input id="clientAppId" type="text" value="template-lab-app" class="w-full rounded-xl border border-blue-200 px-3 py-2 text-sm text-blue-800 outline-none focus:border-blue-400" />
+          </label>
+          <label class="text-sm">
+            <span class="mb-1 block font-semibold text-gray-500">clientAppName</span>
+            <input id="clientAppName" type="text" value="Template Lab App" class="w-full rounded-xl border border-blue-200 px-3 py-2 text-sm text-blue-800 outline-none focus:border-blue-400" />
+          </label>
+          <label class="text-sm">
+            <span class="mb-1 block font-semibold text-gray-500">externalUserId</span>
+            <input id="externalUserId" type="text" class="w-full rounded-xl border border-blue-200 px-3 py-2 text-sm text-blue-800 outline-none focus:border-blue-400" />
           </label>
           <label class="text-sm">
             <span class="mb-1 block font-semibold text-gray-500">Usuario do widget</span>
@@ -64,6 +83,9 @@
           <span id="roomStateInfo">chat_state: - | status: -</span>
           <span id="chatStateResult" class="ml-2"></span>
         </p>
+        <p class="mt-1 text-xs font-semibold text-blue-700">
+          <span id="autoRoomInfo">Auto-sala: modo manual ativo.</span>
+        </p>
       </section>
 
       <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
@@ -83,10 +105,16 @@
     const sessionUser = <%- JSON.stringify(user || null) %>;
     const roomSelect = document.getElementById('roomSelect');
     const widgetUser = document.getElementById('widgetUser');
+    const autoRoomMode = document.getElementById('autoRoomMode');
+    const clientAppIdInput = document.getElementById('clientAppId');
+    const clientAppNameInput = document.getElementById('clientAppName');
+    const externalUserIdInput = document.getElementById('externalUserId');
     const chatStatePicker = document.getElementById('chatStatePicker');
     const roomStateInfo = document.getElementById('roomStateInfo');
     const chatStateResult = document.getElementById('chatStateResult');
+    const autoRoomInfo = document.getElementById('autoRoomInfo');
     const mount = '#widgetMount';
+    let autoResolvedRoomId = '';
 
     function roomId() {
       return roomSelect.value;
@@ -171,41 +199,112 @@
       return selectedUser()?.name || '';
     }
 
-    function initWidget() {
-      if (!roomId()) {
-        alert('Selecione uma sala/chamado.');
-        return;
+    function autoModeEnabled() {
+      return Boolean(autoRoomMode.checked);
+    }
+
+    function renderModeUi() {
+      const auto = autoModeEnabled();
+      roomSelect.disabled = auto;
+      roomSelect.classList.toggle('opacity-50', auto);
+      roomSelect.classList.toggle('cursor-not-allowed', auto);
+      if (!auto) {
+        autoResolvedRoomId = '';
+        autoRoomInfo.textContent = 'Auto-sala: modo manual ativo.';
+      } else if (!autoResolvedRoomId) {
+        autoRoomInfo.textContent = 'Auto-sala: aguardando criacao/resolucao da sala.';
       }
+    }
+
+    async function resolveAutoRoomId() {
+      const appId = String(clientAppIdInput.value || '').trim();
+      if (!appId) throw new Error('Informe clientAppId.');
+      const extUserId = String(externalUserIdInput.value || userId() || '').trim();
+      if (!extUserId) throw new Error('Informe externalUserId.');
+
+      const response = await fetch('/api/chat/client/room', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientAppId: appId,
+          clientAppName: String(clientAppNameInput.value || '').trim(),
+          externalUserId: extUserId
+        })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || `Falha HTTP ${response.status}`);
+      }
+
+      autoResolvedRoomId = String(data.roomId || data.room?.id || '').trim();
+      if (!autoResolvedRoomId) {
+        throw new Error('Falha ao resolver roomId automaticamente.');
+      }
+      autoRoomInfo.textContent = `Auto-sala: roomId ${autoResolvedRoomId} (${data.created ? 'criada agora' : 'reutilizada'}).`;
+      return autoResolvedRoomId;
+    }
+
+    async function initWidget() {
       if (!userId()) {
         alert('Selecione um usuario valido para o widget.');
         return;
       }
+
+      const auto = autoModeEnabled();
+      if (!auto && !roomId()) {
+        alert('Selecione uma sala/chamado.');
+        return;
+      }
+      const extUserId = String(externalUserIdInput.value || userId() || '').trim();
+      if (auto && !String(clientAppIdInput.value || '').trim()) {
+        alert('Informe clientAppId para modo auto-sala.');
+        return;
+      }
+
       window.TaiksuChat.destroy?.();
       window.TaiksuChat.init({
         serverUrl: defaultServerUrl,
-        roomId: roomId(),
+        roomId: auto ? '' : roomId(),
+        clientAppId: auto ? String(clientAppIdInput.value || '').trim() : '',
+        clientAppName: auto ? String(clientAppNameInput.value || '').trim() : '',
+        externalUserId: auto ? extUserId : '',
         userId: userId(),
         userName: userName(),
+        supportInbox: true,
         mode: 'inline',
         mountSelector: mount,
         autoOpen: true,
-        title: `Template Lab - ${roomId()}`
+        title: auto ? `Template Lab - ${String(clientAppIdInput.value || 'auto')}` : `Template Lab - ${roomId()}`
       });
       window.TaiksuChat.open();
+
+      if (auto) {
+        resolveAutoRoomId().catch((err) => {
+          autoRoomInfo.textContent = `Auto-sala: ${err.message}`;
+        });
+      }
     }
 
-    function openRealRoom() {
-      if (!roomId()) return;
-      window.open(`/chat/room/${encodeURIComponent(roomId())}`, '_blank');
+    async function openRealRoom() {
+      let targetRoomId = roomId();
+      if (autoModeEnabled()) {
+        targetRoomId = autoResolvedRoomId || await resolveAutoRoomId();
+      }
+      if (!targetRoomId) return;
+      window.open(`/chat/room/${encodeURIComponent(targetRoomId)}`, '_blank');
     }
 
     async function applyChatState() {
-      if (!roomId()) return;
+      let targetRoomId = roomId();
+      if (autoModeEnabled()) {
+        targetRoomId = autoResolvedRoomId || await resolveAutoRoomId();
+      }
+      if (!targetRoomId) return;
       const nextState = String(chatStatePicker.value || '').trim().toUpperCase();
       if (!nextState) return;
       setChatStateResult('Aplicando...', 'info');
 
-      const response = await fetch(`/api/chat/rooms/${encodeURIComponent(roomId())}/chat-state`, {
+      const response = await fetch(`/api/chat/rooms/${encodeURIComponent(targetRoomId)}/chat-state`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chatState: nextState })
@@ -221,9 +320,10 @@
       setChatStateResult(`chat_state atualizado para ${String(data.chatState || nextState).toUpperCase()}`, 'success');
     }
 
-    document.getElementById('initWidgetBtn').addEventListener('click', initWidget);
+    document.getElementById('initWidgetBtn').addEventListener('click', () => initWidget().catch((err) => alert(err.message)));
     document.getElementById('applyChatStateBtn').addEventListener('click', () => applyChatState().catch((err) => setChatStateResult(err.message, 'error')));
-    document.getElementById('openRoomBtn').addEventListener('click', openRealRoom);
+    document.getElementById('openRoomBtn').addEventListener('click', () => openRealRoom().catch((err) => alert(err.message)));
+    autoRoomMode.addEventListener('change', renderModeUi);
     roomSelect.addEventListener('change', () => {
       buildUserOptions();
       renderRoomStateInfo();
@@ -234,7 +334,11 @@
 
     buildUserOptions();
     renderRoomStateInfo();
-    initWidget();
+    if (!externalUserIdInput.value) {
+      externalUserIdInput.value = String(sessionUser?.id || '');
+    }
+    renderModeUi();
+    initWidget().catch(() => {});
   </script>
 </body>
 </html>

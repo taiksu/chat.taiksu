@@ -39,6 +39,11 @@ class ChatController {
     return User.supportRoles().includes(role);
   }
 
+  canAccessSupportInbox(user) {
+    const role = String(user?.role || '').toLowerCase();
+    return ['admin', 'dev', 'developer', 'atendente', 'support', 'suporte', 'agent'].includes(role);
+  }
+
   normalizeAttendanceState(value) {
     const state = String(value || '').trim().toLowerCase();
     if (state === 'ocupado' || state === 'busy') return 'ocupado';
@@ -138,6 +143,54 @@ class ChatController {
     }));
   }
 
+  summarizeMessagePreview(message) {
+    if (!message) return 'Sem mensagens ainda';
+    const type = String(message.type || 'text').toLowerCase();
+    if (type === 'image') return '[Imagem]';
+    if (type === 'audio') return '[Audio]';
+    if (type === 'video') return '[Video]';
+    if (type === 'document' || type === 'file') return '[Documento]';
+    const text = String(message.content || '').replace(/\s+/g, ' ').trim();
+    if (!text) return 'Nova mensagem';
+    return text.length > 72 ? `${text.slice(0, 69).trim()}...` : text;
+  }
+
+  async buildSupportInboxRooms(currentRoomId) {
+    const [normalRooms, chamadoRooms] = await Promise.all([
+      ChatRoom.findAll(),
+      ChatRoom.findChamadoRooms()
+    ]);
+
+    const merged = new Map();
+    [...(normalRooms || []), ...(chamadoRooms || [])].forEach((room) => {
+      const id = String(room?.id || '');
+      if (!id) return;
+      merged.set(id, room);
+    });
+
+    const items = await Promise.all(Array.from(merged.values()).map(async (room) => {
+      const [messages, unreadCount] = await Promise.all([
+        Message.findByRoomId(room.id, 1),
+        Message.countUnread(room.id)
+      ]);
+      const lastMessage = Array.isArray(messages) && messages.length ? messages[messages.length - 1] : null;
+      const updatedAt = lastMessage?.created_at || room.updated_at || room.created_at || null;
+      return {
+        id: String(room.id || ''),
+        name: String(room.name || 'Sala'),
+        avatar: String(lastMessage?.avatar || ''),
+        unreadCount: Number(unreadCount || 0),
+        lastMessagePreview: this.summarizeMessagePreview(lastMessage),
+        updatedAt,
+        active: String(room.id || '') === String(currentRoomId || '')
+      };
+    }));
+
+    return items
+      .sort((a, b) => new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime())
+      .slice(0, 120);
+  }
+
   async assignAgentToRoom(roomId, agentId, chamadoId = '') {
     await ChatRoom.addParticipant(roomId, agentId);
     await ChatRoom.updateStatus(roomId, 'aberto');
@@ -229,6 +282,25 @@ class ChatController {
     } catch (error) {
       console.error('Error listing chamado rooms api:', error);
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  async listSupportInboxApi(req, res) {
+    try {
+      const actor = req.session.user;
+      if (!actor) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+      if (!this.canAccessSupportInbox(actor)) {
+        return res.status(403).json({ error: 'Acesso restrito para suporte' });
+      }
+
+      const currentRoomId = String(req.query?.roomId || '').trim();
+      const rooms = await this.buildSupportInboxRooms(currentRoomId);
+      return res.json({ success: true, rooms });
+    } catch (error) {
+      console.error('Error listing support inbox rooms api:', error);
+      return res.status(500).json({ error: error.message });
     }
   }
 

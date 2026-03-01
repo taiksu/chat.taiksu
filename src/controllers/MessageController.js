@@ -3,6 +3,7 @@ const ChatRoom = require('../models/ChatRoom');
 const User = require('../models/User');
 const AIController = require('./AIController');
 const knowledgeBase = require('../services/knowledgeBase');
+const fastReplyService = require('../services/fastReplyService');
 const alertService = require('../services/alertService');
 const eventBrokerService = require('../services/eventBrokerService');
 const settingsService = require('../services/settingsService');
@@ -623,10 +624,13 @@ class MessageController {
     if (!safe || !link) return safe;
     if (safe.includes(link)) return safe;
 
-    const wantsReference = /(tutorial|passo a passo|guia|manual|video|v[ií]deo|artigo|ajuda|link|onde vejo|onde encontro)/i.test(String(userMessage || ''));
-    if (!wantsReference) return safe;
+    const sourceAlways = String(process.env.AI_APPEND_SOURCE_LINK_ALWAYS || 'true').trim().toLowerCase() !== 'false';
+    const wantsReference = /(tutorial|passo a passo|guia|manual|video|v[i?]deo|artigo|ajuda|link|onde vejo|onde encontro|fonte)/i.test(String(userMessage || ''));
+    if (!sourceAlways && !wantsReference) return safe;
 
-    return `${safe}\n\nSaiba mais: ${link}`;
+    const isVideo = /(?:youtube\.com|youtu\.be|\/video|\/videos)/i.test(link);
+    const label = isVideo ? 'Video tutorial' : 'Fonte';
+    return `${safe}\n\n${label}: ${link}`;
   }
 
   shouldOfferChoiceFollowUp(replyText) {
@@ -659,8 +663,9 @@ class MessageController {
       actions.push({
         id: 'abrir_chamado',
         label: 'Abrir chamado',
-        type: 'send_text',
-        value: 'Quero abrir um chamado.'
+        type: 'open_url',
+        url: this.getChamadoCreateUrl(),
+        target: '_blank'
       });
     }
     return actions;
@@ -897,6 +902,28 @@ class MessageController {
     return `${safe}\n\nSe quiser, eu te encaminho para um atendente humano aqui no chat.`;
   }
 
+  async tryFastReply({ roomId, userMessage }) {
+    const input = String(userMessage || '').trim();
+    if (!input) return null;
+
+    const intent = this.inferMemoryIntent(input);
+    const topicLabel = this.detectTopicLabel(input);
+    const hit = await fastReplyService.findBestReply({
+      message: input,
+      intent,
+      topicLabel
+    });
+    if (!hit || !String(hit.reply || '').trim()) return null;
+
+    return {
+      reply: String(hit.reply || '').trim(),
+      score: Number(hit.score || 0),
+      matchedQuestion: String(hit.matchedQuestion || ''),
+      matchedAt: hit.matchedAt || null,
+      feedbackValue: hit.feedbackValue || null
+    };
+  }
+
   async publishSseMessage(roomId, payload) {
     const clients = this.getRoomClients(roomId);
     clients.forEach((client) => {
@@ -965,6 +992,7 @@ class MessageController {
       type: 'text',
       actions: normalizedActions
     });
+    fastReplyService.invalidate();
 
     await this.publishSseMessage(roomId, {
       id: aiMessage.id,
@@ -1147,8 +1175,51 @@ class MessageController {
       await ChatRoom.updateChatState(roomId, 'IA');
     }
 
+    const kbTopK = Number(process.env.KB_TOP_K || 3);
+    const kbMinScore = Number(process.env.KB_MIN_SCORE || 2);
+    const preContextDocs = knowledgeBase.retrieve(aiInputContent, { limit: kbTopK, minScore: kbMinScore });
+    const preKbLinks = preContextDocs
+      .filter((doc) => this.isValidKbUrl(doc?.url))
+      .map((doc) => ({ id: String(doc.id || ''), title: String(doc.title || ''), url: String(doc.url || '') }));
+
+    let fastReplyHit = null;
+    try {
+      fastReplyHit = await this.tryFastReply({ roomId, userMessage: aiInputContent });
+    } catch (error) {
+      console.warn('[AI_FAST_REPLY] falha ao buscar cache semantico:', error.message);
+    }
+    if (fastReplyHit) {
+      let cachedReply = this.fixHallucinatedUserName(fastReplyHit.reply, req.session?.user?.name || '');
+      cachedReply = this.adaptAiReplyForConversation({
+        replyText: cachedReply,
+        userMessage: trimmedContent,
+        roomId
+      });
+      cachedReply = this.appendKnowledgeReference(cachedReply, preKbLinks, trimmedContent);
+      const finalCachedContent = this.appendHumanHandoffOffer(cachedReply);
+      await this.sendAiMessage({
+        roomId,
+        content: finalCachedContent
+      });
+      this.logAiMetric('fast_reply_hit', {
+        roomId,
+        chamadoId: chamadoId ? String(chamadoId) : '',
+        score: Number(fastReplyHit.score || 0),
+        matchedQuestion: this.buildBrokerTextPreview(fastReplyHit.matchedQuestion || '', 140),
+        matchedAt: fastReplyHit.matchedAt || null,
+        feedbackValue: fastReplyHit.feedbackValue || null,
+        inputChars: aiInputContent.length,
+        outputChars: finalCachedContent.length
+      });
+      return;
+    }
+
     let aiReply = '';
-    let aiMeta = { kbHits: 0, kbDocIds: [], kbLinks: [] };
+    let aiMeta = {
+      kbHits: preContextDocs.length,
+      kbDocIds: preContextDocs.map((doc) => doc.id),
+      kbLinks: preKbLinks
+    };
     try {
       this.publishAiProcessing(roomId, true);
       const aiResult = await this.callAiApi({ roomId, chamadoId, content: aiInputContent, req, roomState: 'IA' });
@@ -1517,6 +1588,7 @@ class MessageController {
       }
 
       await Message.setFeedback({ messageId, value, userId });
+      fastReplyService.invalidate();
       eventBrokerService.publishAlias(value === 'up' ? 'AI_FEEDBACK_UP' : 'AI_FEEDBACK_DOWN', {
         userId,
         priority: 'normal',

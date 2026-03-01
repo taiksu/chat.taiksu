@@ -173,6 +173,7 @@ class ChatRoom {
   static async deleteById(roomId) {
     return sequelize.transaction(async (transaction) => {
       await SupportChamadoRoomModel.destroy({ where: { room_id: roomId }, transaction });
+      await ExternalClientRoomModel.destroy({ where: { room_id: roomId }, transaction });
       await TypingStatusModel.destroy({ where: { room_id: roomId }, transaction });
       await RoomParticipantModel.destroy({ where: { room_id: roomId }, transaction });
       await MessageModel.destroy({ where: { room_id: roomId }, transaction });
