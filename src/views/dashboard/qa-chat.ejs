@@ -40,9 +40,25 @@
               <% }); %>
             </select>
           </label>
+          <label class="min-w-[220px] text-sm">
+            <span class="mb-1 block font-semibold text-gray-500">chat_state (teste)</span>
+            <select id="chatStatePicker" class="w-full rounded-xl border border-emerald-200 px-3 py-2 text-sm text-emerald-800 outline-none focus:border-emerald-400">
+              <option value="NEW">NEW</option>
+              <option value="IA">IA</option>
+              <option value="AGUARDANDO_HUMANO">AGUARDANDO_HUMANO</option>
+              <option value="FILA">FILA</option>
+              <option value="HUMANO">HUMANO</option>
+              <option value="FECHADO">FECHADO</option>
+            </select>
+          </label>
+          <button id="applyChatStateBtn" type="button" class="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100">Aplicar chat_state</button>
           <button id="refreshBtn" type="button" class="rounded-xl0 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-600">Atualizar dados</button>
           <button id="typingBtn" type="button" class="rounded-xl border border-green-300 bg-white px-4 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-50">Simular digitando</button>
           <button id="auditBtn" type="button" class="rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100">Executar auditoria</button>
+          <div class="w-full text-xs font-semibold text-gray-600">
+            <span id="roomStateInfo">chat_state: - | status: -</span>
+            <span id="chatStateResult" class="ml-2"></span>
+          </div>
         </div>
       </section>
 
@@ -133,6 +149,9 @@
     const paneB = document.getElementById('paneB');
     const typingA = document.getElementById('typingA');
     const typingB = document.getElementById('typingB');
+    const chatStatePicker = document.getElementById('chatStatePicker');
+    const roomStateInfo = document.getElementById('roomStateInfo');
+    const chatStateResult = document.getElementById('chatStateResult');
 
     function normalizeMessage(msg) {
       return {
@@ -149,6 +168,28 @@
 
     function getRoomById(id) {
       return state.rooms.find((room) => room.id === id) || null;
+    }
+
+    function renderRoomStateInfo() {
+      const room = getRoomById(state.roomId);
+      if (!room) {
+        roomStateInfo.textContent = 'chat_state: - | status: -';
+        return;
+      }
+      const chatState = String(room.chatState || 'NEW').toUpperCase();
+      const status = String(room.status || 'aberto').toLowerCase();
+      roomStateInfo.textContent = `chat_state: ${chatState} | status: ${status}`;
+      chatStatePicker.value = chatState;
+    }
+
+    function setChatStateResult(text, type = 'info') {
+      const colors = {
+        info: 'text-gray-600',
+        success: 'text-emerald-700',
+        error: 'text-red-700'
+      };
+      chatStateResult.className = `ml-2 ${colors[type] || colors.info}`;
+      chatStateResult.textContent = text;
     }
 
     function setParticipants(roomId) {
@@ -274,6 +315,7 @@
 
       const checks = [
         { label: 'SSE conectado', ok: state.sseConnected },
+        { label: 'chat_state visivel para teste', ok: Boolean(getRoomById(state.roomId)?.chatState) },
         { label: 'Avatar stack com participantes', ok: state.participants.length > 1 },
         { label: 'Perspectiva A mostra lados corretos', ok: hasOwnA && hasOtherA },
         { label: 'Perspectiva B mostra lados corretos', ok: hasOwnB && hasOtherB },
@@ -394,6 +436,7 @@
       renderPane(paneA, viewerA.value);
       renderPane(paneB, viewerB.value);
       renderTypingStatus();
+      renderRoomStateInfo();
       renderChecklist();
     }
 
@@ -442,6 +485,11 @@
           state.messages = [];
         }
 
+        if (payload.type === 'room_chat_state_changed') {
+          const room = getRoomById(payload.roomId || state.roomId);
+          if (room) room.chatState = String(payload.chatState || room.chatState || 'NEW').toUpperCase();
+        }
+
         renderAll();
       };
 
@@ -488,6 +536,26 @@
       window.location.href = `/dashboard/qa-chat?roomId=${encodeURIComponent(id)}`;
     }
 
+    async function applyChatState() {
+      const nextState = String(chatStatePicker.value || '').trim().toUpperCase();
+      if (!nextState) return;
+      setChatStateResult('Aplicando...', 'info');
+      const response = await fetch(`/api/chat/rooms/${encodeURIComponent(state.roomId)}/chat-state`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatState: nextState })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || `Falha HTTP ${response.status}`);
+      }
+
+      const room = getRoomById(state.roomId);
+      if (room) room.chatState = String(data.chatState || nextState).toUpperCase();
+      renderAll();
+      setChatStateResult(`chat_state atualizado para ${String(data.chatState || nextState).toUpperCase()}`, 'success');
+    }
+
     function attachEvents() {
       roomPicker.addEventListener('change', () => changeRoom(roomPicker.value));
       viewerA.addEventListener('change', () => {
@@ -508,6 +576,7 @@
       document.getElementById('typingBtn').addEventListener('click', () => simulateTyping().catch((err) => alert(err.message)));
       document.getElementById('refreshBtn').addEventListener('click', () => loadMessages().catch((err) => alert(err.message)));
       document.getElementById('auditBtn').addEventListener('click', () => runAudit().catch((err) => alert(err.message)));
+      document.getElementById('applyChatStateBtn').addEventListener('click', () => applyChatState().catch((err) => setChatStateResult(err.message, 'error')));
     }
 
     async function bootstrap() {

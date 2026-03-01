@@ -612,10 +612,18 @@
         const actionButton = event.target && event.target.closest(".tw-msg-action");
         if (actionButton) {
           const actionType = String(actionButton.getAttribute("data-action-type") || "");
+          const actionValue = String(actionButton.getAttribute("data-action-value") || "");
           const actionUrl = String(actionButton.getAttribute("data-action-url") || "");
           const actionTarget = String(actionButton.getAttribute("data-action-target") || "_blank");
           if (actionType === "open_url" && actionUrl) {
             window.open(actionUrl, actionTarget);
+          } else if (actionType === "send_text" && actionValue) {
+            const input = shadow.getElementById("tw-input");
+            if (input && !chatClosed) {
+              input.value = actionValue;
+              onInputUpdate();
+              sendMessage();
+            }
           }
           return;
         }
@@ -1087,10 +1095,11 @@
         const id = String(action?.id || "").trim();
         const label = String(action?.label || "").trim();
         const type = String(action?.type || "open_url").trim();
+        const value = String(action?.value || "").trim();
         const url = String(action?.url || "").trim();
         const target = String(action?.target || "_blank").trim();
         if (!id || !label) return "";
-        return `<button type="button" class="tw-msg-action" data-action-id="${escapeAttr(id)}" data-action-type="${escapeAttr(type)}" data-action-url="${escapeAttr(url)}" data-action-target="${escapeAttr(target)}">${escapeHtml(label)}</button>`;
+        return `<button type="button" class="tw-msg-action" data-action-id="${escapeAttr(id)}" data-action-type="${escapeAttr(type)}" data-action-value="${escapeAttr(value)}" data-action-url="${escapeAttr(url)}" data-action-target="${escapeAttr(target)}">${escapeHtml(label)}</button>`;
       })
       .filter(Boolean)
       .join("");

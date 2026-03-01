@@ -137,6 +137,8 @@ class DashboardController {
           roomType: room.chamado_id ? 'chamado' : 'sala',
           chamadoId: room.chamado_id || null,
           description: room.description || '',
+          status: String(room.status || 'aberto'),
+          chatState: String(room.chat_state || 'NEW').toUpperCase(),
           participants: (participants || []).map((p) => ({
             id: String(p.id),
             name: p.name,
@@ -189,6 +191,8 @@ class DashboardController {
           name: room.name,
           roomType: room.chamado_id ? 'chamado' : 'sala',
           chamadoId: room.chamado_id || null,
+          status: String(room.status || 'aberto'),
+          chatState: String(room.chat_state || 'NEW').toUpperCase(),
           participants: (participants || []).map((p) => ({
             id: String(p.id),
             name: p.name || `Usuario ${p.id}`,

@@ -5,6 +5,7 @@ const {
   ChatRoomModel,
   RoomParticipantModel,
   SupportChamadoRoomModel,
+  ExternalClientRoomModel,
   MessageModel,
   TypingStatusModel
 } = require('./sequelize-models');
@@ -176,6 +177,71 @@ class ChatRoom {
       await RoomParticipantModel.destroy({ where: { room_id: roomId }, transaction });
       await MessageModel.destroy({ where: { room_id: roomId }, transaction });
       return ChatRoomModel.destroy({ where: { id: roomId }, transaction });
+    });
+  }
+
+  static async findByExternalClient(clientAppId, clientUserId) {
+    const rows = await sequelize.query(
+      `SELECT cr.*, ecr.client_app_id, ecr.client_user_id
+       FROM external_client_rooms ecr
+       JOIN chat_rooms cr ON cr.id = ecr.room_id
+       WHERE ecr.client_app_id = :clientAppId
+         AND ecr.client_user_id = :clientUserId
+       LIMIT 1`,
+      {
+        replacements: {
+          clientAppId: String(clientAppId || ''),
+          clientUserId: String(clientUserId || '')
+        },
+        type: QueryTypes.SELECT
+      }
+    );
+    return rows[0] || null;
+  }
+
+  static async createOrGetExternalClientRoom({
+    clientAppId,
+    clientUserId,
+    ownerId,
+    name,
+    description
+  }) {
+    const safeApp = String(clientAppId || '').trim();
+    const safeUser = String(clientUserId || '').trim();
+    if (!safeApp || !safeUser) {
+      throw new Error('clientAppId e clientUserId sao obrigatorios');
+    }
+
+    const existing = await this.findByExternalClient(safeApp, safeUser);
+    if (existing) return { room: existing, created: false };
+
+    return sequelize.transaction(async (transaction) => {
+      const roomId = uuidv4();
+      const createdRoom = await ChatRoomModel.create({
+        id: roomId,
+        name: name || `Cliente ${safeUser}`,
+        type: 'external_client',
+        description: description || `Atendimento do app ${safeApp} para usuario ${safeUser}`,
+        owner_id: ownerId
+      }, { transaction });
+
+      await ExternalClientRoomModel.create({
+        id: uuidv4(),
+        client_app_id: safeApp,
+        client_user_id: safeUser,
+        room_id: createdRoom.id,
+        created_by: ownerId,
+        created_at: new Date()
+      }, { transaction });
+
+      return {
+        room: {
+          ...createdRoom.get({ plain: true }),
+          client_app_id: safeApp,
+          client_user_id: safeUser
+        },
+        created: true
+      };
     });
   }
 

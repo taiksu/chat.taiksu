@@ -56,7 +56,15 @@ class EventBrokerService {
   }
 
   makeDedupeKey(eventId, payload = {}) {
-    return `${eventId}:${String(payload.roomId || '')}:${String(payload.chamadoId || '')}`;
+    return [
+      String(eventId || ''),
+      String(payload.roomId || ''),
+      String(payload.chamadoId || ''),
+      String(payload.messageId || payload.firstMessageId || ''),
+      String(payload.chatState || ''),
+      String(payload.status || ''),
+      String(payload.reason || '')
+    ].join(':');
   }
 
   shouldSkipByDedupe(eventId, payload = {}) {
@@ -76,10 +84,36 @@ class EventBrokerService {
     return false;
   }
 
+  normalizePayload(payload = {}, context = {}) {
+    const base = payload && typeof payload === 'object' ? { ...payload } : {};
+    const source = String(base.source || context.source || 'chat-taiksu').trim() || 'chat-taiksu';
+    const eventAlias = String(context.eventAlias || '').trim();
+    const actorId = this.normalizeUserId(context.userId);
+    const now = new Date().toISOString();
+    return {
+      ...base,
+      source,
+      roomId: base.roomId != null ? String(base.roomId) : '',
+      chamadoId: base.chamadoId != null ? String(base.chamadoId) : '',
+      messageId: base.messageId != null ? String(base.messageId) : '',
+      firstMessageId: base.firstMessageId != null ? String(base.firstMessageId) : '',
+      metadata: {
+        eventId: Number(context.eventId || 0),
+        eventAlias,
+        emittedAt: now,
+        payloadVersion: 2,
+        service: 'chat-taiksu',
+        environment: String(process.env.NODE_ENV || 'development'),
+        actorId
+      }
+    };
+  }
+
   async publish(eventId, {
     userId,
     priority = 'high',
-    payload = {}
+    payload = {},
+    eventAlias = ''
   } = {}) {
     if (!this.isEnabled()) return { ok: false, reason: 'disabled' };
 
@@ -91,7 +125,13 @@ class EventBrokerService {
       return { ok: false, reason: 'invalid_event_id' };
     }
 
-    if (this.shouldSkipByDedupe(safeEventId, payload || {})) {
+    const normalizedPayload = this.normalizePayload(payload, {
+      userId,
+      eventId: safeEventId,
+      eventAlias
+    });
+
+    if (this.shouldSkipByDedupe(safeEventId, normalizedPayload)) {
       return { ok: true, deduped: true };
     }
 
@@ -108,7 +148,7 @@ class EventBrokerService {
       const response = await fetch(this.getPublishUrl(), {
         method: 'POST',
         headers,
-        body: JSON.stringify(payload && typeof payload === 'object' ? payload : {})
+        body: JSON.stringify(normalizedPayload)
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -123,7 +163,10 @@ class EventBrokerService {
   async publishAlias(alias, context = {}) {
     const eventId = this.getEventIdByAlias(alias);
     if (!eventId) return { ok: false, reason: 'missing_event_id_alias' };
-    return this.publish(eventId, context);
+    return this.publish(eventId, {
+      ...context,
+      eventAlias: String(alias || '').trim().toUpperCase()
+    });
   }
 }
 

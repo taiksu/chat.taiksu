@@ -107,6 +107,25 @@ const TypingStatusModel = sequelize.define('typing_status', {
   timestamps: false
 });
 
+const ExternalClientRoomModel = sequelize.define('external_client_rooms', {
+  id: { type: DataTypes.STRING(64), primaryKey: true },
+  client_app_id: { type: DataTypes.STRING(120), allowNull: false },
+  client_user_id: { type: DataTypes.STRING(120), allowNull: false },
+  room_id: { type: DataTypes.STRING(64), allowNull: false, unique: true },
+  created_by: { type: DataTypes.STRING(64), allowNull: false },
+  created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+}, {
+  ...common,
+  timestamps: false,
+  indexes: [
+    {
+      name: 'idx_external_client_room_unique',
+      unique: true,
+      fields: ['client_app_id', 'client_user_id']
+    }
+  ]
+});
+
 const ChatQueueModel = sequelize.define('chat_queue', {
   id: { type: DataTypes.STRING(64), primaryKey: true },
   room_id: { type: DataTypes.STRING(64), allowNull: false },
@@ -167,6 +186,8 @@ RoomParticipantModel.belongsTo(UserModel, { foreignKey: 'user_id' });
 RoomParticipantModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
 SupportChamadoRoomModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
 SupportChamadoRoomModel.belongsTo(UserModel, { foreignKey: 'created_by', as: 'creator' });
+ExternalClientRoomModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
+ExternalClientRoomModel.belongsTo(UserModel, { foreignKey: 'created_by', as: 'creator' });
 ChatQueueModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
 ChatQueueModel.belongsTo(UserModel, { foreignKey: 'user_id' });
 ChatQueueModel.belongsTo(UserModel, { foreignKey: 'assigned_agent_id', as: 'assignedAgent' });
@@ -284,6 +305,7 @@ module.exports = {
   MessageModel,
   RoomParticipantModel,
   SupportChamadoRoomModel,
+  ExternalClientRoomModel,
   MetricModel,
   TypingStatusModel,
   ChatQueueModel,

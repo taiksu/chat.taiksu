@@ -13,6 +13,17 @@
       .replace(/>/g, "&gt;");
   }
 
+  function linkifyText(content) {
+    const source = String(content || "");
+    const escaped = escapeHtml(source);
+    const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
+    return escaped.replace(urlRegex, (url) => {
+      const safeUrl = String(url || "").trim();
+      if (!/^https?:\/\//i.test(safeUrl)) return safeUrl;
+      return `<a class="tw-link" href="${escapeAttr(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(safeUrl)}</a>`;
+    });
+  }
+
   function formatTimePtBr(dateValue) {
     return new Date(dateValue).toLocaleTimeString("pt-BR", {
       hour: "2-digit",
@@ -217,7 +228,7 @@
     const mediaUrl = opts.resolveMediaUrl ? opts.resolveMediaUrl(rawUrl) : rawUrl;
 
     if (type === "text") {
-      return escapeHtml(content);
+      return linkifyText(content);
     }
 
     if (!mediaUrl) {

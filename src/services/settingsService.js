@@ -10,7 +10,35 @@ class SettingsService {
     this.lastMtimeMs = 0;
   }
 
+  getAllowedProviders() {
+    return ['ollama', 'gemini'];
+  }
+
+  normalizeProvider(value, fallback = 'ollama') {
+    const provider = String(value || '').trim().toLowerCase();
+    return this.getAllowedProviders().includes(provider) ? provider : fallback;
+  }
+
+  getDefaultProvider() {
+    const ordered = String(process.env.AI_PROVIDER_ORDER || 'ollama,gemini')
+      .split(',')
+      .map((item) => this.normalizeProvider(item, ''))
+      .filter(Boolean);
+    return ordered[0] || 'ollama';
+  }
+
+  getDefaultModelByProvider(provider) {
+    if (provider === 'gemini') {
+      return String(process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
+    }
+    return String(process.env.OLLAMA_MODEL || process.env.ollama_MODEL || 'gemma3:1b').trim();
+  }
+
   defaults() {
+    const preferredProvider = this.normalizeProvider(
+      process.env.AI_DEFAULT_PROVIDER,
+      this.getDefaultProvider()
+    );
     return {
       aiAttendantEnabled: String(process.env.AI_ATTENDANT_ENABLED || 'false').toLowerCase() === 'true',
       aiBetaModeEnabled: String(process.env.AI_BETA_MODE_ENABLED || 'false').toLowerCase() === 'true',
@@ -24,6 +52,12 @@ class SettingsService {
       aiTemperature: this.clampNumber(process.env.AI_TEMPERATURE, 0, 2, 0.25),
       aiMaxOutputTokens: this.clampInt(process.env.AI_MAX_OUTPUT_TOKENS, 64, 2048, 280),
       aiMaxReplyChars: this.clampInt(process.env.AI_MAX_REPLY_CHARS, 120, 4000, 420),
+      aiPreferredProvider: preferredProvider,
+      aiPreferredModel: String(
+        process.env.AI_DEFAULT_MODEL
+        || this.getDefaultModelByProvider(preferredProvider)
+      ).trim(),
+      aiCustomModels: this.parseCustomModels(process.env.AI_CUSTOM_MODELS || ''),
       kbAutoPublishEnabled: String(process.env.KB_AUTO_PUBLISH_ENABLED || 'false').toLowerCase() === 'true',
       alertEmailEnabled: String(process.env.ALERT_EMAIL_ENABLED || 'false').toLowerCase() === 'true',
       alertEmailApiUrl: String(process.env.ALERT_EMAIL_API_URL || 'https://email.taiksu.com.br/api/email/send').trim(),
@@ -43,6 +77,38 @@ class SettingsService {
       .split(/[\n,;]+/g)
       .map((entry) => String(entry || '').trim().toLowerCase())
       .filter(Boolean);
+  }
+
+  parseCustomModels(raw) {
+    if (Array.isArray(raw)) {
+      return raw
+        .map((entry) => this.normalizeCustomModelEntry(entry))
+        .filter(Boolean);
+    }
+
+    return String(raw || '')
+      .split(/\r?\n|[,;]+/g)
+      .map((entry) => this.normalizeCustomModelEntry(entry))
+      .filter(Boolean);
+  }
+
+  normalizeCustomModelEntry(rawEntry) {
+    if (!rawEntry) return null;
+    if (typeof rawEntry === 'object' && !Array.isArray(rawEntry)) {
+      const provider = this.normalizeProvider(rawEntry.provider, '');
+      const model = String(rawEntry.model || '').trim();
+      if (!provider || !model) return null;
+      return `${provider}:${model}`;
+    }
+
+    const value = String(rawEntry || '').trim();
+    if (!value) return null;
+    const separatorIdx = value.indexOf(':');
+    if (separatorIdx <= 0) return null;
+    const provider = this.normalizeProvider(value.slice(0, separatorIdx), '');
+    const model = String(value.slice(separatorIdx + 1) || '').trim();
+    if (!provider || !model) return null;
+    return `${provider}:${model}`;
   }
 
   clampNumber(value, min, max, fallback) {
@@ -92,6 +158,14 @@ class SettingsService {
 
   save(input = {}) {
     const current = this.load();
+    const providerFallback = this.normalizeProvider(current.aiPreferredProvider, this.getDefaultProvider());
+    const preferredProvider = input.aiPreferredProvider !== undefined
+      ? this.normalizeProvider(input.aiPreferredProvider, providerFallback)
+      : providerFallback;
+    const preferredModel = input.aiPreferredModel !== undefined
+      ? String(input.aiPreferredModel || '').trim()
+      : String(current.aiPreferredModel || '').trim();
+
     const next = {
       ...current,
       aiAttendantEnabled: input.aiAttendantEnabled !== undefined ? Boolean(input.aiAttendantEnabled) : current.aiAttendantEnabled,
@@ -117,6 +191,11 @@ class SettingsService {
       aiMaxReplyChars: input.aiMaxReplyChars !== undefined
         ? this.clampInt(input.aiMaxReplyChars, 120, 4000, this.clampInt(current.aiMaxReplyChars, 120, 4000, 420))
         : this.clampInt(current.aiMaxReplyChars, 120, 4000, 420),
+      aiPreferredProvider: preferredProvider,
+      aiPreferredModel: preferredModel || this.getDefaultModelByProvider(preferredProvider),
+      aiCustomModels: input.aiCustomModels !== undefined
+        ? this.parseCustomModels(input.aiCustomModels)
+        : this.parseCustomModels(current.aiCustomModels || []),
       kbAutoPublishEnabled: input.kbAutoPublishEnabled !== undefined
         ? Boolean(input.kbAutoPublishEnabled)
         : current.kbAutoPublishEnabled,
@@ -152,6 +231,10 @@ class SettingsService {
       aiTemperature: this.clampNumber(current.aiTemperature, 0, 2, 0.25),
       aiMaxOutputTokens: this.clampInt(current.aiMaxOutputTokens, 64, 2048, 280),
       aiMaxReplyChars: this.clampInt(current.aiMaxReplyChars, 120, 4000, 420),
+      aiPreferredProvider: this.normalizeProvider(current.aiPreferredProvider, this.getDefaultProvider()),
+      aiPreferredModel: String(current.aiPreferredModel || '').trim()
+        || this.getDefaultModelByProvider(this.normalizeProvider(current.aiPreferredProvider, this.getDefaultProvider())),
+      aiCustomModels: this.parseCustomModels(current.aiCustomModels || []),
       kbAutoPublishEnabled: Boolean(current.kbAutoPublishEnabled),
       alertEmailEnabled: Boolean(current.alertEmailEnabled),
       alertEmailApiUrl: String(current.alertEmailApiUrl || ''),

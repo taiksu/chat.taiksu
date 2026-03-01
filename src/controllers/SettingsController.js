@@ -34,6 +34,16 @@ class SettingsController {
     return res.json({ success: true, settings: settingsService.safeForClient() });
   }
 
+  async listAiModels(req, res) {
+    if (!this.isAdmin(req)) return this.deny(res);
+    try {
+      const catalog = await AIController.listAvailableModels();
+      return res.json({ success: true, ...catalog });
+    } catch (error) {
+      return res.status(502).json({ error: error.message || 'Falha ao listar modelos de IA' });
+    }
+  }
+
   updateSettings(req, res) {
     if (!this.isAdmin(req)) return this.deny(res);
     const body = req.body || {};
@@ -53,6 +63,9 @@ class SettingsController {
       aiTemperature: body.aiTemperature,
       aiMaxOutputTokens: body.aiMaxOutputTokens,
       aiMaxReplyChars: body.aiMaxReplyChars,
+      aiPreferredProvider: body.aiPreferredProvider,
+      aiPreferredModel: body.aiPreferredModel,
+      aiCustomModels: body.aiCustomModels,
       kbAutoPublishEnabled: body.kbAutoPublishEnabled,
       alertEmailEnabled: body.alertEmailEnabled,
       alertEmailApiUrl: body.alertEmailApiUrl,
@@ -77,7 +90,9 @@ class SettingsController {
           aiPersonalityPrompt: body.aiPersonalityPrompt,
           aiTemperature: body.aiTemperature,
           aiMaxOutputTokens: body.aiMaxOutputTokens,
-          aiMaxReplyChars: body.aiMaxReplyChars
+          aiMaxReplyChars: body.aiMaxReplyChars,
+          aiPreferredProvider: body.aiPreferredProvider,
+          aiPreferredModel: body.aiPreferredModel
         }
       );
       return res.json({ success: true, result });

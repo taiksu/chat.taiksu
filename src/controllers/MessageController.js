@@ -151,9 +151,9 @@ class MessageController {
   getWelcomeMessage(isChamadoRoom) {
     const agentName = this.getAiUserName();
     if (isChamadoRoom) {
-      return `Olá! Eu sou a Assistente ${agentName} da Taiksu IA. Vamos resolver por aqui no chat. Se precisar, eu te encaminho para um atendente humano.`;
+      return `Ol\u00E1! Eu sou a Assistente ${agentName} da Taiksu IA. Em que posso ajudar?`;
     }
-    return `Olá! Eu sou a Assistente ${agentName} da Taiksu IA. Posso te ajudar agora e, se precisar, te encaminho para um atendente humano.`;
+    return `Ol\u00E1! Eu sou a Assistente ${agentName} da Taiksu IA. Em que posso ajudar?`;
   }
 
   isHumanRequest(text) {
@@ -602,8 +602,19 @@ class MessageController {
 
   pickBestKbUrl(kbLinks = []) {
     if (!Array.isArray(kbLinks)) return '';
-    const found = kbLinks.find((item) => this.isValidKbUrl(item?.url));
-    return found ? String(found.url).trim() : '';
+    const validLinks = kbLinks
+      .map((item) => String(item?.url || '').trim())
+      .filter((url) => this.isValidKbUrl(url));
+
+    if (!validLinks.length) return '';
+
+    const articleLink = validLinks.find((url) => /\/artigos?\//i.test(url));
+    if (articleLink) return articleLink;
+
+    const nonChamadoLink = validLinks.find((url) => !/\/chamados\/criar\/?/i.test(url));
+    if (nonChamadoLink) return nonChamadoLink;
+
+    return validLinks[0];
   }
 
   appendKnowledgeReference(replyText, kbLinks = [], userMessage = '') {
@@ -635,8 +646,24 @@ class MessageController {
     return String(room?.type || '').toLowerCase() === 'support_ticket';
   }
 
-  buildChamadoActions() {
-    return [];
+  buildChamadoActions({ isChamadoRoom = false } = {}) {
+    const actions = [
+      {
+        id: 'falar_humano',
+        label: 'Falar com humano',
+        type: 'send_text',
+        value: 'Quero falar com um atendente humano.'
+      }
+    ];
+    if (!isChamadoRoom) {
+      actions.push({
+        id: 'abrir_chamado',
+        label: 'Abrir chamado',
+        type: 'send_text',
+        value: 'Quero abrir um chamado.'
+      });
+    }
+    return actions;
   }
 
   shouldRunAiFlow({ room, req, messageType, content }) {
@@ -911,14 +938,22 @@ class MessageController {
         id: String(item?.id || ''),
         label: String(item?.label || ''),
         type: String(item?.type || 'open_url'),
+        value: String(item?.value || ''),
         url: String(item?.url || ''),
         target: String(item?.target || '_blank')
       }))
       .filter((item) => item.id && item.label);
   }
 
+  buildBrokerTextPreview(text, max = 220) {
+    const safe = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!safe) return '';
+    return safe.length > max ? `${safe.slice(0, Math.max(1, max - 3)).trim()}...` : safe;
+  }
+
   async sendAiMessage({ roomId, content, actions = [] }) {
     const aiUser = await this.ensureAiUser();
+    const room = await ChatRoom.findById(roomId);
     const previous = await Message.findByRoomId(roomId, 120);
     const hadAiBefore = Array.isArray(previous)
       && previous.some((item) => String(item?.user_id || '') === String(aiUser.id || ''));
@@ -957,6 +992,15 @@ class MessageController {
       payload: {
         roomId: String(roomId || ''),
         messageId: String(aiMessage?.id || ''),
+        chamadoId: room?.chamado_id ? String(room.chamado_id) : '',
+        roomType: String(room?.type || ''),
+        roomStatus: String(room?.status || ''),
+        chatState: this.normalizeChatState(room?.chat_state),
+        senderRole: 'system',
+        messageType: 'text',
+        hasActions: normalizedActions.length > 0,
+        actionsCount: normalizedActions.length,
+        contentPreview: this.buildBrokerTextPreview(content),
         source: 'chat-taiksu'
       }
     }).catch(() => {});
@@ -968,6 +1012,11 @@ class MessageController {
         payload: {
           roomId: String(roomId || ''),
           firstMessageId: String(aiMessage?.id || ''),
+          chamadoId: room?.chamado_id ? String(room.chamado_id) : '',
+          roomType: String(room?.type || ''),
+          roomStatus: String(room?.status || ''),
+          chatState: this.normalizeChatState(room?.chat_state),
+          contentPreview: this.buildBrokerTextPreview(content),
           source: 'chat-taiksu'
         }
       }).catch(() => {});
@@ -1118,7 +1167,14 @@ class MessageController {
         payload: {
           roomId: String(roomId || ''),
           chamadoId: chamadoId ? String(chamadoId) : '',
+          roomType: String(room?.type || ''),
+          roomStatus: String(room?.status || ''),
+          chatStateBefore: this.normalizeChatState(room?.chat_state),
+          chatStateAfter: 'AGUARDANDO_HUMANO',
+          trigger: 'ai_api_error',
+          userMessagePreview: this.buildBrokerTextPreview(aiInputContent),
           error: String(error.message || ''),
+          actorName: String(req.session?.user?.name || ''),
           source: 'chat-taiksu'
         }
       }).catch(() => {});
@@ -1280,6 +1336,13 @@ class MessageController {
               roomId: String(roomId || ''),
               chamadoId: chamadoId ? String(chamadoId) : (finalRoom.chamado_id ? String(finalRoom.chamado_id) : ''),
               reason: String(closureState.reason || 'Chat fechado'),
+              roomType: String(finalRoom.type || ''),
+              roomStatus: String(finalRoom.status || ''),
+              chamadoStatus: String(finalRoom.chamado_status || ''),
+              chatState: this.normalizeChatState(finalRoom.chat_state),
+              messageType: String(type || 'text').toLowerCase(),
+              actorName: String(req.session?.user?.name || ''),
+              actorRole: String(req.session?.user?.role || ''),
               source: 'chat-taiksu'
             }
           }).catch(() => {});
@@ -1291,6 +1354,12 @@ class MessageController {
                 roomId: String(roomId || ''),
                 chamadoId: chamadoId ? String(chamadoId) : (finalRoom.chamado_id ? String(finalRoom.chamado_id) : ''),
                 reason: String(closureState.reason || ''),
+                roomType: String(finalRoom.type || ''),
+                roomStatus: String(finalRoom.status || ''),
+                chamadoStatus: String(finalRoom.chamado_status || ''),
+                chatState: this.normalizeChatState(finalRoom.chat_state),
+                actorName: String(req.session?.user?.name || ''),
+                actorRole: String(req.session?.user?.role || ''),
                 source: 'chat-taiksu'
               }
             }).catch(() => {});
@@ -1371,7 +1440,8 @@ class MessageController {
           });
           this.sendAiMessage({
             roomId,
-            content: 'No momento, eu ainda não consigo analisar imagens, áudios ou documentos automaticamente. Se você descrever em texto eu posso ajudar melhor, ou posso te encaminhar para atendimento humano aqui no chat.'
+            content: 'No momento, eu ainda nao consigo analisar imagens, audios ou documentos automaticamente. Se voce descrever em texto eu posso ajudar melhor, ou posso te encaminhar para atendimento humano aqui no chat.',
+            actions
           }).catch((aiError) => {
             console.error('[AI] Erro ao enviar aviso de midia nao suportada:', aiError.message);
           });
@@ -1453,7 +1523,10 @@ class MessageController {
         payload: {
           roomId: String(message.room_id || ''),
           messageId: String(messageId),
+          messageType: String(message.type || 'text'),
+          senderRole: String(message.sender_role || ''),
           feedbackValue: String(value),
+          actorName: String(req.session?.user?.name || ''),
           source: 'chat-taiksu'
         }
       }).catch(() => {});
@@ -1579,9 +1652,11 @@ class MessageController {
       }
 
       const isChamadoRoom = this.isChamadoRoom(room, null);
+      const actions = this.buildChamadoActions({ isChamadoRoom });
       await this.sendAiMessage({
         roomId,
-        content: this.getWelcomeMessage(isChamadoRoom)
+        content: this.getWelcomeMessage(isChamadoRoom),
+        actions
       });
       this.bootstrapLocks.delete(roomId);
 

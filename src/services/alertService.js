@@ -203,9 +203,13 @@ class AlertService {
         payload: {
           roomId: event.roomId || '',
           chamadoId: event.chamadoId || '',
+          type: event.type || '',
+          level: event.level || '',
           chatState: event.chatState || '',
+          waitMinutes: Number(event.waitMinutes || 0),
           message: event.message || '',
           source: 'chat-taiksu',
+          actorId: event.actorId || '',
           actorName: event.actorName || ''
         }
       });

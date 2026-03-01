@@ -8,6 +8,12 @@ const path = require('path');
 const fs = require('fs');
 
 class ChatController {
+  normalizeChatState(value) {
+    const state = String(value || '').trim().toUpperCase();
+    const allowed = ['NEW', 'IA', 'AGUARDANDO_HUMANO', 'FILA', 'HUMANO', 'FECHADO'];
+    return allowed.includes(state) ? state : null;
+  }
+
   normalizeRoomStatus(value) {
     const raw = String(value || '').trim().toLowerCase();
     if (!raw) return null;
@@ -37,6 +43,17 @@ class ChatController {
     const state = String(value || '').trim().toLowerCase();
     if (state === 'ocupado' || state === 'busy') return 'ocupado';
     return 'livre';
+  }
+
+  normalizeClientAppId(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    if (!raw) return '';
+    return raw
+      .replace(/^https?:\/\//, '')
+      .replace(/[^\w.-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 120);
   }
 
   getInactivityHours() {
@@ -93,6 +110,22 @@ class ChatController {
     });
   }
 
+  buildBrokerPayload({ room = null, roomId = '', chamadoId = '', actor = null, extra = {} } = {}) {
+    return {
+      roomId: String(roomId || room?.id || ''),
+      chamadoId: String(chamadoId || room?.chamado_id || ''),
+      roomType: String(room?.type || ''),
+      roomStatus: String(room?.status || ''),
+      chatState: this.normalizeChatState(room?.chat_state) || '',
+      assignedAgentId: room?.assigned_agent_id ? String(room.assigned_agent_id) : '',
+      actorId: actor?.id ? String(actor.id) : '',
+      actorName: actor?.name ? String(actor.name) : '',
+      actorRole: actor?.role ? String(actor.role) : '',
+      source: 'chat-taiksu',
+      ...extra
+    };
+  }
+
   async enrichRooms(rooms) {
     return Promise.all((rooms || []).map(async (room) => {
       const participants = await ChatRoom.getParticipants(room.id);
@@ -123,12 +156,15 @@ class ChatController {
     eventBrokerService.publishAlias('HUMAN_ASSIGNED', {
       userId: agentId,
       priority: 'normal',
-      payload: {
-        roomId: String(roomId || ''),
-        chamadoId: chamadoId ? String(chamadoId) : '',
-        agentId: String(agentId || ''),
-        source: 'chat-taiksu'
-      }
+      payload: this.buildBrokerPayload({
+        roomId,
+        chamadoId,
+        actor: { id: agentId, role: 'agent' },
+        extra: {
+          agentId: String(agentId || ''),
+          assignmentMode: 'direct'
+        }
+      })
     }).catch(() => {});
   }
 
@@ -259,11 +295,13 @@ class ChatController {
       eventBrokerService.publishAlias('ROOM_OPENED_BY_USER', {
         userId: req.session.user.id,
         priority: 'normal',
-        payload: {
-          roomId: String(room.id || ''),
-          roomName: String(room.name || ''),
-          source: 'chat-taiksu'
-        }
+        payload: this.buildBrokerPayload({
+          room,
+          actor: req.session.user,
+          extra: {
+            roomName: String(room.name || '')
+          }
+        })
       }).catch(() => {});
       res.json({ success: true, room });
     } catch (error) {
@@ -310,12 +348,14 @@ class ChatController {
         eventBrokerService.publishAlias('CHAMADO_CHAT_OPENED', {
           userId: req.session.user.id,
           priority: 'high',
-          payload: {
-            roomId: String(result.room.id || ''),
+          payload: this.buildBrokerPayload({
+            room: result.room,
             chamadoId: String(chamadoId || ''),
-            roomName: String(result.room.name || ''),
-            source: 'chat-taiksu'
-          }
+            actor: req.session.user,
+            extra: {
+              roomName: String(result.room.name || '')
+            }
+          })
         }).catch(() => {});
       }
 
@@ -327,6 +367,70 @@ class ChatController {
     } catch (error) {
       console.error('Error creating/getting chamado room:', error);
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  async createOrGetClientRoom(req, res) {
+    try {
+      const user = req.session.user;
+      if (!user) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const requestedAppId = req.body?.clientAppId || req.body?.client_app_id || req.headers['x-client-app'] || '';
+      const requestedAppName = req.body?.clientAppName || req.body?.client_app_name || '';
+      const requestedExternalUserId = req.body?.externalUserId || req.body?.external_user_id || user.id;
+
+      const clientAppId = this.normalizeClientAppId(requestedAppId);
+      if (!clientAppId) {
+        return res.status(400).json({ error: 'clientAppId e obrigatorio' });
+      }
+
+      const clientUserId = String(requestedExternalUserId || user.id).trim().slice(0, 120);
+      if (!clientUserId) {
+        return res.status(400).json({ error: 'externalUserId e obrigatorio' });
+      }
+
+      const appLabel = String(requestedAppName || clientAppId).trim().slice(0, 80);
+      const displayName = String(user.name || 'Cliente').trim().slice(0, 80);
+      const result = await ChatRoom.createOrGetExternalClientRoom({
+        clientAppId,
+        clientUserId,
+        ownerId: user.id,
+        name: `${appLabel} - ${displayName}`,
+        description: `Atendimento originado pelo app ${appLabel}`
+      });
+
+      await ChatRoom.addParticipant(result.room.id, user.id);
+
+      if (result.created) {
+        eventBrokerService.publishAlias('ROOM_OPENED_BY_USER', {
+          userId: user.id,
+          priority: 'normal',
+          payload: this.buildBrokerPayload({
+            room: result.room,
+            actor: user,
+            extra: {
+              roomName: String(result.room.name || ''),
+              origin: 'external_client_widget',
+              clientAppId,
+              clientUserId
+            }
+          })
+        }).catch(() => {});
+      }
+
+      return res.json({
+        success: true,
+        created: Boolean(result.created),
+        room: result.room,
+        roomId: result.room.id,
+        clientAppId,
+        clientUserId
+      });
+    } catch (error) {
+      console.error('Error creating/getting client room:', error);
+      return res.status(500).json({ error: error.message });
     }
   }
 
@@ -397,12 +501,16 @@ class ChatController {
         eventBrokerService.publishAlias('HUMAN_QUEUE_JOINED', {
           userId: user.id,
           priority: 'normal',
-          payload: {
-            roomId: String(room.id || ''),
+          payload: this.buildBrokerPayload({
+            room,
             chamadoId: String(chamadoId || ''),
-            position: Number(queueItem.position || 0),
-            source: 'chat-taiksu'
-          }
+            actor: user,
+            extra: {
+              position: Number(queueItem.position || 0),
+              queueId: String(queueItem.id || ''),
+              queueStatus: String(queueItem.status || 'waiting')
+            }
+          })
         }).catch(() => {});
         await alertService.emit({
           type: 'human_requested',
@@ -488,12 +596,15 @@ class ChatController {
         eventBrokerService.publishAlias('CHAT_CLOSED_MANUAL', {
           userId: req.session.user.id,
           priority: 'high',
-          payload: {
-            roomId: String(updatedRoom.id || ''),
+          payload: this.buildBrokerPayload({
+            room: { ...updatedRoom, status: 'fechado', chat_state: 'FECHADO' },
             chamadoId: String(chamadoId || ''),
-            status: 'fechado',
-            source: 'chat-taiksu'
-          }
+            actor: req.session.user,
+            extra: {
+              status: 'fechado',
+              closeReason: 'manual_status_change'
+            }
+          })
         }).catch(() => {});
       } else {
         await ChatRoom.updateChatState(updatedRoom.id, 'NEW');
@@ -564,12 +675,14 @@ class ChatController {
         eventBrokerService.publishAlias('CHAT_CLOSED_MANUAL', {
           userId: actor.id,
           priority: 'high',
-          payload: {
-            roomId: String(roomId || ''),
-            chamadoId: room.chamado_id ? String(room.chamado_id) : '',
-            status: 'fechado',
-            source: 'chat-taiksu'
-          }
+          payload: this.buildBrokerPayload({
+            room: { ...room, id: roomId, status: 'fechado', chat_state: 'FECHADO' },
+            actor,
+            extra: {
+              status: 'fechado',
+              closeReason: 'manual_room_update'
+            }
+          })
         }).catch(() => {});
       } else {
         await ChatRoom.updateChatState(roomId, 'NEW');
@@ -592,6 +705,56 @@ class ChatController {
       });
     } catch (error) {
       console.error('Error updating room status:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  async updateRoomChatState(req, res) {
+    try {
+      const actor = req.session.user;
+      if (!actor) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const { roomId } = req.params;
+      if (!roomId) {
+        return res.status(400).json({ error: 'roomId e obrigatorio' });
+      }
+
+      const room = await ChatRoom.findById(roomId);
+      if (!room) {
+        return res.status(404).json({ error: 'Sala nao encontrada' });
+      }
+
+      if (!this.isAdmin(actor) && !this.isSupportAgent(actor)) {
+        return res.status(403).json({ error: 'Sem permissao para alterar chat_state' });
+      }
+
+      const requestedChatState = req.body?.chatState ?? req.body?.chat_state;
+      const nextChatState = this.normalizeChatState(requestedChatState);
+      if (!nextChatState) {
+        return res.status(400).json({
+          error: 'chat_state invalido',
+          allowed: ['NEW', 'IA', 'AGUARDANDO_HUMANO', 'FILA', 'HUMANO', 'FECHADO']
+        });
+      }
+
+      await ChatRoom.updateChatState(roomId, nextChatState);
+
+      this.broadcastRoomEvent(roomId, {
+        type: 'room_chat_state_changed',
+        roomId,
+        chatState: nextChatState,
+        changedBy: String(actor.id || '')
+      });
+
+      return res.json({
+        success: true,
+        roomId,
+        chatState: nextChatState
+      });
+    } catch (error) {
+      console.error('Error updating room chat_state:', error);
       return res.status(500).json({ error: error.message });
     }
   }
@@ -655,12 +818,14 @@ class ChatController {
       eventBrokerService.publishAlias('CHAT_CLOSED_MANUAL', {
         userId: actor.id,
         priority: 'high',
-        payload: {
-          roomId: String(roomId || ''),
-          chamadoId: room.chamado_id ? String(room.chamado_id) : '',
-          status: 'fechado',
-          source: 'chat-taiksu'
-        }
+        payload: this.buildBrokerPayload({
+          room: { ...room, id: roomId, status: 'fechado', chat_state: 'FECHADO' },
+          actor,
+          extra: {
+            status: 'fechado',
+            closeReason: 'human_finish'
+          }
+        })
       }).catch(() => {});
 
       this.broadcastRoomEvent(roomId, {
@@ -671,11 +836,13 @@ class ChatController {
       eventBrokerService.publishAlias('HUMAN_FINISHED', {
         userId: actor.id,
         priority: 'normal',
-        payload: {
-          roomId: String(roomId || ''),
-          chamadoId: room.chamado_id ? String(room.chamado_id) : '',
-          source: 'chat-taiksu'
-        }
+        payload: this.buildBrokerPayload({
+          room: { ...room, id: roomId, status: 'fechado', chat_state: 'FECHADO' },
+          actor,
+          extra: {
+            finishReason: 'agent_finished_chat'
+          }
+        })
       }).catch(() => {});
 
       return res.json({
