@@ -8,10 +8,10 @@ Ele registra o Web Component `<taiksu-chat-widget>` e encapsula a chamada do `Ta
 ## 1) Uso rapido (HTML)
 
 ```html
-<script src="http://127.0.0.1:3000/js/taiksu-widget-component.js"></script>
+<script src="https://chat.taiksu.com.br/js/taiksu-widget-component.js"></script>
 
 <taiksu-chat-widget
-  server-url="http://127.0.0.1:3000"
+  server-url="https://chat.taiksu.com.br"
   client-app-id="meu-microservice"
   client-app-name="Meu Microservice"
   external-user-id="user-42"
@@ -34,14 +34,14 @@ export default function ChatEmbed() {
     if (document.getElementById(id)) return;
     const s = document.createElement("script");
     s.id = id;
-    s.src = "http://127.0.0.1:3000/js/taiksu-widget-component.js";
+    s.src = "https://chat.taiksu.com.br/js/taiksu-widget-component.js";
     s.async = true;
     document.head.appendChild(s);
   }, []);
 
   return (
     <taiksu-chat-widget
-      server-url="http://127.0.0.1:3000"
+      server-url="https://chat.taiksu.com.br"
       client-app-id="meu-microservice"
       external-user-id="user-42"
       auth-token="SEU_TOKEN_JWT"
