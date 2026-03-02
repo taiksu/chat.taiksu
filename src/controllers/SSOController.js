@@ -5,6 +5,7 @@
 
 const { validateSSOToken, validateSSOTokenDetailed } = require('../middleware/ssoValidation');
 const User = require('../models/User');
+const { resolveRoleFromGroup } = require('../utils/ssoRole');
 const TOKEN_COOKIE_NAME = process.env.SSO_TOKEN_COOKIE_NAME || 'taiksu_sso_token';
 
 class SSOController {
@@ -135,10 +136,7 @@ class SSOController {
   async syncSSOUser(ssoUserData) {
     try {
       const { id, name, email, foto, grupo_nome } = ssoUserData;
-      const normalizedGroup = String(grupo_nome || '').toLowerCase();
-      const role = normalizedGroup.includes('admin') || normalizedGroup.includes('desenvolvedor')
-        ? 'admin'
-        : 'user';
+      const role = resolveRoleFromGroup(grupo_nome);
 
       let user = await User.findByEmail(email);
 

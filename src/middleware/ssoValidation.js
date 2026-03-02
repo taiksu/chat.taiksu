@@ -1,6 +1,7 @@
 /**
  * Middleware para validacao de tokens SSO
  */
+const { resolveRoleFromGroup } = require('../utils/ssoRole');
 
 function maskToken(token) {
   if (!token || token.length < 16) return '[token-curto]';
@@ -111,10 +112,7 @@ function ssoAuthMiddleware(req, _res, next) {
   validateSSOToken(token)
     .then((userData) => {
       if (userData) {
-        const normalizedGroup = String(userData.grupo_nome || '').toLowerCase();
-        const role = normalizedGroup.includes('admin') || normalizedGroup.includes('desenvolvedor')
-          ? 'admin'
-          : 'user';
+        const role = resolveRoleFromGroup(userData.grupo_nome);
         req.ssoUser = userData;
         req.session.ssoUser = userData;
         req.session.user = {
@@ -140,4 +138,3 @@ module.exports = {
   validateSSOTokenDetailed,
   ssoAuthMiddleware
 };
-
