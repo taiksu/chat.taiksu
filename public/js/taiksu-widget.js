@@ -169,15 +169,17 @@
       } else {
         console.warn(`TaiksuChat: mountSelector nao encontrado: ${config.mountSelector}`);
         host.style.position = "fixed";
-        host.style.bottom = "16px";
-        host.style[config.position === "bottom-left" ? "left" : "right"] = "16px";
+        host.style.bottom = "0";
+        host.style.right = "0";
+        host.style.left = "auto";
         host.style.zIndex = String(config.zIndex);
         document.body.appendChild(host);
       }
     } else {
       host.style.position = "fixed";
-      host.style.bottom = "16px";
-      host.style[config.position === "bottom-left" ? "left" : "right"] = "16px";
+      host.style.bottom = "0";
+      host.style.right = "0";
+      host.style.left = "auto";
       host.style.zIndex = String(config.zIndex);
       document.body.appendChild(host);
     }
