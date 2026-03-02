@@ -826,6 +826,52 @@ class AIController {
     };
     return this.generateFirstContact(previewPayload, overrides);
   }
+
+  parseSuggestedTags(rawText) {
+    const source = String(rawText || '').trim();
+    if (!source) return [];
+    let list = [];
+    try {
+      const parsed = JSON.parse(source);
+      if (Array.isArray(parsed)) list = parsed;
+    } catch (_err) {
+      list = source.split(/[\n,;]+/g);
+    }
+    return Array.from(new Set(
+      list
+        .map((item) => String(item || '').trim().toLowerCase())
+        .map((item) => item.replace(/[^a-z0-9_\- ]+/g, '').trim().replace(/\s+/g, '_'))
+        .filter((item) => item.length >= 2)
+    )).slice(0, 8);
+  }
+
+  async suggestKnowledgeTags(input = '', overrides = {}) {
+    const text = String(input || '').trim().slice(0, 2500);
+    if (!text) return [];
+    const providers = this.getProviderOrder(overrides);
+    const systemInstruction = [
+      'Voce gera tags curtas para base de conhecimento.',
+      'Retorne somente um JSON array valido de strings.',
+      'Use portugues, minusculas, sem acentos e no maximo 8 tags.',
+      'Evite frases longas e redundancias.'
+    ].join(' ');
+    const userPrompt = [
+      'Gere tags para este item de conhecimento.',
+      `Conteudo:\n${text}`,
+      'Formato obrigatorio da resposta: ["tag1","tag2"]'
+    ].join('\n\n');
+
+    const result = await this.tryProviders({
+      providers,
+      userPrompt,
+      systemInstruction,
+      roomId: 'kb-tags',
+      chamadoId: '',
+      chatState: 'KB_TAGS',
+      overrides
+    });
+    return this.parseSuggestedTags(result.reply || '');
+  }
 }
 
 module.exports = new AIController();

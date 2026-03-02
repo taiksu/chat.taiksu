@@ -115,6 +115,16 @@ class MessageController {
     return Boolean((userId && allowlist.includes(userId)) || (email && allowlist.includes(email)));
   }
 
+  isAdminUser(user) {
+    return String(user?.role || '').trim().toLowerCase() === 'admin';
+  }
+
+  isAiAllowedForAdmin(user) {
+    if (!this.isAdminUser(user)) return false;
+    const settings = settingsService.load();
+    return Boolean(settings.aiAllowAdminChat);
+  }
+
   getAiUserId() {
     return String(process.env.AI_USER_ID || 'ai-assistant');
   }
@@ -681,7 +691,7 @@ class MessageController {
     if (['HUMANO', 'FECHADO'].includes(roomState)) return false;
 
     const role = String(req.session?.user?.role || '').toLowerCase();
-    if (this.isHumanRole(role)) return false;
+    if (this.isHumanRole(role) && !this.isAiAllowedForAdmin(req.session?.user)) return false;
 
     return true;
   }
@@ -701,8 +711,7 @@ class MessageController {
     if (['HUMANO', 'FECHADO'].includes(roomState)) return false;
 
     const role = String(req.session?.user?.role || '').toLowerCase();
-    const humanRoles = ['admin', 'atendente', 'agent', 'suporte', 'support'];
-    if (humanRoles.includes(role)) return false;
+    if (this.isHumanRole(role) && !this.isAiAllowedForAdmin(req.session?.user)) return false;
     return true;
   }
 
@@ -1454,7 +1463,7 @@ class MessageController {
         }
 
         const senderRole = String(req.session?.user?.role || '').toLowerCase();
-        const senderIsHuman = this.isHumanRole(senderRole);
+        const senderIsHuman = this.isHumanRole(senderRole) && !this.isAiAllowedForAdmin(req.session?.user);
         if (senderIsHuman && ['NEW', 'IA', 'AGUARDANDO_HUMANO', 'FILA'].includes(this.normalizeChatState(finalRoom.chat_state))) {
           await ChatRoom.updateChatState(roomId, 'HUMANO');
           await ChatRoom.setAssignedAgent(roomId, userId);
@@ -1745,8 +1754,7 @@ class MessageController {
       }
 
       const role = String(req.session?.user?.role || '').toLowerCase();
-      const humanRoles = ['admin', 'atendente', 'agent', 'suporte', 'support'];
-      if (humanRoles.includes(role)) {
+      if (this.isHumanRole(role) && !this.isAiAllowedForAdmin(req.session?.user)) {
         return res.json({ success: true, created: false, reason: 'human_role' });
       }
 

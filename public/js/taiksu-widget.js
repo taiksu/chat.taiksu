@@ -52,7 +52,6 @@
   let localTypingEchoUntil = 0;
   let aiProcessingActive = false;
   let aiProcessingTimer = null;
-  let aiProcessingStartedAt = 0;
   const renderedIds = new Set();
   const HISTORY_PAGE_SIZE = 35;
   let historyMessages = [];
@@ -1612,7 +1611,6 @@
     clearLongPress();
     closeReactionMenu();
     aiProcessingActive = false;
-    aiProcessingStartedAt = 0;
     clearAiProcessingTimer();
     stopRecording();
     stopSupportInboxRefresh();
@@ -1843,19 +1841,8 @@
     }
   }
 
-  function getAiProcessingLabel(data) {
-    const explicitStage = String(data?.stage || "").trim().toLowerCase();
-    const map = {
-      context: "Analisando",
-      knowledge: "Buscando informacoes",
-      answer: "Elaborando resposta"
-    };
-    if (explicitStage && map[explicitStage]) return map[explicitStage];
-
-    const elapsedMs = Math.max(0, Date.now() - Number(aiProcessingStartedAt || Date.now()));
-    if (elapsedMs < 2500) return map.context;
-    if (elapsedMs < 5200) return map.knowledge;
-    return map.answer;
+  function getAiProcessingLabel() {
+    return "esta digitando";
   }
 
   function renderMessageActions(message) {
@@ -1957,7 +1944,6 @@
     if (!message) return;
     if (Boolean(message.is_ai) || String(message.sender_role || "").toLowerCase() === "system") {
       aiProcessingActive = false;
-      aiProcessingStartedAt = 0;
       clearAiProcessingTimer();
       const typingEl = shadow && shadow.getElementById("tw-typing");
       if (typingEl) typingEl.classList.remove("show");
@@ -2433,7 +2419,6 @@
     aiProcessingActive = active;
 
     if (!active) {
-      aiProcessingStartedAt = 0;
       clearAiProcessingTimer();
       typingEl.classList.remove("show");
       if (!recording && chip) chip.classList.remove("show");
@@ -2448,16 +2433,8 @@
       typingEl.classList.add("show");
       scrollToBottom();
     };
-    aiProcessingStartedAt = Date.now();
     clearAiProcessingTimer();
     paint();
-    aiProcessingTimer = setInterval(() => {
-      if (!aiProcessingActive) {
-        clearAiProcessingTimer();
-        return;
-      }
-      paint();
-    }, 1400);
     if (!recording && chip) chip.classList.remove("show");
   }
 

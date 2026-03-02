@@ -41,7 +41,10 @@ function unauthorized(req, res, asApi) {
 }
 
 async function rehydrateSession(req, res, asApi) {
-  if (!SSO_ENABLED) return false;
+  if (!SSO_ENABLED) {
+    // Em modo local/dev sem SSO, autenticação vem da sessão (ex.: /auth/dev-login).
+    return Boolean(req.session?.user);
+  }
 
   const cookies = parseCookies(req);
   const requestToken =

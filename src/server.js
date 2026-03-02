@@ -230,7 +230,19 @@ app.get('/', (req, res) => {
   if (req.session.user) {
     res.redirect('/dashboard');
   } else {
-    res.render('index', { title: 'Chat Taiksu - Chat de Suporte' });
+    const showDevQuickLogin = !isProd;
+    const devUsers = showDevQuickLogin
+      ? [
+        { id: 'alice', label: 'Entrar como Admin', note: 'Alice Dev (admin)' },
+        { id: 'bob', label: 'Entrar como Atendente', note: 'Bob Atendente (agent)' },
+        { id: 'carol', label: 'Entrar como Cliente', note: 'Carol Cliente (user)' }
+      ]
+      : [];
+    res.render('index', {
+      title: 'Chat Taiksu - Chat de Suporte',
+      showDevQuickLogin,
+      devUsers
+    });
   }
 });
 

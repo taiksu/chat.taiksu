@@ -189,29 +189,5 @@
     "updatedAt": "2026-02-27",
     "owner": "time-suporte",
     "source": "manual"
-  },
-  {
-    "id": "kb_suggest_para_desativar_o_modo_estrito_voce_precisa_ativar__45376a63",
-    "title": "Para desativar o Modo Estrito, você precisa ativar a opção de **Modo Normal** no seu siste",
-    "content": "Para desativar o Modo Estrito, você precisa ativar a opção de **Modo Normal** no seu sistema. Isso geralmente pode ser feito através das configurações do seu software ou aplicativo específico. Você pode precisar entrar em contato com suporte técnico para obter mais detalhes específicos. Fonte: https://ajuda.taiksu.com.br/artigos/c57445a2-ecd3-11f0-b8e2-3ae8d4b024df",
-    "tags": [
-      "modo-estrito",
-      "desativar-modos",
-      "configuraes-software",
-      "suporte-tcnico"
-    ],
-    "url": "",
-    "category": "geral",
-    "intent": "geral",
-    "audience": "cliente",
-    "priority": 3,
-    "confidence": 0.65,
-    "status": "active",
-    "updatedAt": "2026-03-02",
-    "owner": "Alice Dev",
-    "source": "feedback_suggestion",
-    "sourceMessageId": "45376a63-4df4-4a71-93e3-13a9499bbc37",
-    "sourceRoomId": "6138ad0a-7a0a-4754-a976-05708e526825",
-    "sourceFeedbackValue": "up"
   }
 ]

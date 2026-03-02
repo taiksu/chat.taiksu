@@ -6,13 +6,83 @@
   <title><%= title %></title>
   <link rel="stylesheet" href="/css/style.css">
   <style>
-    .kb-grid {
+    .kb-layout {
       display: grid;
       grid-template-columns: 1fr;
       gap: 16px;
     }
-    @media (min-width: 1024px) {
-      .kb-grid { grid-template-columns: 360px 1fr; }
+    @media (min-width: 1200px) {
+      .kb-layout {
+        grid-template-columns: 340px 1fr;
+        align-items: start;
+      }
+    }
+    .kb-left-sticky {
+      position: sticky;
+      top: 86px;
+    }
+    .kb-step {
+      border: 1px solid #d1fae5;
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px 12px;
+    }
+    .kb-step strong {
+      display: block;
+      color: #065f46;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .kb-step p {
+      margin-top: 4px;
+      font-size: 12px;
+      color: #475569;
+    }
+    .kb-toolbar {
+      position: sticky;
+      top: 84px;
+      z-index: 20;
+      border: 1px solid #d1fae5;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(3px);
+      padding: 10px;
+      margin-bottom: 12px;
+    }
+    .kb-card {
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+    .kb-card textarea {
+      min-height: 110px;
+    }
+    .kb-mode-btn.active {
+      background: #065f46;
+      color: #fff;
+      border-color: #065f46;
+    }
+    .kb-btn-loading {
+      position: relative;
+      opacity: 0.9;
+      pointer-events: none;
+    }
+    .kb-btn-loading::after {
+      content: '';
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-left: 8px;
+      border-radius: 999px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      animation: kb-spin .7s linear infinite;
+      vertical-align: -2px;
+    }
+    @keyframes kb-spin {
+      to { transform: rotate(360deg); }
     }
   </style>
 </head>
@@ -33,120 +103,141 @@
       <%- include('./partials/ai-tabs', { aiTab: typeof aiTab !== 'undefined' ? aiTab : 'knowledge' }) %>
 
       <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-        <h1 class="text-xl font-bold text-green-800">Fluxo de curadoria da IA</h1>
-        <p class="mt-1 text-sm text-gray-500">Importe o Markdown, revise os blocos gerados e publique apenas o que estiver validado.</p>
-
-        <div class="mt-4 grid gap-3 sm:grid-cols-3">
-          <div class="rounded-xl border border-green-100 bg-green-50 px-3 py-2">
-            <p class="text-xs font-semibold text-green-700">1. Importar</p>
-            <p class="text-xs text-gray-600">Arquivo `.md` vira draft estruturado.</p>
-          </div>
-          <div class="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2">
-            <p class="text-xs font-semibold text-blue-700">2. Revisar</p>
-            <p class="text-xs text-gray-600">Edite título, conteúdo, tags e URL.</p>
-          </div>
-          <div class="rounded-xl border border-amber-100 bg-amber-50 px-3 py-2">
-            <p class="text-xs font-semibold text-amber-700">3. Publicar</p>
-            <p class="text-xs text-gray-600">Substitui a base ativa e gera backup.</p>
-          </div>
-        </div>
+        <h1 class="text-xl font-bold text-green-800">Fluxo de Curadoria da IA</h1>
+        <p class="mt-1 text-sm text-gray-500">Importe o conteúdo, revise os itens no draft e publique com segurança na base ativa.</p>
       </section>
 
-      <section class="kb-grid">
-        <article class="space-y-4">
-          <div class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-            <h2 class="text-base font-bold text-green-800">Resumo</h2>
-            <div class="mt-3 grid gap-2">
-              <div class="rounded-lg border border-green-100 bg-green-50 px-3 py-2">
-                <p class="text-[11px] font-semibold text-green-700">Draft atual</p>
-                <p id="draftCount" class="text-lg font-bold text-green-800"><%= draftCount %></p>
+      <section class="kb-layout">
+        <aside class="space-y-4">
+          <div class="kb-left-sticky space-y-4">
+            <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+              <h2 class="text-base font-bold text-green-800">Resumo</h2>
+              <div class="mt-3 grid gap-2">
+                <div class="rounded-lg border border-green-100 bg-green-50 px-3 py-2">
+                  <p class="text-[11px] font-semibold text-green-700">Draft atual</p>
+                  <p id="draftCount" class="text-lg font-bold text-green-800"><%= draftCount %></p>
+                </div>
+                <div class="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                  <p class="text-[11px] font-semibold text-blue-700">Base publicada</p>
+                  <p id="liveCount" class="text-lg font-bold text-blue-800"><%= liveCount %></p>
+                </div>
+                <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <p class="text-[11px] font-semibold text-gray-700">Status</p>
+                  <p id="statusText" class="text-sm font-semibold text-gray-700">Aguardando acao</p>
+                </div>
               </div>
-              <div class="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
-                <p class="text-[11px] font-semibold text-blue-700">Base publicada</p>
-                <p id="liveCount" class="text-lg font-bold text-blue-800"><%= liveCount %></p>
-              </div>
-              <div class="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-                <p class="text-[11px] font-semibold text-gray-700">Status</p>
-                <p id="statusText" class="text-sm font-semibold text-gray-700">Aguardando ação</p>
-              </div>
-            </div>
-          </div>
+            </article>
 
-          <div class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-            <h2 class="text-base font-bold text-green-800">Importar Markdown</h2>
-            <form id="importForm" class="mt-3 space-y-3">
-              <input id="mdFile" name="file" type="file" accept=".md,text/markdown" class="block w-full rounded-xl border border-green-200 bg-white px-3 py-2 text-sm text-green-800">
-              <div class="grid gap-2">
-                <label class="text-xs font-semibold text-gray-600">Modo de importacao</label>
-                <select id="importMode" class="rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-                  <option value="replace" selected>Substituir draft atual</option>
-                  <option value="append">Adicionar ao draft atual</option>
+            <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+              <h2 class="text-base font-bold text-green-800">Etapas</h2>
+              <div class="mt-3 space-y-2">
+                <div class="kb-step">
+                  <strong>1. Importar</strong>
+                  <p>Envie um arquivo `.md` para criar itens de draft.</p>
+                </div>
+                <div class="kb-step">
+                  <strong>2. Revisar</strong>
+                  <p>Ajuste titulo, conteudo, tags e URL antes de publicar.</p>
+                </div>
+                <div class="kb-step">
+                  <strong>3. Publicar</strong>
+                  <p>Publicacao mescla com a base ativa e gera backup.</p>
+                </div>
+              </div>
+            </article>
+
+            <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+              <h2 class="text-base font-bold text-green-800">Importar Markdown</h2>
+              <form id="importForm" class="mt-3 space-y-3">
+                <input id="mdFile" name="file" type="file" accept=".md,text/markdown" class="block w-full rounded-xl border border-green-200 bg-white px-3 py-2 text-sm text-green-800">
+                <div class="grid gap-2">
+                  <label class="text-xs font-semibold text-gray-600">Modo de importacao</label>
+                  <select id="importMode" class="rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                    <option value="replace" selected>Substituir draft atual</option>
+                    <option value="append">Adicionar ao draft atual</option>
+                  </select>
+                  <label class="flex items-center gap-2 text-xs font-semibold text-gray-600">
+                    <input id="importAutoPublish" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500">
+                    Publicar automaticamente apos importar
+                  </label>
+                </div>
+                <button id="importBtn" type="button" class="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700">Importar Arquivo</button>
+              </form>
+            </article>
+
+            <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+              <h2 class="text-base font-bold text-green-800">Acoes de Base</h2>
+              <div class="mt-3 space-y-2">
+                <button id="publishBtn" type="button" class="inline-flex w-full items-center justify-center rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-600">Publicar Draft</button>
+                <button id="cloneLiveBtn" type="button" class="inline-flex w-full items-center justify-center rounded-xl border border-green-200 bg-white px-4 py-2 text-sm font-semibold text-green-800 transition hover:bg-green-50">Trazer base publicada para draft</button>
+                <button id="clearBtn" type="button" class="inline-flex w-full items-center justify-center rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 transition hover:bg-red-50">Limpar Draft</button>
+              </div>
+              <div class="mt-3 space-y-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
+                <label class="block text-xs font-semibold text-amber-700">Restaurar versao publicada</label>
+                <select id="versionSelect" class="w-full rounded-lg border border-amber-200 bg-white px-2 py-1 text-xs text-slate-700">
+                  <option value="">Selecione uma versao...</option>
                 </select>
-                <label class="flex items-center gap-2 text-xs font-semibold text-gray-600">
-                  <input id="importAutoPublish" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500">
-                  Publicar automaticamente apos importar
-                </label>
+                <button id="restoreVersionBtn" type="button" class="w-full rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">Restaurar versao selecionada</button>
               </div>
-              <%- include('../components/buttons/default', {
-                id: 'importBtn',
-                label: 'Importar Arquivo'
-              }) %>
-            </form>
+            </article>
           </div>
+        </aside>
 
-          <div class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm space-y-2">
-            <h2 class="text-base font-bold text-green-800">Ações do draft</h2>
-            <%- include('../components/buttons/default', {
-              id: 'publishBtn',
-              label: 'Publicar Draft'
-            }) %>
-            <%- include('../components/buttons/default', {
-              id: 'clearBtn',
-              label: 'Limpar Draft'
-            }) %>
-            <%- include('../components/buttons/default', {
-              id: 'cloneLiveBtn',
-              label: 'Trazer base publicada para draft'
-            }) %>
-            <div class="mt-2 space-y-2 rounded-xl border border-amber-100 bg-amber-50 p-2">
-              <label class="block text-xs font-semibold text-amber-700">Restaurar versao publicada</label>
-              <select id="versionSelect" class="w-full rounded-lg border border-amber-200 bg-white px-2 py-1 text-xs text-slate-700">
-                <option value="">Selecione uma versao...</option>
+        <section>
+          <div class="kb-toolbar">
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="text-base font-bold text-green-800">Itens do Draft</h2>
+              <span id="resultCount" class="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">0 itens</span>
+              <div class="ml-auto inline-flex rounded-lg border border-green-200 bg-white p-1">
+                <button id="modeCompactBtn" type="button" class="kb-mode-btn rounded-md px-2 py-1 text-xs font-semibold text-green-800">Compacto</button>
+                <button id="modeAdvancedBtn" type="button" class="kb-mode-btn rounded-md px-2 py-1 text-xs font-semibold text-green-800">Avancado</button>
+              </div>
+              <button id="autoTagsBtn" type="button" class="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50">Gerar tags IA</button>
+              <button id="saveAllBtn" type="button" class="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50">Salvar tudo</button>
+              <button id="saveAndPublishBtn" type="button" class="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50">Salvar e publicar</button>
+              <button id="refreshBtn" type="button" class="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-50">Atualizar</button>
+            </div>
+            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+              <input id="searchInput" placeholder="Buscar por titulo, conteudo, ID ou tags..." class="rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              <select id="intentFilter" class="rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                <option value="">Todos os intents</option>
+                <option value="abrir_chamado">abrir_chamado</option>
+                <option value="falar_humano">falar_humano</option>
+                <option value="status_chamado">status_chamado</option>
+                <option value="enviar_anexo">enviar_anexo</option>
+                <option value="geral">geral</option>
               </select>
-              <button id="restoreVersionBtn" type="button" class="w-full rounded-lg border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100">Restaurar versao selecionada</button>
             </div>
           </div>
-        </article>
 
-        <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-          <div class="flex flex-wrap items-center gap-2">
-            <h2 class="text-base font-bold text-green-800">Itens do draft</h2>
-            <span id="resultCount" class="rounded-full bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">0 itens</span>
-            <button id="refreshBtn" type="button" class="ml-auto rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-50">Atualizar</button>
-          </div>
+          <article class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+            <div id="draftList" class="space-y-3"></div>
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-green-100 pt-3">
+              <div class="flex items-center gap-2 text-xs text-slate-600">
+                <span>Itens por pagina</span>
+                <select id="pageSizeSelect" class="rounded-md border border-green-200 bg-white px-2 py-1 text-xs text-green-800">
+                  <option value="10">10</option>
+                  <option value="20" selected>20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="prevPageBtn" type="button" class="rounded-md border border-green-200 bg-white px-2 py-1 text-xs font-semibold text-green-800 hover:bg-green-50">Anterior</button>
+                <span id="pageInfo" class="text-xs font-semibold text-slate-600">Pagina 1 de 1</span>
+                <button id="nextPageBtn" type="button" class="rounded-md border border-green-200 bg-white px-2 py-1 text-xs font-semibold text-green-800 hover:bg-green-50">Proxima</button>
+              </div>
+            </div>
+          </article>
 
-          <div class="mt-3 grid gap-2 sm:grid-cols-2">
-            <input id="searchInput" placeholder="Buscar por titulo, conteúdo ou tags..." class="rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-            <select id="intentFilter" class="rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-              <option value="">Todos os intents</option>
-              <option value="abrir_chamado">abrir_chamado</option>
-              <option value="falar_humano">falar_humano</option>
-              <option value="status_chamado">status_chamado</option>
-              <option value="enviar_anexo">enviar_anexo</option>
-              <option value="geral">geral</option>
-            </select>
-          </div>
-
-          <div id="draftList" class="mt-4 space-y-3"></div>
-        </article>
-      </section>
-
-      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-        <div class="flex items-center justify-between gap-2">
-          <h2 class="text-base font-bold text-green-800">Historico de importacoes</h2>
-          <button id="refreshHistoryBtn" type="button" class="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-50">Atualizar</button>
-        </div>
-        <div id="importHistoryList" class="mt-3 space-y-2"></div>
+          <article class="mt-5 rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+            <div class="flex items-center justify-between gap-2">
+              <h2 class="text-base font-bold text-green-800">Historico de Importacoes</h2>
+              <button id="refreshHistoryBtn" type="button" class="rounded-lg border border-green-300 bg-white px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-50">Atualizar</button>
+            </div>
+            <div id="importHistoryList" class="mt-3 space-y-2"></div>
+          </article>
+        </section>
       </section>
     </main>
   </div>
@@ -166,7 +257,17 @@
     const importAutoPublishEl = document.getElementById('importAutoPublish');
     const importHistoryListEl = document.getElementById('importHistoryList');
     const versionSelectEl = document.getElementById('versionSelect');
+    const modeCompactBtn = document.getElementById('modeCompactBtn');
+    const modeAdvancedBtn = document.getElementById('modeAdvancedBtn');
+    const autoTagsBtnEl = document.getElementById('autoTagsBtn');
+    const pageSizeSelectEl = document.getElementById('pageSizeSelect');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
+    const pageInfoEl = document.getElementById('pageInfo');
     let draftItems = [];
+    let viewMode = 'compact';
+    let currentPage = 1;
+    let pageSize = 20;
 
     function setStatus(text, type) {
       const palette = {
@@ -215,24 +316,80 @@
 
     function buildCard(item) {
       const tags = Array.isArray(item.tags) ? item.tags.join(', ') : '';
+      const compactContentPreview = escapeHtml(String(item.content || '').replace(/\s+/g, ' ').trim()).slice(0, 240);
+      if (viewMode === 'compact') {
+        return `
+          <article class="kb-card">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p class="text-xs font-semibold text-gray-500">${escapeHtml(item.id)}</p>
+                <p class="text-sm font-bold text-green-800">${escapeHtml(item.title || 'Sem titulo')}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-700">${escapeHtml(item.intent || 'geral')}</span>
+                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">${escapeHtml(item.category || 'geral')}</span>
+              </div>
+            </div>
+            <p class="mt-2 text-xs text-slate-600">${compactContentPreview || 'Sem conteudo'}</p>
+            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+              <div>
+                <label class="text-[11px] font-semibold text-slate-600">Titulo</label>
+                <input data-id="${escapeHtml(item.id)}" data-field="title" value="${escapeHtml(item.title)}" class="mt-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs">
+              </div>
+              <div>
+                <label class="text-[11px] font-semibold text-slate-600">Tags (virgula)</label>
+                <input data-id="${escapeHtml(item.id)}" data-field="tags" value="${escapeHtml(tags)}" class="mt-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs" placeholder="tag1, tag2">
+              </div>
+            </div>
+            <details class="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-2">
+              <summary class="cursor-pointer text-xs font-semibold text-gray-700">Editar completo</summary>
+              <div class="mt-2 grid gap-2">
+                <label class="text-[11px] font-semibold text-slate-600">Conteudo</label>
+                <textarea data-id="${escapeHtml(item.id)}" data-field="content" rows="4" class="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs">${escapeHtml(item.content)}</textarea>
+                <label class="text-[11px] font-semibold text-slate-600">URL de referencia</label>
+                <input data-id="${escapeHtml(item.id)}" data-field="url" value="${escapeHtml(item.url || '')}" class="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-xs" placeholder="https://...">
+              </div>
+            </details>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button type="button" class="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800" onclick="saveItem('${escapeHtml(item.id)}')">Salvar item</button>
+              <button type="button" class="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800" onclick="autoTagItem('${escapeHtml(item.id)}', this)">Auto tags IA</button>
+              <button type="button" class="rounded-lg border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700" onclick="removeItem('${escapeHtml(item.id)}')">Excluir item</button>
+            </div>
+          </article>
+        `;
+      }
       return `
-        <article class="rounded-xl border border-gray-200 p-3">
-          <div class="flex items-start justify-between gap-2">
+        <article class="kb-card">
+          <div class="flex flex-wrap items-start justify-between gap-2">
             <div>
               <p class="text-xs font-semibold text-gray-500">${escapeHtml(item.id)}</p>
-              <p class="text-sm font-bold text-green-800">${escapeHtml(item.title || 'Sem título')}</p>
+              <p class="text-sm font-bold text-green-800">${escapeHtml(item.title || 'Sem titulo')}</p>
             </div>
-            <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-700">${escapeHtml(item.intent || 'geral')}</span>
+            <div class="flex items-center gap-2">
+              <span class="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-700">${escapeHtml(item.intent || 'geral')}</span>
+              <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">${escapeHtml(item.category || 'geral')}</span>
+            </div>
           </div>
           <div class="mt-3 grid gap-2">
-            <input data-id="${escapeHtml(item.id)}" data-field="title" value="${escapeHtml(item.title)}" class="rounded-lg border border-gray-200 px-2 py-1 text-xs">
-            <textarea data-id="${escapeHtml(item.id)}" data-field="content" rows="4" class="rounded-lg border border-gray-200 px-2 py-1 text-xs">${escapeHtml(item.content)}</textarea>
-            <input data-id="${escapeHtml(item.id)}" data-field="tags" value="${escapeHtml(tags)}" class="rounded-lg border border-gray-200 px-2 py-1 text-xs" placeholder="tag1, tag2">
-            <input data-id="${escapeHtml(item.id)}" data-field="url" value="${escapeHtml(item.url || '')}" class="rounded-lg border border-gray-200 px-2 py-1 text-xs" placeholder="https://...">
+            <label class="text-[11px] font-semibold text-slate-600">Titulo</label>
+            <input data-id="${escapeHtml(item.id)}" data-field="title" value="${escapeHtml(item.title)}" class="rounded-lg border border-gray-200 px-2 py-1.5 text-xs">
+            <label class="text-[11px] font-semibold text-slate-600">Conteudo</label>
+            <textarea data-id="${escapeHtml(item.id)}" data-field="content" rows="4" class="rounded-lg border border-gray-200 px-2 py-1.5 text-xs">${escapeHtml(item.content)}</textarea>
+            <div class="grid gap-2 sm:grid-cols-2">
+              <div>
+                <label class="text-[11px] font-semibold text-slate-600">Tags (separadas por virgula)</label>
+                <input data-id="${escapeHtml(item.id)}" data-field="tags" value="${escapeHtml(tags)}" class="mt-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs" placeholder="tag1, tag2">
+              </div>
+              <div>
+                <label class="text-[11px] font-semibold text-slate-600">URL de referencia</label>
+                <input data-id="${escapeHtml(item.id)}" data-field="url" value="${escapeHtml(item.url || '')}" class="mt-1 rounded-lg border border-gray-200 px-2 py-1.5 text-xs" placeholder="https://...">
+              </div>
+            </div>
           </div>
-          <div class="mt-3 flex gap-2">
-            <button type="button" class="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800" onclick="saveItem('${escapeHtml(item.id)}')">Salvar</button>
-            <button type="button" class="rounded-lg border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700" onclick="removeItem('${escapeHtml(item.id)}')">Excluir</button>
+          <div class="mt-3 flex flex-wrap gap-2">
+            <button type="button" class="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-800" onclick="saveItem('${escapeHtml(item.id)}')">Salvar item</button>
+            <button type="button" class="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-800" onclick="autoTagItem('${escapeHtml(item.id)}', this)">Auto tags IA</button>
+            <button type="button" class="rounded-lg border border-red-300 bg-red-50 px-3 py-1 text-xs font-semibold text-red-700" onclick="removeItem('${escapeHtml(item.id)}')">Excluir item</button>
           </div>
         </article>
       `;
@@ -242,10 +399,32 @@
       const visible = filterDraftItems(draftItems);
       resultCountEl.textContent = `${visible.length} itens`;
       if (!visible.length) {
-        draftListEl.innerHTML = '<p class="text-sm text-gray-500">Nenhum item encontrado no filtro atual.</p>';
+        draftListEl.innerHTML = '<p class="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-500">Nenhum item encontrado para este filtro.</p>';
+        if (pageInfoEl) pageInfoEl.textContent = 'Pagina 0 de 0';
+        if (prevPageBtn) prevPageBtn.disabled = true;
+        if (nextPageBtn) nextPageBtn.disabled = true;
         return;
       }
-      draftListEl.innerHTML = visible.map(buildCard).join('');
+      const totalPages = Math.max(1, Math.ceil(visible.length / Math.max(1, pageSize)));
+      if (currentPage > totalPages) currentPage = totalPages;
+      if (currentPage < 1) currentPage = 1;
+      const start = (currentPage - 1) * pageSize;
+      const pageItems = visible.slice(start, start + pageSize);
+      draftListEl.innerHTML = pageItems.map(buildCard).join('');
+      if (pageInfoEl) pageInfoEl.textContent = `Pagina ${currentPage} de ${totalPages}`;
+      if (prevPageBtn) prevPageBtn.disabled = currentPage <= 1;
+      if (nextPageBtn) nextPageBtn.disabled = currentPage >= totalPages;
+    }
+
+    function applyViewMode(mode) {
+      viewMode = mode === 'advanced' ? 'advanced' : 'compact';
+      if (modeCompactBtn) modeCompactBtn.classList.toggle('active', viewMode === 'compact');
+      if (modeAdvancedBtn) modeAdvancedBtn.classList.toggle('active', viewMode === 'advanced');
+      try {
+        window.localStorage.setItem('kb_view_mode', viewMode);
+      } catch (_err) {}
+      currentPage = 1;
+      renderDraftList();
     }
 
     async function refreshData() {
@@ -342,6 +521,60 @@
       }
     };
 
+    function collectDraftPayloads() {
+      const grouped = {};
+      const fields = Array.from(document.querySelectorAll('[data-id]'));
+      fields.forEach((el) => {
+        const itemId = String(el.dataset.id || '').trim();
+        const field = String(el.dataset.field || '').trim();
+        if (!itemId || !field) return;
+        if (!grouped[itemId]) grouped[itemId] = {};
+        if (field === 'tags') {
+          grouped[itemId].tags = String(el.value || '').split(',').map((tag) => tag.trim()).filter(Boolean);
+        } else {
+          grouped[itemId][field] = el.value;
+        }
+      });
+      return Object.keys(grouped).map((id) => ({ id, patch: grouped[id] }));
+    }
+
+    async function saveAllDraft() {
+      const items = collectDraftPayloads();
+      if (!items.length) return { updated: 0 };
+      const result = await fetchJson('/api/kb/draft/bulk', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items })
+      });
+      return result;
+    }
+
+    function setButtonLoading(button, loadingText) {
+      if (!button) return () => {};
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.classList.add('kb-btn-loading');
+      if (loadingText) button.textContent = loadingText;
+      return () => {
+        button.disabled = false;
+        button.classList.remove('kb-btn-loading');
+        button.textContent = originalText;
+      };
+    }
+
+    window.autoTagItem = async function autoTagItem(itemId, button) {
+      const clearLoading = setButtonLoading(button, 'Gerando...');
+      try {
+        await fetchJson(`/api/kb/draft/${encodeURIComponent(itemId)}/auto-tags`, { method: 'POST' });
+        setStatus(`Tags atualizadas para ${itemId}`, 'success');
+        await refreshData();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      } finally {
+        clearLoading();
+      }
+    };
+
     document.getElementById('importForm').addEventListener('submit', async (event) => {
       event.preventDefault();
       const file = mdFileEl.files && mdFileEl.files[0];
@@ -356,8 +589,8 @@
         formData.append('autoPublish', importAutoPublishEl.checked ? 'true' : 'false');
         const result = await fetchJson('/api/kb/import-file', { method: 'POST', body: formData });
         const summary = result.autoPublished
-          ? ('Importacao concluida: ' + result.imported + ' itens e ' + Number(result.published || 0) + ' publicados')
-          : ('Importacao concluida: ' + result.imported + ' itens no draft');
+          ? (`Importacao concluida: ${result.imported} itens e ${Number(result.published || 0)} publicados`)
+          : (`Importacao concluida: ${result.imported} itens no draft`);
         setStatus(summary, 'success');
         await refreshData();
         await refreshHistory();
@@ -376,7 +609,7 @@
       if (!confirm('Publicar o draft na base oficial?')) return;
       try {
         const result = await fetchJson('/api/kb/publish', { method: 'POST' });
-        setStatus(`Publicado com sucesso (${result.published} itens)`, 'success');
+        setStatus(`Publicado com sucesso (${result.published} itens processados | base ativa: ${Number(result.liveCount || 0)} itens)`, 'success');
         await refreshData();
       } catch (error) {
         setStatus(error.message, 'error');
@@ -435,6 +668,41 @@
       }
     });
 
+    document.getElementById('saveAllBtn').addEventListener('click', async () => {
+      try {
+        const result = await saveAllDraft();
+        setStatus(`Draft salvo em lote (${Number(result.updated || 0)} itens)`, 'success');
+        await refreshData();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('saveAndPublishBtn').addEventListener('click', async () => {
+      if (!confirm('Salvar todos os itens visiveis e publicar o draft agora?')) return;
+      try {
+        const saved = await saveAllDraft();
+        const published = await fetchJson('/api/kb/publish', { method: 'POST' });
+        setStatus(`Salvo e publicado (${Number(saved.updated || 0)} salvos | ${Number(published.published || 0)} processados)`, 'success');
+        await refreshData();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      }
+    });
+
+    document.getElementById('autoTagsBtn').addEventListener('click', async () => {
+      const clearLoading = setButtonLoading(autoTagsBtnEl, 'Gerando...');
+      try {
+        const result = await fetchJson('/api/kb/draft/auto-tags', { method: 'POST' });
+        setStatus(`Tags geradas (${Number(result.updated || 0)} itens | fonte: ${result.source || 'n/a'})`, 'success');
+        await refreshData();
+      } catch (error) {
+        setStatus(error.message, 'error');
+      } finally {
+        clearLoading();
+      }
+    });
+
     document.getElementById('refreshHistoryBtn').addEventListener('click', async () => {
       try {
         await refreshHistory();
@@ -444,8 +712,43 @@
       }
     });
 
-    searchInputEl.addEventListener('input', renderDraftList);
-    intentFilterEl.addEventListener('change', renderDraftList);
+    intentFilterEl.addEventListener('change', () => {
+      currentPage = 1;
+      renderDraftList();
+    });
+    searchInputEl.addEventListener('input', () => {
+      currentPage = 1;
+      renderDraftList();
+    });
+    if (pageSizeSelectEl) {
+      pageSizeSelectEl.addEventListener('change', () => {
+        const nextSize = Number(pageSizeSelectEl.value || 20);
+        pageSize = Number.isFinite(nextSize) && nextSize > 0 ? nextSize : 20;
+        currentPage = 1;
+        renderDraftList();
+      });
+    }
+    if (prevPageBtn) {
+      prevPageBtn.addEventListener('click', () => {
+        currentPage = Math.max(1, currentPage - 1);
+        renderDraftList();
+      });
+    }
+    if (nextPageBtn) {
+      nextPageBtn.addEventListener('click', () => {
+        currentPage += 1;
+        renderDraftList();
+      });
+    }
+    if (modeCompactBtn) modeCompactBtn.addEventListener('click', () => applyViewMode('compact'));
+    if (modeAdvancedBtn) modeAdvancedBtn.addEventListener('click', () => applyViewMode('advanced'));
+
+    try {
+      const persistedMode = window.localStorage.getItem('kb_view_mode');
+      applyViewMode(persistedMode === 'advanced' ? 'advanced' : 'compact');
+    } catch (_err) {
+      applyViewMode('compact');
+    }
 
     Promise.all([
       refreshData(),
@@ -456,5 +759,3 @@
   </script>
 </body>
 </html>
-
-

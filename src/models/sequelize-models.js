@@ -182,6 +182,16 @@ const AiToolRunModel = sequelize.define('ai_tool_runs', {
   timestamps: false
 });
 
+const AppSettingModel = sequelize.define('app_settings', {
+  id: { type: DataTypes.STRING(64), primaryKey: true },
+  payload_json: { type: DataTypes.TEXT, allowNull: false, defaultValue: '{}' }
+}, {
+  ...common,
+  timestamps: true,
+  createdAt: 'created_at',
+  updatedAt: 'updated_at'
+});
+
 ChatRoomModel.belongsTo(UserModel, { foreignKey: 'owner_id', as: 'owner' });
 MessageModel.belongsTo(UserModel, { foreignKey: 'user_id', as: 'sender' });
 MessageModel.belongsTo(ChatRoomModel, { foreignKey: 'room_id' });
@@ -431,5 +441,6 @@ module.exports = {
   ChatQueueModel,
   AiToolModel,
   AiToolRunModel,
+  AppSettingModel,
   syncDatabase
 };

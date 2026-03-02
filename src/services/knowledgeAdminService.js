@@ -62,6 +62,59 @@ class KnowledgeAdminService {
     return [];
   }
 
+  normalizeEntrySignature(entry = {}) {
+    const title = String(entry.title || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+    const content = String(entry.content || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+    return `${title}::${content}`;
+  }
+
+  mergeKnowledgeEntries(baseItems = [], incomingItems = []) {
+    const merged = [];
+    const indexById = new Map();
+    const indexBySignature = new Map();
+
+    const put = (item) => {
+      const id = String(item?.id || '').trim();
+      const signature = this.normalizeEntrySignature(item);
+      const safeItem = { ...(item || {}) };
+      if (id) indexById.set(id, merged.length);
+      if (signature) indexBySignature.set(signature, merged.length);
+      merged.push(safeItem);
+    };
+
+    (Array.isArray(baseItems) ? baseItems : []).forEach((item) => put(item));
+
+    (Array.isArray(incomingItems) ? incomingItems : []).forEach((item) => {
+      const id = String(item?.id || '').trim();
+      const signature = this.normalizeEntrySignature(item);
+      const idxById = id && indexById.has(id) ? indexById.get(id) : -1;
+      const idxBySignature = signature && indexBySignature.has(signature) ? indexBySignature.get(signature) : -1;
+      const targetIdx = idxById >= 0 ? idxById : idxBySignature;
+
+      if (targetIdx >= 0) {
+        merged[targetIdx] = {
+          ...merged[targetIdx],
+          ...item,
+          id: String(item?.id || merged[targetIdx]?.id || '').trim() || merged[targetIdx]?.id
+        };
+        return;
+      }
+      put(item);
+    });
+
+    return merged;
+  }
+
   buildTags(text) {
     const normalized = String(text || '')
       .normalize('NFD')
@@ -215,6 +268,35 @@ class KnowledgeAdminService {
     return merged;
   }
 
+  bulkUpdateDraft(items = []) {
+    const patchList = Array.isArray(items) ? items : [];
+    if (!patchList.length) return { updated: 0, items: this.getDraft() };
+
+    const current = this.getDraft();
+    const indexById = new Map();
+    current.forEach((item, idx) => {
+      indexById.set(String(item?.id || ''), idx);
+    });
+
+    let updated = 0;
+    patchList.forEach((entry) => {
+      const itemId = String(entry?.id || '').trim();
+      if (!itemId || !indexById.has(itemId)) return;
+      const idx = indexById.get(itemId);
+      const patch = entry?.patch && typeof entry.patch === 'object' ? entry.patch : {};
+      current[idx] = {
+        ...current[idx],
+        ...patch,
+        id: current[idx].id,
+        updatedAt: this.nowIsoDate()
+      };
+      updated += 1;
+    });
+
+    this.writeJsonArray(this.draftFile, current);
+    return { updated, items: current };
+  }
+
   deleteDraftItem(itemId) {
     const items = this.getDraft();
     const next = items.filter((item) => String(item.id) !== String(itemId));
@@ -229,10 +311,11 @@ class KnowledgeAdminService {
     const current = this.getKnowledge();
     const versionFile = path.join(this.versionsDir, `knowledge.${Date.now()}.json`);
     this.writeJsonArray(versionFile, current);
-    this.writeJsonArray(this.knowledgeFile, draft);
+    const merged = this.mergeKnowledgeEntries(current, draft);
+    this.writeJsonArray(this.knowledgeFile, merged);
     this.clearDraft();
 
-    return { published: draft.length, versionFile };
+    return { published: draft.length, liveCount: merged.length, versionFile };
   }
 
   cloneLiveToDraft() {

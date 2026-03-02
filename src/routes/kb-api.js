@@ -22,6 +22,9 @@ router.get('/import-history', requireApiAuth, KnowledgeBaseController.listImport
 router.get('/versions', requireApiAuth, KnowledgeBaseController.listVersions.bind(KnowledgeBaseController));
 router.post('/restore-version', requireApiAuth, KnowledgeBaseController.restoreVersion.bind(KnowledgeBaseController));
 router.post('/clone-live-to-draft', requireApiAuth, KnowledgeBaseController.cloneLiveToDraft.bind(KnowledgeBaseController));
+router.post('/draft/auto-tags', requireApiAuth, KnowledgeBaseController.autoTagAllDraft.bind(KnowledgeBaseController));
+router.post('/draft/:id/auto-tags', requireApiAuth, KnowledgeBaseController.autoTagDraftItem.bind(KnowledgeBaseController));
+router.put('/draft/bulk', requireApiAuth, KnowledgeBaseController.bulkUpdateDraft.bind(KnowledgeBaseController));
 router.patch('/draft/:id', requireApiAuth, KnowledgeBaseController.updateDraftItem.bind(KnowledgeBaseController));
 router.delete('/draft/:id', requireApiAuth, KnowledgeBaseController.deleteDraftItem.bind(KnowledgeBaseController));
 router.delete('/draft', requireApiAuth, KnowledgeBaseController.clearDraft.bind(KnowledgeBaseController));

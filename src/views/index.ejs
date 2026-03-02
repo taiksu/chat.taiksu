@@ -17,6 +17,24 @@
       </div>
     </section>
 
+    <% if (showDevQuickLogin) { %>
+      <section class="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+        <h2 class="text-lg font-bold text-blue-800">Login rapido (ambiente local)</h2>
+        <p class="mt-1 text-sm text-blue-700">Use estes acessos para testes sem passar pelo SSO.</p>
+        <div class="mt-4 grid gap-2 sm:grid-cols-3">
+          <% (Array.isArray(devUsers) ? devUsers : []).forEach((profile) => { %>
+            <a
+              href="/auth/dev-login/<%= encodeURIComponent(profile.id) %>?redirect=%2Fdashboard"
+              class="rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-800 transition hover:bg-blue-100"
+            >
+              <span class="block"><%= profile.label %></span>
+              <span class="mt-1 block text-xs font-normal text-blue-600"><%= profile.note %></span>
+            </a>
+          <% }) %>
+        </div>
+      </section>
+    <% } %>
+
     <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <article class="rounded-2xl border border-green-100 bg-white p-5">
         <h2 class="text-lg font-bold text-green-700">Tempo real</h2>

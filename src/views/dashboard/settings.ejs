@@ -5,6 +5,75 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= title %></title>
   <link rel="stylesheet" href="/css/style.css">
+  <style>
+    .switch-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border: 1px solid #d1fae5;
+      border-radius: 12px;
+      padding: 12px;
+      background: #fff;
+    }
+    .switch-control {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex: 0 0 auto;
+    }
+    .switch-control input {
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+      pointer-events: none;
+    }
+    .switch-track {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: #cbd5e1;
+      transition: all .2s ease;
+      cursor: pointer;
+    }
+    .switch-track::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .24);
+      transition: transform .2s ease;
+    }
+    .switch-control input:checked + .switch-track {
+      background: #10b981;
+    }
+    .switch-control input:checked + .switch-track::after {
+      transform: translateX(20px);
+    }
+    .fold-section > summary {
+      list-style: none;
+      cursor: pointer;
+    }
+    .fold-section > summary::-webkit-details-marker {
+      display: none;
+    }
+    .sticky-save {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 40;
+      padding: 10px 16px;
+      background: linear-gradient(to top, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.86));
+      border-top: 1px solid #d1fae5;
+      backdrop-filter: blur(3px);
+    }
+  </style>
 </head>
 <body class="min-h-dvh text-green-700">
   <div id="sidebarOverlay" class="fixed inset-0 z-20 bg-black/30 opacity-0 pointer-events-none transition"></div>
@@ -13,7 +82,7 @@
   <div>
     <%- include('../partials/topbar', { user, pageTitle: 'IA - Agente' }) %>
 
-    <main class="mx-auto w-full max-w-7xl space-y-5 px-4 py-6 sm:px-6 lg:px-10 lg:py-8">
+    <main class="mx-auto w-full max-w-7xl space-y-5 px-4 py-6 pb-28 sm:px-6 lg:px-10 lg:py-8 lg:pb-32">
       <%- include('../components/breadcrumb/index', {
         link: '/dashboard',
         paginaAnterior: 'Dashboard',
@@ -27,167 +96,209 @@
         <p class="mt-1 text-sm text-gray-500">Configure o atendimento automatico, perfil da assistente e parametros de resposta.</p>
       </section>
 
-      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-        <h2 class="text-lg font-bold text-green-800">Modo IA Atendente</h2>
-        <label class="mt-3 flex items-center gap-3 rounded-xl border border-green-100 p-3">
-          <input id="aiAttendantEnabled" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500" <%= settings.aiAttendantEnabled ? 'checked' : '' %>>
-          <span class="text-sm font-semibold text-slate-700">Ativar IA no primeiro atendimento do chat</span>
-        </label>
-        <p class="mt-2 text-xs text-gray-500">Quando desativado, a IA para de responder automaticamente no chat.</p>
+      <section class="grid gap-5 xl:grid-cols-12">
+        <div class="space-y-5 xl:col-span-7">
+          <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+            <h2 class="text-lg font-bold text-green-800">Operacao da IA</h2>
+            <p class="mt-1 text-sm text-gray-500">Ative/desative comportamentos principais de atendimento.</p>
+            <label class="switch-row mt-3">
+              <span class="text-sm font-semibold text-slate-700">Ativar IA no primeiro atendimento do chat</span>
+              <span class="switch-control">
+                <input id="aiAttendantEnabled" type="checkbox" <%= settings.aiAttendantEnabled ? 'checked' : '' %>>
+                <span class="switch-track"></span>
+              </span>
+            </label>
+            <p class="mt-2 text-xs text-gray-500">Quando desativado, a IA para de responder automaticamente no chat.</p>
 
-        <div class="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-3">
-          <label class="flex items-center gap-3">
-            <input id="aiBetaModeEnabled" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500" <%= settings.aiBetaModeEnabled ? 'checked' : '' %>>
-            <span class="text-sm font-semibold text-slate-700">Ativar modo beta (somente usuarios selecionados)</span>
-          </label>
-          <label class="mt-3 block text-sm">
-            <span class="mb-1 block font-semibold text-gray-600">Usuarios liberados para IA (ID ou e-mail, 1 por linha)</span>
-            <textarea id="aiBetaAllowlist" rows="4" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400" placeholder="user_carol&#10;carol@dev.com"><%= Array.isArray(settings.aiBetaAllowlist) ? settings.aiBetaAllowlist.join('\n') : '' %></textarea>
-          </label>
-          <p class="mt-2 text-xs text-gray-500">Se o modo beta estiver ativo, apenas os usuarios listados recebem respostas da IA.</p>
-        </div>
+            <label class="switch-row mt-3">
+              <span class="text-sm font-semibold text-slate-700">Permitir que ADMIN converse com a IA no chat</span>
+              <span class="switch-control">
+                <input id="aiAllowAdminChat" type="checkbox" <%= settings.aiAllowAdminChat ? 'checked' : '' %>>
+                <span class="switch-track"></span>
+              </span>
+            </label>
+            <p class="mt-2 text-xs text-gray-500">Quando ativo, usuarios com perfil ADMIN podem trocar mensagens com a IA sem forcar estado HUMANO.</p>
 
-        <label class="mt-4 flex items-center gap-3 rounded-xl border border-green-100 p-3">
-          <input id="kbAutoPublishEnabled" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500" <%= settings.kbAutoPublishEnabled ? 'checked' : '' %>>
-          <span class="text-sm font-semibold text-slate-700">Publicar automaticamente importacoes da Base IA</span>
-        </label>
-        <p class="mt-2 text-xs text-gray-500">Quando ativo, novos arquivos importados ja entram em producao sem etapa manual de publicar draft.</p>
-      </section>
+            <label class="switch-row mt-3">
+              <span class="text-sm font-semibold text-slate-700">Publicar automaticamente importacoes da Base IA</span>
+              <span class="switch-control">
+                <input id="kbAutoPublishEnabled" type="checkbox" <%= settings.kbAutoPublishEnabled ? 'checked' : '' %>>
+                <span class="switch-track"></span>
+              </span>
+            </label>
+            <p class="mt-2 text-xs text-gray-500">Quando ativo, novos arquivos importados ja entram em producao sem etapa manual de publicar draft.</p>
 
-      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-        <h2 class="text-lg font-bold text-green-800">Perfil do Agente IA</h2>
-        <p class="mt-1 text-sm text-gray-500">Personalize identidade e comportamento da assistente sem editar arquivo de ambiente.</p>
-        <div class="mt-3 grid gap-3 sm:grid-cols-2">
-          <label class="text-sm">
-            <span class="mb-1 block font-semibold text-gray-600">Nome do agente</span>
-            <input id="aiAgentName" type="text" value="<%= settings.aiAgentName %>" placeholder="Marina" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-          </label>
-          <label class="text-sm">
-            <span class="mb-1 block font-semibold text-gray-600">Avatar (URL ou caminho)</span>
-            <input id="aiAgentAvatar" type="text" value="<%= settings.aiAgentAvatar %>" placeholder="/images/marina.png" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-          </label>
-          <label class="text-sm sm:col-span-2">
-            <span class="mb-1 block font-semibold text-gray-600">Prompt de personalidade</span>
-            <textarea id="aiPersonalityPrompt" rows="4" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400"><%= settings.aiPersonalityPrompt %></textarea>
-          </label>
-          <label class="text-sm">
-            <span class="mb-1 block font-semibold text-gray-600">Temperatura (0-2)</span>
-            <input id="aiTemperature" type="number" min="0" max="2" step="0.05" value="<%= settings.aiTemperature %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-          </label>
-          <label class="text-sm">
-            <span class="mb-1 block font-semibold text-gray-600">Max output tokens</span>
-            <input id="aiMaxOutputTokens" type="number" min="64" max="2048" step="1" value="<%= settings.aiMaxOutputTokens %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-          </label>
-          <label class="text-sm sm:col-span-2">
-            <span class="mb-1 block font-semibold text-gray-600">Limite de caracteres da resposta</span>
-            <input id="aiMaxReplyChars" type="number" min="120" max="4000" step="1" value="<%= settings.aiMaxReplyChars %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-          </label>
-        </div>
-      </section>
-
-      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-        <div class="flex flex-wrap items-start justify-between gap-2">
-          <div>
-            <h2 class="text-lg font-bold text-green-800">Modelo de IA</h2>
-            <p class="mt-1 text-sm text-gray-500">Escolha o provider e o modelo padrao da assistente, com deteccao automatica dos modelos disponiveis.</p>
-          </div>
-          <button id="reloadModelsBtn" type="button" class="rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50">Atualizar lista</button>
-        </div>
-
-        <div class="mt-3 grid gap-3 sm:grid-cols-2">
-          <label class="text-sm">
-            <span class="mb-1 block font-semibold text-gray-600">Provider padrao</span>
-            <select id="aiPreferredProvider" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-              <option value="ollama" <%= settings.aiPreferredProvider === 'ollama' ? 'selected' : '' %>>Ollama</option>
-              <option value="gemini" <%= settings.aiPreferredProvider === 'gemini' ? 'selected' : '' %>>Gemini</option>
-            </select>
-          </label>
-          <label class="text-sm">
-            <span class="mb-1 block font-semibold text-gray-600">Modelo padrao</span>
-            <select id="aiPreferredModel" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-              <option value="<%= settings.aiPreferredModel %>" selected><%= settings.aiPreferredModel %></option>
-            </select>
-          </label>
-          <label class="text-sm sm:col-span-2">
-            <span class="mb-1 block font-semibold text-gray-600">Adicionar modelo manualmente</span>
-            <div class="grid gap-2 sm:grid-cols-3">
-              <select id="customModelProvider" class="rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-                <option value="ollama">Ollama</option>
-                <option value="gemini">Gemini</option>
-              </select>
-              <input id="customModelName" type="text" placeholder="gemma3:4b ou gemini-2.5-pro" class="sm:col-span-2 rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+            <div class="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-3 space-y-2">
+              <label class="switch-row border-amber-200">
+                <span class="text-sm font-semibold text-slate-700">Ativar modo beta (somente usuarios selecionados)</span>
+                <span class="switch-control">
+                  <input id="aiBetaModeEnabled" type="checkbox" <%= settings.aiBetaModeEnabled ? 'checked' : '' %>>
+                  <span class="switch-track"></span>
+                </span>
+              </label>
+              <label class="mt-3 block text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Usuarios liberados para IA (ID ou e-mail, 1 por linha)</span>
+                <textarea id="aiBetaAllowlist" rows="4" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400" placeholder="user_carol&#10;carol@dev.com"><%= Array.isArray(settings.aiBetaAllowlist) ? settings.aiBetaAllowlist.join('\n') : '' %></textarea>
+              </label>
+              <p class="mt-2 text-xs text-gray-500">Se o modo beta estiver ativo, apenas os usuarios listados recebem respostas da IA.</p>
             </div>
-            <div class="mt-2 flex flex-wrap gap-2">
-              <button id="addCustomModelBtn" type="button" class="rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50">Adicionar no cadastro</button>
-              <span class="text-xs text-gray-500">Formato salvo: provider:modelo</span>
+          </section>
+
+          <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+            <h2 class="text-lg font-bold text-green-800">Perfil do Agente IA</h2>
+            <p class="mt-1 text-sm text-gray-500">Personalize identidade e comportamento da assistente sem editar arquivo de ambiente.</p>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Nome do agente</span>
+                <input id="aiAgentName" type="text" value="<%= settings.aiAgentName %>" placeholder="Marina" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              </label>
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Avatar (URL ou caminho)</span>
+                <input id="aiAgentAvatar" type="text" value="<%= settings.aiAgentAvatar %>" placeholder="/images/marina.png" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              </label>
+              <label class="text-sm sm:col-span-2">
+                <span class="mb-1 block font-semibold text-gray-600">Prompt de personalidade</span>
+                <textarea id="aiPersonalityPrompt" rows="4" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400"><%= settings.aiPersonalityPrompt %></textarea>
+              </label>
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Temperatura (0-2)</span>
+                <input id="aiTemperature" type="number" min="0" max="2" step="0.05" value="<%= settings.aiTemperature %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              </label>
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Max output tokens</span>
+                <input id="aiMaxOutputTokens" type="number" min="64" max="2048" step="1" value="<%= settings.aiMaxOutputTokens %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              </label>
+              <label class="text-sm sm:col-span-2">
+                <span class="mb-1 block font-semibold text-gray-600">Limite de caracteres da resposta</span>
+                <input id="aiMaxReplyChars" type="number" min="120" max="4000" step="1" value="<%= settings.aiMaxReplyChars %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              </label>
             </div>
-          </label>
-          <label class="text-sm sm:col-span-2">
-            <span class="mb-1 block font-semibold text-gray-600">Modelos customizados (1 por linha, formato provider:modelo)</span>
-            <textarea id="aiCustomModels" rows="4" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400" placeholder="ollama:llama3.1:8b&#10;gemini:gemini-2.5-pro"><%= Array.isArray(settings.aiCustomModels) ? settings.aiCustomModels.join('\n') : '' %></textarea>
-          </label>
+          </section>
         </div>
-        <p id="modelsStatus" class="mt-2 text-xs font-semibold text-gray-500">Lista de modelos aguardando atualizacao.</p>
-      </section>
 
-      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-        <h2 class="text-lg font-bold text-green-800">Teste de Prompt</h2>
-        <p class="mt-1 text-sm text-gray-500">Valide a resposta da IA com as configuracoes atuais antes de salvar em producao.</p>
-        <div class="mt-3 grid gap-3">
-          <label class="text-sm">
-            <span class="mb-1 block font-semibold text-gray-600">Mensagem de teste</span>
-            <textarea id="testMessage" rows="3" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">Quero entender melhor o modo estrito.</textarea>
-          </label>
-          <div class="w-full sm:w-72">
-            <%- include('../components/buttons/default', {
-              id: 'testPromptBtn',
-              label: 'Testar Prompt'
-            }) %>
-          </div>
-          <div id="testPromptResult" class="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
-            Nenhum teste executado ainda.
-          </div>
-        </div>
-      </section>
+        <div class="space-y-5 xl:col-span-5">
+          <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h2 class="text-lg font-bold text-green-800">Modelo de IA</h2>
+                <p class="mt-1 text-sm text-gray-500">Escolha provider/modelo principal e recarregue catalogo automatico.</p>
+              </div>
+              <button id="reloadModelsBtn" type="button" class="rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50">Atualizar lista</button>
+            </div>
 
-      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-        <h2 class="text-lg font-bold text-green-800">Alertas por e-mail</h2>
-        <div class="mt-3 grid gap-3 sm:grid-cols-2">
-          <label class="text-sm sm:col-span-2">
-            <span class="mb-1 block font-semibold text-gray-600">Ativar envio por e-mail</span>
-            <input id="alertEmailEnabled" type="checkbox" class="h-4 w-4 rounded border-gray-300 text-green-600 focus:ring-green-500" <%= settings.alertEmailEnabled ? 'checked' : '' %>>
-          </label>
-          <label class="text-sm sm:col-span-2">
-            <span class="mb-1 block font-semibold text-gray-600">Destinatarios (separados por virgula)</span>
-            <input id="alertEmailTo" type="text" value="<%= settings.alertEmailTo %>" placeholder="admin@taiksu.com.br,dev@taiksu.com.br" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-          </label>
-          <label class="text-sm">
-            <span class="mb-1 block font-semibold text-gray-600">Email Service ID</span>
-            <input id="alertEmailServiceId" type="number" min="1" value="<%= settings.alertEmailServiceId %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-          </label>
-          <label class="text-sm">
-            <span class="mb-1 block font-semibold text-gray-600">URL da API de e-mail</span>
-            <input id="alertEmailApiUrl" type="text" value="<%= settings.alertEmailApiUrl %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-          </label>
-          <label class="text-sm sm:col-span-2">
-            <span class="mb-1 block font-semibold text-gray-600">Token da API de e-mail</span>
-            <input id="alertEmailToken" type="password" placeholder="<%= settings.hasAlertEmailToken ? 'Token configurado (digite para substituir)' : 'Cole o token Bearer aqui' %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-          </label>
-        </div>
-      </section>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Provider padrao</span>
+                <select id="aiPreferredProvider" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                  <option value="ollama" <%= settings.aiPreferredProvider === 'ollama' ? 'selected' : '' %>>Ollama</option>
+                  <option value="gemini" <%= settings.aiPreferredProvider === 'gemini' ? 'selected' : '' %>>Gemini</option>
+                </select>
+              </label>
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Modelo padrao</span>
+                <select id="aiPreferredModel" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                  <option value="<%= settings.aiPreferredModel %>" selected><%= settings.aiPreferredModel %></option>
+                </select>
+              </label>
+            </div>
+            <p id="modelsStatus" class="mt-2 text-xs font-semibold text-gray-500">Lista de modelos aguardando atualizacao.</p>
 
-      <section class="rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
-        <div class="flex flex-wrap items-center gap-2">
-          <div class="w-full sm:w-72">
-            <%- include('../components/buttons/default', {
-              id: 'saveSettingsBtn',
-              label: 'Salvar Configuracoes'
-            }) %>
-          </div>
-          <span id="settingsStatus" class="text-sm font-semibold text-gray-600">Aguardando alteracoes</span>
+            <details class="fold-section mt-3 rounded-xl border border-green-100 bg-green-50 p-3">
+              <summary class="flex items-center justify-between text-sm font-semibold text-green-800">
+                <span>Configuracoes avancadas de modelos</span>
+                <span class="text-xs text-green-600">abrir</span>
+              </summary>
+              <div class="mt-3 grid gap-3">
+                <label class="text-sm">
+                  <span class="mb-1 block font-semibold text-gray-600">Adicionar modelo manualmente</span>
+                  <div class="grid gap-2 sm:grid-cols-3">
+                    <select id="customModelProvider" class="rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                      <option value="ollama">Ollama</option>
+                      <option value="gemini">Gemini</option>
+                    </select>
+                    <input id="customModelName" type="text" placeholder="gemma3:4b ou gemini-2.5-pro" class="sm:col-span-2 rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                  </div>
+                  <div class="mt-2 flex flex-wrap gap-2">
+                    <button id="addCustomModelBtn" type="button" class="rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50">Adicionar no cadastro</button>
+                    <span class="text-xs text-gray-500">Formato salvo: provider:modelo</span>
+                  </div>
+                </label>
+                <label class="text-sm">
+                  <span class="mb-1 block font-semibold text-gray-600">Modelos customizados (1 por linha, formato provider:modelo)</span>
+                  <textarea id="aiCustomModels" rows="4" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400" placeholder="ollama:llama3.1:8b&#10;gemini:gemini-2.5-pro"><%= Array.isArray(settings.aiCustomModels) ? settings.aiCustomModels.join('\n') : '' %></textarea>
+                </label>
+              </div>
+            </details>
+          </section>
+
+          <details class="fold-section rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+            <summary class="flex items-center justify-between">
+              <div>
+                <h2 class="text-lg font-bold text-green-800">Teste de Prompt</h2>
+                <p class="mt-1 text-sm text-gray-500">Valide a resposta da IA antes de salvar em producao.</p>
+              </div>
+              <span class="text-xs font-semibold text-green-700">abrir</span>
+            </summary>
+            <div class="mt-3 grid gap-3">
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Mensagem de teste</span>
+                <textarea id="testMessage" rows="3" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">Quero entender melhor o modo estrito.</textarea>
+              </label>
+              <div class="w-full sm:w-72">
+                <button id="testPromptBtn" type="button" class="inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 sm:w-auto">Testar Prompt</button>
+              </div>
+              <div id="testPromptResult" class="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600">
+                Nenhum teste executado ainda.
+              </div>
+            </div>
+          </details>
+
+          <details class="fold-section rounded-2xl border border-green-100 bg-white p-4 shadow-sm">
+            <summary class="flex items-center justify-between">
+              <div>
+                <h2 class="text-lg font-bold text-green-800">Alertas por e-mail</h2>
+                <p class="mt-1 text-sm text-gray-500">Configuracoes de notificacao para eventos importantes.</p>
+              </div>
+              <span class="text-xs font-semibold text-green-700">abrir</span>
+            </summary>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <label class="text-sm sm:col-span-2">
+                <div class="switch-row">
+                  <span class="font-semibold text-gray-600">Ativar envio por e-mail</span>
+                  <span class="switch-control">
+                    <input id="alertEmailEnabled" type="checkbox" <%= settings.alertEmailEnabled ? 'checked' : '' %>>
+                    <span class="switch-track"></span>
+                  </span>
+                </div>
+              </label>
+              <label class="text-sm sm:col-span-2">
+                <span class="mb-1 block font-semibold text-gray-600">Destinatarios (separados por virgula)</span>
+                <input id="alertEmailTo" type="text" value="<%= settings.alertEmailTo %>" placeholder="admin@taiksu.com.br,dev@taiksu.com.br" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              </label>
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Email Service ID</span>
+                <input id="alertEmailServiceId" type="number" min="1" value="<%= settings.alertEmailServiceId %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              </label>
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">URL da API de e-mail</span>
+                <input id="alertEmailApiUrl" type="text" value="<%= settings.alertEmailApiUrl %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              </label>
+              <label class="text-sm sm:col-span-2">
+                <span class="mb-1 block font-semibold text-gray-600">Token da API de e-mail</span>
+                <input id="alertEmailToken" type="password" placeholder="<%= settings.hasAlertEmailToken ? 'Token configurado (digite para substituir)' : 'Cole o token Bearer aqui' %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+              </label>
+            </div>
+          </details>
         </div>
       </section>
     </main>
+  </div>
+
+  <div class="sticky-save">
+    <div class="mx-auto flex w-full max-w-7xl items-center justify-between gap-3 rounded-xl border border-green-100 bg-white px-3 py-2 shadow-sm">
+      <span id="settingsStatus" class="text-sm font-semibold text-gray-600">Aguardando alteracoes</span>
+      <button id="saveSettingsBtn" type="button" class="inline-flex items-center justify-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700">Salvar Configuracoes</button>
+    </div>
   </div>
 
   <%- include('../partials/sidebar-script') %>
@@ -307,6 +418,7 @@
     async function saveSettings() {
       const payload = {
         aiAttendantEnabled: document.getElementById('aiAttendantEnabled').checked,
+        aiAllowAdminChat: document.getElementById('aiAllowAdminChat').checked,
         aiBetaModeEnabled: document.getElementById('aiBetaModeEnabled').checked,
         aiBetaAllowlist: document.getElementById('aiBetaAllowlist').value || '',
         aiAgentName: document.getElementById('aiAgentName').value || '',

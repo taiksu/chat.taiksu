@@ -1,5 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const { AppSettingModel } = require('../models/sequelize-models');
+
+const SETTINGS_DB_ID = 'global';
 
 class SettingsService {
   constructor() {
@@ -8,6 +11,8 @@ class SettingsService {
     this.filePath = path.join(this.dataDir, 'app-settings.json');
     this.cache = null;
     this.lastMtimeMs = 0;
+    this.dbHydrated = false;
+    this.dbHydratePromise = null;
   }
 
   getAllowedProviders() {
@@ -41,6 +46,7 @@ class SettingsService {
     );
     return {
       aiAttendantEnabled: String(process.env.AI_ATTENDANT_ENABLED || 'false').toLowerCase() === 'true',
+      aiAllowAdminChat: String(process.env.AI_ALLOW_ADMIN_CHAT || 'false').toLowerCase() === 'true',
       aiBetaModeEnabled: String(process.env.AI_BETA_MODE_ENABLED || 'false').toLowerCase() === 'true',
       aiBetaAllowlist: this.parseAllowlist(process.env.AI_BETA_ALLOWLIST || ''),
       aiAgentName: String(process.env.AI_USER_NAME || 'Marina').trim() || 'Marina',
@@ -129,6 +135,7 @@ class SettingsService {
   }
 
   load() {
+    this.kickOffDbHydration();
     this.ensureDir();
     const base = this.defaults();
     if (!fs.existsSync(this.filePath)) {
@@ -156,7 +163,47 @@ class SettingsService {
     }
   }
 
-  save(input = {}) {
+  kickOffDbHydration() {
+    if (this.dbHydrated) return;
+    if (this.dbHydratePromise) return;
+    this.dbHydratePromise = this.hydrateFromDatabase()
+      .catch(() => {})
+      .finally(() => {
+        this.dbHydrated = true;
+        this.dbHydratePromise = null;
+      });
+  }
+
+  async hydrateFromDatabase() {
+    const row = await AppSettingModel.findByPk(SETTINGS_DB_ID);
+    if (!row) return null;
+    const payload = String(row.payload_json || '{}').trim() || '{}';
+    let parsed = {};
+    try {
+      parsed = JSON.parse(payload);
+    } catch (_err) {
+      parsed = {};
+    }
+    const merged = { ...this.defaults(), ...(parsed || {}) };
+    this.ensureDir();
+    fs.writeFileSync(this.filePath, JSON.stringify(merged, null, 2), 'utf-8');
+    this.cache = merged;
+    try {
+      this.lastMtimeMs = fs.statSync(this.filePath).mtimeMs;
+    } catch (_err) {
+      this.lastMtimeMs = Date.now();
+    }
+    return { ...merged };
+  }
+
+  async persistToDatabase(payload) {
+    await AppSettingModel.upsert({
+      id: SETTINGS_DB_ID,
+      payload_json: JSON.stringify(payload || {})
+    });
+  }
+
+  async save(input = {}) {
     const current = this.load();
     const providerFallback = this.normalizeProvider(current.aiPreferredProvider, this.getDefaultProvider());
     const preferredProvider = input.aiPreferredProvider !== undefined
@@ -169,6 +216,7 @@ class SettingsService {
     const next = {
       ...current,
       aiAttendantEnabled: input.aiAttendantEnabled !== undefined ? Boolean(input.aiAttendantEnabled) : current.aiAttendantEnabled,
+      aiAllowAdminChat: input.aiAllowAdminChat !== undefined ? Boolean(input.aiAllowAdminChat) : Boolean(current.aiAllowAdminChat),
       aiBetaModeEnabled: input.aiBetaModeEnabled !== undefined ? Boolean(input.aiBetaModeEnabled) : current.aiBetaModeEnabled,
       aiBetaAllowlist: input.aiBetaAllowlist !== undefined
         ? this.parseAllowlist(input.aiBetaAllowlist)
@@ -216,6 +264,7 @@ class SettingsService {
     } catch (_err) {
       this.lastMtimeMs = Date.now();
     }
+    await this.persistToDatabase(next);
     return { ...next };
   }
 
@@ -223,6 +272,7 @@ class SettingsService {
     const current = this.load();
     return {
       aiAttendantEnabled: Boolean(current.aiAttendantEnabled),
+      aiAllowAdminChat: Boolean(current.aiAllowAdminChat),
       aiBetaModeEnabled: Boolean(current.aiBetaModeEnabled),
       aiBetaAllowlist: this.parseAllowlist(current.aiBetaAllowlist || []),
       aiAgentName: String(current.aiAgentName || 'Marina'),

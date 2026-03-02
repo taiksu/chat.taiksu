@@ -1,6 +1,7 @@
 const multer = require('multer');
 const knowledgeAdmin = require('../services/knowledgeAdminService');
 const settingsService = require('../services/settingsService');
+const AIController = require('./AIController');
 
 class KnowledgeBaseController {
   constructor() {
@@ -96,6 +97,29 @@ class KnowledgeBaseController {
     return res.json({ success: true, item: updated });
   }
 
+  bulkUpdateDraft(req, res) {
+    if (!this.isAdmin(req)) return this.deny(res);
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    if (!items.length) return res.status(400).json({ error: 'items obrigatorio (array)' });
+    const normalized = items.map((entry) => {
+      const patch = entry?.patch && typeof entry.patch === 'object' ? entry.patch : {};
+      const nextPatch = { ...patch };
+      if (nextPatch.tags !== undefined) {
+        nextPatch.tags = Array.isArray(nextPatch.tags)
+          ? nextPatch.tags.map((tag) => String(tag || '').trim()).filter(Boolean)
+          : String(nextPatch.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean);
+      }
+      return {
+        id: String(entry?.id || '').trim(),
+        patch: nextPatch
+      };
+    }).filter((entry) => entry.id);
+
+    if (!normalized.length) return res.status(400).json({ error: 'Nenhum item valido para atualizar' });
+    const result = knowledgeAdmin.bulkUpdateDraft(normalized);
+    return res.json({ success: true, updated: Number(result.updated || 0), items: result.items || [] });
+  }
+
   deleteDraftItem(req, res) {
     if (!this.isAdmin(req)) return this.deny(res);
     const { id } = req.params;
@@ -116,7 +140,65 @@ class KnowledgeBaseController {
     return res.json({
       success: true,
       published: result.published,
+      liveCount: Number(result.liveCount || 0),
       versionFile: result.versionFile
+    });
+  }
+
+  async autoTagDraftItem(req, res) {
+    if (!this.isAdmin(req)) return this.deny(res);
+    const itemId = String(req.params?.id || '').trim();
+    if (!itemId) return res.status(400).json({ error: 'id obrigatorio' });
+
+    const draft = knowledgeAdmin.getDraft();
+    const target = draft.find((item) => String(item?.id || '') === itemId);
+    if (!target) return res.status(404).json({ error: 'Item nao encontrado no draft' });
+
+    const text = [target.title, target.content, target.intent, target.category].filter(Boolean).join('\n');
+    let tags = [];
+    let source = 'heuristic';
+    try {
+      tags = await AIController.suggestKnowledgeTags(text);
+      source = 'ai';
+    } catch (_err) {
+      tags = knowledgeAdmin.buildTags(text);
+    }
+
+    const updated = knowledgeAdmin.updateDraftItem(itemId, { tags: Array.isArray(tags) ? tags.slice(0, 8) : [] });
+    return res.json({ success: true, source, item: updated });
+  }
+
+  async autoTagAllDraft(req, res) {
+    if (!this.isAdmin(req)) return this.deny(res);
+    const draft = knowledgeAdmin.getDraft();
+    if (!draft.length) return res.json({ success: true, updated: 0, source: 'none' });
+
+    let aiSuccessCount = 0;
+    let fallbackCount = 0;
+    const patchList = [];
+    for (const item of draft) {
+      const text = [item.title, item.content, item.intent, item.category].filter(Boolean).join('\n');
+      let tags = [];
+      try {
+        tags = await AIController.suggestKnowledgeTags(text);
+        aiSuccessCount += 1;
+      } catch (_err) {
+        tags = knowledgeAdmin.buildTags(text);
+        fallbackCount += 1;
+      }
+      patchList.push({
+        id: String(item.id || ''),
+        patch: { tags: Array.isArray(tags) ? tags.slice(0, 8) : [] }
+      });
+    }
+
+    const result = knowledgeAdmin.bulkUpdateDraft(patchList);
+    return res.json({
+      success: true,
+      updated: Number(result.updated || 0),
+      source: aiSuccessCount > 0 && fallbackCount === 0 ? 'ai' : (aiSuccessCount > 0 ? 'mixed' : 'heuristic'),
+      aiSuccessCount,
+      fallbackCount
     });
   }
 
