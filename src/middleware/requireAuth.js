@@ -41,15 +41,33 @@ function unauthorized(req, res, asApi) {
 }
 
 async function rehydrateSession(req, res, asApi) {
-  if (req.session?.user) return true;
   if (!SSO_ENABLED) return false;
 
   const cookies = parseCookies(req);
-  const token =
+  const requestToken =
     req.query?.token ||
-    req.session?.ssoToken ||
-    cookies[TOKEN_COOKIE_NAME] ||
-    extractBearerToken(req);
+    extractBearerToken(req) ||
+    null;
+  const sessionToken = req.session?.ssoToken || null;
+  const cookieToken = cookies[TOKEN_COOKIE_NAME] || null;
+  const token = requestToken || sessionToken || cookieToken;
+
+  // Se ja existe sessao e o token explicitamente informado e o mesmo,
+  // preserva a sessao sem revalidar.
+  if (req.session?.user && requestToken && sessionToken && requestToken === sessionToken) {
+    return true;
+  }
+
+  // Se existe sessao, mas chegou token explicito diferente, precisa reidratar
+  // para nao manter usuario antigo.
+  if (req.session?.user && requestToken && sessionToken && requestToken !== sessionToken) {
+    req.session.user = null;
+    req.session.ssoUser = null;
+    req.session.ssoToken = null;
+  } else if (req.session?.user && !requestToken) {
+    // Sem token explicito, seguimos com sessao atual (fluxo web normal).
+    return true;
+  }
 
   if (!token) return false;
 
