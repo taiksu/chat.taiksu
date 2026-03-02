@@ -20,6 +20,8 @@ const isProd = process.env.NODE_ENV === 'production';
 const isDev = !isProd;
 let startupError = null;
 const strictStartup = process.env.STRICT_STARTUP === 'true';
+const packageJson = require('../package.json');
+const assetVersion = String(process.env.ASSET_VERSION || packageJson.version || '1').trim();
 
 if (process.env.PROXY_TRUST === '1' || process.env.PROXY_TRUST === 'true') {
   app.set('trust proxy', 1);
@@ -140,6 +142,7 @@ app.use(session(sessionOptions));
 
 app.use((req, res, next) => {
   res.locals.user = req.session.user || null;
+  res.locals.assetVersion = assetVersion;
   next();
 });
 

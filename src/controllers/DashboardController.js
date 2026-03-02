@@ -197,7 +197,8 @@ class DashboardController {
             id: String(p.id),
             name: p.name || `Usuario ${p.id}`,
             avatar: p.avatar || '',
-            status: p.status || 'offline'
+            status: p.status || 'offline',
+            role: String(p.role || 'user')
           }))
         };
       }));

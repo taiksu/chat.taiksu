@@ -339,6 +339,7 @@ class AIController {
       'Nao repita o mesmo texto da resposta anterior; se houver repeticao, reformule com palavras diferentes.',
       'Se o usuario mudar de assunto, abandone imediatamente o topico anterior e responda somente o novo tema.',
       'Se o novo tema nao estiver claro, faca 1 pergunta curta de esclarecimento.',
+      'Se o usuario ja escolheu formato (ex.: visao geral ou passo a passo), nao repita pergunta de clarificacao de formato.',
       'Nao invente nem altere o nome do usuario; se usar nome, use exatamente o nome informado no prompt.',
       'Quando houver base de conhecimento enviada, use essa base como fonte principal.',
       'Se a resposta nao estiver na base enviada, diga que precisa de mais informacoes ou ofereca humano.',
@@ -425,7 +426,7 @@ class AIController {
       `Nome exato do usuario: ${userName}`,
       `Ja houve resposta da assistente neste chat: ${hadAssistantContext ? 'sim' : 'nao'}`,
       memory
-        ? `Memoria curta da conversa:\n- topico: ${String(memory.topic || 'n/a')}\n- intencao: ${String(memory.intent || 'geral')}\n- resumo: ${String(memory.summary || 'n/a')}\n- ultima msg usuario: ${String(memory.lastUserMessage || 'n/a')}\n- ultima msg assistente: ${String(memory.lastAiMessage || 'n/a')}`
+        ? `Memoria curta da conversa:\n- topico: ${String(memory.topic || 'n/a')}\n- intencao: ${String(memory.intent || 'geral')}\n- preferencia de formato: ${String(memory.preferredReplyStyle || 'n/a')}\n- resumo: ${String(memory.summary || 'n/a')}\n- ultima msg usuario: ${String(memory.lastUserMessage || 'n/a')}\n- ultima msg assistente: ${String(memory.lastAiMessage || 'n/a')}`
         : 'Sem memoria curta registrada.',
       `Mensagem atual: ${message}`,
       docsBlock ? `Base de conhecimento recuperada:\n${docsBlock}` : 'Sem base de conhecimento recuperada.',
@@ -767,6 +768,9 @@ class AIController {
     const startedAt = Date.now();
     try {
       const payload = req.body || {};
+      const overrides = payload && typeof payload.overrides === 'object' && payload.overrides
+        ? payload.overrides
+        : {};
       const roomId = String(payload.roomId || '');
       const chamadoId = payload.chamadoId ? String(payload.chamadoId) : '';
       const chatState = String(payload.chatState || 'IA');
@@ -777,7 +781,7 @@ class AIController {
         return res.status(401).json({ error: 'Nao autorizado para API de IA' });
       }
 
-      const result = await this.generateFirstContact(payload, {});
+      const result = await this.generateFirstContact(payload, overrides);
 
       const latencyMs = Date.now() - startedAt;
       this.logAiMetric('success', {

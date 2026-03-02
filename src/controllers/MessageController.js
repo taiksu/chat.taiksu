@@ -7,6 +7,7 @@ const fastReplyService = require('../services/fastReplyService');
 const alertService = require('../services/alertService');
 const eventBrokerService = require('../services/eventBrokerService');
 const settingsService = require('../services/settingsService');
+const aiLearningLogService = require('../services/aiLearningLogService');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -229,6 +230,7 @@ class MessageController {
       topic: '',
       intent: 'geral',
       summary: '',
+      preferredReplyStyle: '',
       lastUserMessage: '',
       lastAiMessage: '',
       updatedAt: Date.now()
@@ -269,12 +271,14 @@ class MessageController {
     const current = this.getRoomMemory(roomId) || {};
     const topic = this.extractTopicFromText(content) || current.topic || '';
     const intent = this.inferMemoryIntent(content) || current.intent || 'geral';
+    const preferredReplyStyle = this.detectReplyStylePreference(content) || current.preferredReplyStyle || '';
     const summary = topic
       ? `Topico atual: ${topic}. Intencao: ${intent}.`
       : (current.summary || `Intencao: ${intent}.`);
     this.setRoomMemory(roomId, {
       topic,
       intent,
+      preferredReplyStyle,
       summary,
       lastUserMessage: content.slice(0, 260)
     });
@@ -296,6 +300,7 @@ class MessageController {
     return {
       topic: String(memory.topic || ''),
       intent: String(memory.intent || 'geral'),
+      preferredReplyStyle: String(memory.preferredReplyStyle || ''),
       summary: String(memory.summary || ''),
       lastUserMessage: String(memory.lastUserMessage || ''),
       lastAiMessage: String(memory.lastAiMessage || '')
@@ -314,6 +319,7 @@ class MessageController {
         roomId: String(roomId),
         topic: String(memory?.topic || ''),
         intent: String(memory?.intent || 'geral'),
+        preferredReplyStyle: String(memory?.preferredReplyStyle || ''),
         summary: String(memory?.summary || ''),
         lastUserMessage: String(memory?.lastUserMessage || ''),
         lastAiMessage: String(memory?.lastAiMessage || ''),
@@ -445,6 +451,61 @@ class MessageController {
       .trim();
   }
 
+  detectReplyStylePreference(text) {
+    const normalized = this.normalizeCompareText(text);
+    if (!normalized) return '';
+    if (/(passo a passo|tutorial|guia|etapas|como fazer)/i.test(normalized)) return 'passo_a_passo';
+    if (/(visao geral|visao macro|resumo|objetivo)/i.test(normalized)) return 'visao_geral';
+    return '';
+  }
+
+  isClarificationPrompt(text) {
+    const normalized = this.normalizeCompareText(text);
+    if (!normalized) return false;
+    return /(visao geral|passo a passo).{0,30}(ou|ou se).{0,30}(visao geral|passo a passo)/i.test(normalized);
+  }
+
+  buildLoopBreakReply({ userMessage, roomId, requestedTopic }) {
+    const memory = this.getRoomMemory(roomId);
+    const preferred = this.detectReplyStylePreference(userMessage) || String(memory?.preferredReplyStyle || '');
+    const topic = String(requestedTopic || memory?.topic || 'esse tema').trim();
+    if (preferred === 'passo_a_passo') {
+      return `Perfeito. Vou responder direto em passo a passo sobre ${topic}.`;
+    }
+    if (preferred === 'visao_geral') {
+      return `Perfeito. Vou responder direto com uma visao geral sobre ${topic}.`;
+    }
+    return `Perfeito. Vou responder direto sobre ${topic}.`;
+  }
+
+  evaluateReplyQuality({ userMessage, replyText, roomId }) {
+    const requestedTopic = this.extractRequestedTopic(userMessage);
+    const userTopicLabel = this.detectTopicLabel(requestedTopic || userMessage);
+    const replyTopicLabel = this.detectTopicLabel(replyText);
+    const topicMismatch = Boolean(userTopicLabel && replyTopicLabel && userTopicLabel !== replyTopicLabel);
+    const repeatedReply = this.isVerySimilarReply(replyText, this.getRoomMemory(roomId)?.lastAiMessage || '');
+    const clarificationPrompt = this.isClarificationPrompt(replyText);
+    const previousClarificationPrompt = this.isClarificationPrompt(this.getRoomMemory(roomId)?.lastAiMessage || '');
+    const repeatedClarification = Boolean(clarificationPrompt && previousClarificationPrompt);
+    const replyStylePreference = this.detectReplyStylePreference(userMessage) || String(this.getRoomMemory(roomId)?.preferredReplyStyle || '');
+    const likelyLoop = Boolean(repeatedClarification || (clarificationPrompt && replyStylePreference));
+    return {
+      requestedTopic,
+      userTopicLabel,
+      replyTopicLabel,
+      topicMismatch,
+      repeatedReply,
+      clarificationPrompt,
+      repeatedClarification,
+      replyStylePreference,
+      likelyLoop
+    };
+  }
+
+  async logLearningEvent(event, data = {}) {
+    await aiLearningLogService.append(event, data);
+  }
+
   stripLeadingGreeting(replyText) {
     let safe = String(replyText || '').trim();
     if (!safe) return safe;
@@ -530,7 +591,11 @@ class MessageController {
     let safe = this.sanitizeAiReply(replyText);
     const memory = this.getRoomMemory(roomId);
     const hasAssistantHistory = Boolean(String(memory?.lastAiMessage || '').trim());
-    const requestedTopic = this.extractRequestedTopic(userMessage);
+    let quality = this.evaluateReplyQuality({
+      userMessage,
+      replyText: safe,
+      roomId
+    });
 
     if (hasAssistantHistory) {
       safe = this.stripLeadingGreeting(safe);
@@ -552,19 +617,38 @@ class MessageController {
       }
     }
 
-    const userTopicLabel = this.detectTopicLabel(requestedTopic || userMessage);
-    const replyTopicLabel = this.detectTopicLabel(safe);
-    if (userTopicLabel && replyTopicLabel && userTopicLabel !== replyTopicLabel) {
-      safe = requestedTopic
-        ? `Entendi, voce quer saber sobre ${requestedTopic}. Vou focar nesse assunto. Pode me dizer se voce quer uma visao geral ou passo a passo?`
-        : 'Entendi a mudanca de assunto. Vou focar no novo tema. Voce quer uma visao geral ou passo a passo?';
+    quality = this.evaluateReplyQuality({
+      userMessage,
+      replyText: safe,
+      roomId
+    });
+
+    if (quality.topicMismatch && quality.requestedTopic) {
+      safe = `Vou focar em ${quality.requestedTopic}. ${safe}`;
+    }
+
+    if (quality.likelyLoop) {
+      safe = this.buildLoopBreakReply({
+        userMessage,
+        roomId,
+        requestedTopic: quality.requestedTopic
+      });
     }
 
     safe = this.sanitizeAiReply(safe);
     if (!safe) {
       safe = 'Recebi sua mensagem. Posso te ajudar com isso agora.';
     }
-    return safe;
+
+    quality = this.evaluateReplyQuality({
+      userMessage,
+      replyText: safe,
+      roomId
+    });
+    return {
+      replyText: safe,
+      quality
+    };
   }
 
   normalizeUserFirstName(name) {
@@ -987,7 +1071,7 @@ class MessageController {
     return safe.length > max ? `${safe.slice(0, Math.max(1, max - 3)).trim()}...` : safe;
   }
 
-  async sendAiMessage({ roomId, content, actions = [] }) {
+  async sendAiMessage({ roomId, content, actions = [], trace = null }) {
     const aiUser = await this.ensureAiUser();
     const room = await ChatRoom.findById(roomId);
     const previous = await Message.findByRoomId(roomId, 120);
@@ -1061,6 +1145,26 @@ class MessageController {
         }
       }).catch(() => {});
     }
+
+    if (trace && typeof trace === 'object') {
+      await this.logLearningEvent('assistant_message_sent', {
+        roomId: String(roomId || ''),
+        chamadoId: String(trace.chamadoId || ''),
+        userId: String(trace.userId || ''),
+        aiUserId: String(aiUser.id || ''),
+        aiMessageId: String(aiMessage.id || ''),
+        source: String(trace.source || ''),
+        userMessage: this.buildBrokerTextPreview(trace.userMessage || '', 280),
+        aiReply: this.buildBrokerTextPreview(content, 320),
+        quality: trace.quality || null,
+        kbHits: Number(trace.kbHits || 0),
+        kbLinks: Array.isArray(trace.kbLinks)
+          ? trace.kbLinks.map((item) => String(item?.url || '')).filter(Boolean)
+          : []
+      });
+    }
+
+    return aiMessage;
   }
 
   async processAiFirstContactFlow({ room, roomId, chamadoId, content, req }) {
@@ -1080,6 +1184,7 @@ class MessageController {
       this.setRoomMemory(roomId, {
         topic: requestedTopic || '',
         intent: this.inferMemoryIntent(trimmedContent),
+        preferredReplyStyle: this.detectReplyStylePreference(trimmedContent),
         summary: requestedTopic
           ? `Topico atual: ${requestedTopic}. Intencao: ${this.inferMemoryIntent(trimmedContent)}.`
           : `Intencao: ${this.inferMemoryIntent(trimmedContent)}.`,
@@ -1202,16 +1307,26 @@ class MessageController {
     }
     if (fastReplyHit) {
       let cachedReply = this.fixHallucinatedUserName(fastReplyHit.reply, req.session?.user?.name || '');
-      cachedReply = this.adaptAiReplyForConversation({
+      const adaptedCached = this.adaptAiReplyForConversation({
         replyText: cachedReply,
         userMessage: trimmedContent,
         roomId
       });
+      cachedReply = adaptedCached.replyText;
       cachedReply = this.appendKnowledgeReference(cachedReply, preKbLinks, trimmedContent);
       const finalCachedContent = this.appendHumanHandoffOffer(cachedReply);
-      await this.sendAiMessage({
+      const cachedSent = await this.sendAiMessage({
         roomId,
-        content: finalCachedContent
+        content: finalCachedContent,
+        trace: {
+          source: 'fast_reply',
+          roomId,
+          chamadoId: chamadoId ? String(chamadoId) : '',
+          userId: String(req.session?.user?.id || ''),
+          userMessage: trimmedContent,
+          aiReply: finalCachedContent,
+          quality: adaptedCached.quality || null
+        }
       });
       this.logAiMetric('fast_reply_hit', {
         roomId,
@@ -1223,6 +1338,27 @@ class MessageController {
         inputChars: aiInputContent.length,
         outputChars: finalCachedContent.length
       });
+      await this.logLearningEvent('ai_fast_reply', {
+        roomId: String(roomId || ''),
+        chamadoId: chamadoId ? String(chamadoId) : '',
+        userId: String(req.session?.user?.id || ''),
+        userMessage: this.buildBrokerTextPreview(trimmedContent, 280),
+        aiMessageId: String(cachedSent?.id || ''),
+        aiReply: this.buildBrokerTextPreview(finalCachedContent, 320),
+        quality: adaptedCached.quality || null,
+        score: Number(fastReplyHit.score || 0),
+        matchedQuestion: this.buildBrokerTextPreview(fastReplyHit.matchedQuestion || '', 180),
+        feedbackValue: fastReplyHit.feedbackValue || null
+      });
+      if (adaptedCached.quality?.topicMismatch || adaptedCached.quality?.likelyLoop) {
+        await this.logLearningEvent('reply_quality_flag', {
+          roomId: String(roomId || ''),
+          chamadoId: chamadoId ? String(chamadoId) : '',
+          userId: String(req.session?.user?.id || ''),
+          source: 'fast_reply',
+          quality: adaptedCached.quality
+        });
+      }
       return;
     }
 
@@ -1293,11 +1429,12 @@ class MessageController {
       askedOpenChamado,
       askedHuman
     });
-    aiReply = this.adaptAiReplyForConversation({
+    const adaptedAiReply = this.adaptAiReplyForConversation({
       replyText: aiReply,
       userMessage: trimmedContent,
       roomId
     });
+    aiReply = adaptedAiReply.replyText;
     aiReply = this.appendKnowledgeReference(aiReply, aiMeta.kbLinks, trimmedContent);
     if (this.shouldOfferChoiceFollowUp(aiReply)) {
       this.setPendingDialog(roomId, {
@@ -1308,10 +1445,42 @@ class MessageController {
     }
 
     const finalContent = this.appendHumanHandoffOffer(aiReply);
-    await this.sendAiMessage({
+    const sentMessage = await this.sendAiMessage({
       roomId,
-      content: finalContent
+      content: finalContent,
+      trace: {
+        source: 'ai_model',
+        roomId,
+        chamadoId: chamadoId ? String(chamadoId) : '',
+        userId: String(req.session?.user?.id || ''),
+        userMessage: trimmedContent,
+        aiReply: finalContent,
+        quality: adaptedAiReply.quality || null,
+        kbHits: Number(aiMeta.kbHits || 0),
+        kbLinks: Array.isArray(aiMeta.kbLinks) ? aiMeta.kbLinks : []
+      }
     });
+    await this.logLearningEvent('ai_model_reply', {
+      roomId: String(roomId || ''),
+      chamadoId: chamadoId ? String(chamadoId) : '',
+      userId: String(req.session?.user?.id || ''),
+      userMessage: this.buildBrokerTextPreview(trimmedContent, 280),
+      aiMessageId: String(sentMessage?.id || ''),
+      aiReply: this.buildBrokerTextPreview(finalContent, 320),
+      quality: adaptedAiReply.quality || null,
+      kbHits: Number(aiMeta.kbHits || 0),
+      kbDocIds: Array.isArray(aiMeta.kbDocIds) ? aiMeta.kbDocIds : [],
+      kbLinks: Array.isArray(aiMeta.kbLinks) ? aiMeta.kbLinks.map((item) => String(item?.url || '')).filter(Boolean) : []
+    });
+    if (adaptedAiReply.quality?.topicMismatch || adaptedAiReply.quality?.likelyLoop) {
+      await this.logLearningEvent('reply_quality_flag', {
+        roomId: String(roomId || ''),
+        chamadoId: chamadoId ? String(chamadoId) : '',
+        userId: String(req.session?.user?.id || ''),
+        source: 'ai_model',
+        quality: adaptedAiReply.quality
+      });
+    }
   }
 
   isClosedStatus(value) {
@@ -1481,6 +1650,20 @@ class MessageController {
         });
         if (String(type || 'text').toLowerCase() === 'text') {
           this.updateMemoryFromUserMessage(roomId, content || '');
+          const userTopic = this.extractRequestedTopic(content || '') || this.extractTopicFromText(content || '');
+          await this.logLearningEvent('user_message_received', {
+            roomId: String(roomId || ''),
+            chamadoId: chamadoId ? String(chamadoId) : (finalRoom?.chamado_id ? String(finalRoom.chamado_id) : ''),
+            userId: String(userId || ''),
+            messageId: String(message?.id || ''),
+            chatState: this.normalizeChatState(finalRoom?.chat_state),
+            message: this.buildBrokerTextPreview(content || '', 320),
+            intent: this.inferMemoryIntent(content || ''),
+            topicLabel: this.detectTopicLabel(userTopic || content || ''),
+            topic: this.buildBrokerTextPreview(userTopic || '', 180),
+            preferredReplyStyle: this.detectReplyStylePreference(content || ''),
+            topicShiftSignal: this.isTopicShiftMessage(content || '')
+          });
         }
 
         const clients = this.getRoomClients(roomId);
@@ -1604,6 +1787,13 @@ class MessageController {
 
       await Message.setFeedback({ messageId, value, userId });
       fastReplyService.invalidate();
+      await this.logLearningEvent('assistant_feedback', {
+        roomId: String(message.room_id || ''),
+        messageId: String(messageId),
+        userId: String(userId || ''),
+        feedbackValue: String(value),
+        aiReply: this.buildBrokerTextPreview(message.content || '', 320)
+      });
       eventBrokerService.publishAlias(value === 'up' ? 'AI_FEEDBACK_UP' : 'AI_FEEDBACK_DOWN', {
         userId,
         priority: 'normal',

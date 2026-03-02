@@ -35,6 +35,7 @@
   let supportInboxExpanded = false;
   let supportInboxTab = "active";
   let supportInboxRoomsCache = [];
+  let supportInboxBlocked = false;
   const archivedRoomIds = new Set();
   let typingTimer = null;
   let typingActive = false;
@@ -66,6 +67,7 @@
   let templateCore = (typeof window !== "undefined" && window.ChatTemplateCore) ? window.ChatTemplateCore : null;
   let templateCoreLoader = null;
   const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🎉", "🔥"];
+  let widgetAssetVersion = "";
 
   const ICONS = {
     expand: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>`,
@@ -108,6 +110,36 @@
     return value === true || String(value || "").trim().toLowerCase() === "true" || String(value || "") === "1";
   }
 
+  function getWidgetAssetVersion() {
+    if (widgetAssetVersion) return widgetAssetVersion;
+    try {
+      const script = document.currentScript;
+      const src = String(script?.src || "").trim();
+      if (!src) return "";
+      const parsed = new URL(src, window.location.href);
+      widgetAssetVersion = String(parsed.searchParams.get("v") || parsed.searchParams.get("ver") || "").trim();
+      return widgetAssetVersion;
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  function appendVersion(url, version) {
+    const base = String(url || "").trim();
+    const v = String(version || "").trim();
+    if (!base || !v) return base;
+    try {
+      const parsed = new URL(base, window.location.href);
+      if (!parsed.searchParams.has("v")) {
+        parsed.searchParams.set("v", v);
+      }
+      return parsed.toString();
+    } catch (_err) {
+      const separator = base.includes("?") ? "&" : "?";
+      return `${base}${separator}v=${encodeURIComponent(v)}`;
+    }
+  }
+
   function loadMessageReactions() {
     reactionsByMessage = new Map();
   }
@@ -137,7 +169,8 @@
     if (typeof document === "undefined") return Promise.resolve(null);
 
     const script = document.createElement("script");
-    script.src = `${String(config.serverUrl || "").replace(/\/+$/, "")}/js/chat-template-core.js`;
+    const version = String(config.assetVersion || getWidgetAssetVersion() || "").trim();
+    script.src = appendVersion(`${String(config.serverUrl || "").replace(/\/+$/, "")}/js/chat-template-core.js`, version);
     script.async = true;
     templateCoreLoader = new Promise((resolve) => {
       script.onload = () => {
@@ -642,14 +675,63 @@
       @keyframes twBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
       .tw-typing {
-        font-size: 12px; color: #065f46; padding: 6px 14px; font-weight: 700; display: none;
-        align-items: center; gap: 4px; background: #ecfdf5; border-top: 1px solid #d1fae5;
+        display: none;
+        position: absolute;
+        left: 122px;
+        right: 14px;
+        bottom: 83px;
+        z-index: 35;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        padding: 0;
+        color: #065f46;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        pointer-events: none;
+        animation: twTypingFadeIn 0.18s ease-out;
       }
-      .tw-typing.show { display: flex; }
-      .tw-dot { width: 3px; height: 3px; background: currentColor; border-radius: 50%; animation: twDot 1.4s infinite; }
-      .tw-dot:nth-child(2) { animation-delay: 0.2s; }
-      .tw-dot:nth-child(3) { animation-delay: 0.4s; }
-      @keyframes twDot { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+      .tw-typing.show { display: inline-flex; }
+      .tw-typing-text {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .tw-typing-label {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 155px;
+      }
+      .tw-typing-bubble {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 28px;
+      }
+      .tw-typing-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: #10b981;
+        opacity: 0.35;
+        transform: translateY(0);
+        animation: twTypingDot 1s ease-in-out infinite;
+      }
+      .tw-typing-dot:nth-child(2) { animation-delay: 0.15s; }
+      .tw-typing-dot:nth-child(3) { animation-delay: 0.3s; }
+      @keyframes twTypingDot {
+        0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+        40% { transform: translateY(-3px); opacity: 1; }
+      }
+      @keyframes twTypingFadeIn {
+        from { opacity: 0; transform: translateY(3px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
 
       .tw-system { font-size: 11px; text-align: center; padding: 4px; display: none; }
       .tw-system.show { display: block; }
@@ -684,6 +766,11 @@
         .tw-widget { width: 100vw; height: 100vh; border-radius: 0; }
         .tw-widget.expanded { width: 100vw; height: 100vh; border-radius: 0; max-width: none; }
         .tw-support-dock { display: none !important; }
+        .tw-typing {
+          left: 12px;
+          right: 12px;
+          bottom: 70px;
+        }
       }
     `;
   }
@@ -773,7 +860,7 @@
       : `
           <div class="tw-attach-menu" id="tw-attach-menu"></div>
           <div class="tw-emoji-picker" id="tw-emoji-picker"><div id="tw-emoji-recent"></div><div class="tw-emoji-section-title">Todos Emojis</div><div class="tw-emoji-grid" id="tw-emoji-all-grid"></div></div>
-          <div class="tw-typing" id="tw-typing"><span>Digitando</span><div class="tw-dot"></div><div class="tw-dot"></div><div class="tw-dot"></div></div>
+          <div class="tw-typing" id="tw-typing" aria-live="polite"></div>
           <div class="tw-system" id="tw-system-msg"></div>
           <div class="tw-input-area" id="tw-input-area"><div class="tw-input-row"><button class="tw-icon-btn" id="tw-emoji-btn" title="Emojis">${ICONS.smile}</button><button class="tw-icon-btn" id="tw-attach-btn" title="Anexar">${ICONS.attach}</button><textarea class="tw-input" id="tw-input" placeholder="${escapeAttr(config.placeholder)}" rows="1" autocomplete="off"></textarea><button class="tw-action-btn pulse" id="tw-action-btn" title="Enviar"><span id="tw-action-icon">${ICONS.mic}</span></button></div><div class="tw-recording-chip" id="tw-recording-chip"><span class="tw-recording-dot"></span><strong>Gravando audio...</strong></div></div>
           <input type="file" id="tw-file-input" style="display:none;" />
@@ -1322,6 +1409,7 @@
     supportInboxExpanded = false;
     supportInboxTab = "active";
     supportInboxRoomsCache = [];
+    supportInboxBlocked = false;
     config.position = normalizePosition(config.position);
     config.mode = normalizeMode(config.mode);
     localUserName = String(config.userName || "").trim();
@@ -1397,7 +1485,7 @@
   }
 
   function shouldUseSupportInbox() {
-    return isTruthy(config.supportInbox);
+    return isTruthy(config.supportInbox) && !supportInboxBlocked;
   }
 
   function getArchiveStorageKey() {
@@ -1559,6 +1647,10 @@
       credentials: "include"
     });
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        supportInboxBlocked = true;
+        stopSupportInboxRefresh();
+      }
       renderSupportInbox(null);
       return;
     }
@@ -2377,6 +2469,21 @@
     }).catch(() => {});
   }
 
+  function buildTypingIndicatorHtml({ name, label }) {
+    const safeName = String(name || "Alguem").trim() || "Alguem";
+    const safeLabel = String(label || "esta digitando").trim() || "esta digitando";
+    return `
+      <span class="tw-typing-text">
+        <span class="tw-typing-label"><strong>${escapeHtml(safeName)}</strong> ${escapeHtml(safeLabel)}</span>
+      </span>
+      <span class="tw-typing-bubble" aria-hidden="true">
+        <span class="tw-typing-dot"></span>
+        <span class="tw-typing-dot"></span>
+        <span class="tw-typing-dot"></span>
+      </span>
+    `;
+  }
+
   function renderTyping(data) {
     const typingEl = shadow.getElementById("tw-typing");
     const chip = shadow.getElementById("tw-recording-chip");
@@ -2409,18 +2516,25 @@
       return;
     }
 
-    const dots = `<span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`;
     const activity = data.activity === "recording" ? "esta gravando audio" : "esta digitando";
     if (!recording && chip) chip.classList.remove("show");
-    typingEl.innerHTML = `<strong>${escapeHtml(data.userName || "Alguem")}</strong> ${activity} ${dots}`;
+    typingEl.innerHTML = buildTypingIndicatorHtml({
+      name: data.userName || "Alguem",
+      label: activity
+    });
     typingEl.classList.add("show");
   }
 
   function linkifyText(content) {
+    if (templateCore && typeof templateCore.linkifyText === "function") {
+      return templateCore.linkifyText(content);
+    }
     const source = String(content || "");
     const escaped = escapeHtml(source);
+    const formatted = escaped
+      .replace(/(\*\*|__)([\s\S]*?)\1/g, "<strong>$2</strong>");
     const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
-    const html = escaped.replace(urlRegex, (url) => {
+    const html = formatted.replace(urlRegex, (url) => {
       const safeUrl = String(url || "").trim();
       if (!/^https?:\/\//i.test(safeUrl)) return safeUrl;
       return `<a class="tw-link" href="${escapeAttr(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(safeUrl)}</a>`;
@@ -2443,10 +2557,12 @@
     }
 
     const aiName = String(data?.aiUserName || "Marina");
-    const dots = `<span class="tw-dot"></span><span class="tw-dot"></span><span class="tw-dot"></span>`;
     const paint = () => {
       const statusLabel = getAiProcessingLabel(data);
-      typingEl.innerHTML = `<strong>${escapeHtml(aiName)}</strong> ${escapeHtml(statusLabel)}... ${dots}`;
+      typingEl.innerHTML = buildTypingIndicatorHtml({
+        name: aiName,
+        label: statusLabel
+      });
       typingEl.classList.add("show");
       scrollToBottom();
     };

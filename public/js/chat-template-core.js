@@ -16,8 +16,10 @@
   function linkifyText(content) {
     const source = String(content || "");
     const escaped = escapeHtml(source);
+    const formatted = escaped
+      .replace(/(\*\*|__)([\s\S]*?)\1/g, "<strong>$2</strong>");
     const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
-    const html = escaped.replace(urlRegex, (url) => {
+    const html = formatted.replace(urlRegex, (url) => {
       const safeUrl = String(url || "").trim();
       if (!/^https?:\/\//i.test(safeUrl)) return safeUrl;
       return `<a class="tw-link" href="${escapeAttr(safeUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(safeUrl)}</a>`;
@@ -385,6 +387,7 @@
   const api = {
     escapeHtml,
     escapeAttr,
+    linkifyText,
     formatTimePtBr,
     insertTextAtCursor,
     EMOJI_LIST,

@@ -85,12 +85,23 @@ class SettingsController {
     if (!this.isAdmin(req)) return this.deny(res);
     try {
       const body = req.body || {};
-      const result = await AIController.previewReply(
-        {
-          message: body.testMessage,
-          userName: req.session?.user?.name || 'Usuario Teste'
+      const apiUrl = String(process.env.API_AI_URL || '').trim();
+      const internalToken = String(process.env.API_AI_TOKEN || '').trim();
+      const payload = {
+        roomId: 'settings-test-prompt',
+        chamadoId: null,
+        chatState: 'IA',
+        message: String(body.testMessage || '').trim() || 'Olá, preciso de ajuda.',
+        user: {
+          id: String(req.session?.user?.id || 'preview-user'),
+          name: String(req.session?.user?.name || 'Usuario Teste'),
+          role: 'user',
+          email: String(req.session?.user?.email || '')
         },
-        {
+        context: [],
+        contextDocs: [],
+        options: { offerHumanHandoff: true },
+        overrides: {
           aiAgentName: body.aiAgentName,
           aiPersonalityPrompt: body.aiPersonalityPrompt,
           aiTemperature: body.aiTemperature,
@@ -99,7 +110,37 @@ class SettingsController {
           aiPreferredProvider: body.aiPreferredProvider,
           aiPreferredModel: body.aiPreferredModel
         }
-      );
+      };
+
+      let result;
+      if (apiUrl) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (internalToken) headers['x-ai-token'] = internalToken;
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data?.success === false) {
+          throw new Error(data?.error || `Erro HTTP ${response.status}`);
+        }
+        result = {
+          provider: String(data?.provider || '').trim() || 'n/a',
+          model: String(data?.model || '').trim() || 'n/a',
+          reply: String(data?.reply || data?.message || '').trim(),
+          usage: data?.usage || null,
+          latencyMs: Number(data?.latencyMs || 0) || 0
+        };
+      } else {
+        result = await AIController.previewReply(
+          {
+            message: payload.message,
+            userName: payload.user.name
+          },
+          payload.overrides
+        );
+      }
       return res.json({ success: true, result });
     } catch (error) {
       return res.status(502).json({ error: error.message || 'Falha ao testar prompt' });

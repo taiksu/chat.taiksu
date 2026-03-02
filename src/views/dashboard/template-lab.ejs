@@ -98,7 +98,7 @@
 
   <%- include('../partials/sidebar-script') %>
 
-  <script src="/js/taiksu-widget.js"></script>
+  <script src="/js/taiksu-widget.js?v=<%= encodeURIComponent(String(assetVersion || '1')) %>"></script>
   <script>
     const defaultServerUrl = <%- JSON.stringify(appUrl || '') %> || `${window.location.protocol}//${window.location.host}`;
     const roomsData = <%- JSON.stringify(rooms || []) %>;
@@ -125,7 +125,8 @@
       if (!selected) return null;
       return {
         id: String(selected.value || ''),
-        name: String(selected.dataset.name || selected.textContent || '')
+        name: String(selected.dataset.name || selected.textContent || ''),
+        role: String(selected.dataset.role || 'user').toLowerCase()
       };
     }
 
@@ -133,8 +134,14 @@
       if (!participant || !participant.id) return null;
       return {
         id: String(participant.id),
-        name: String(participant.name || `Usuario ${participant.id}`)
+        name: String(participant.name || `Usuario ${participant.id}`),
+        role: String(participant.role || 'user').toLowerCase()
       };
+    }
+
+    function canUseSupportInboxForRole(roleValue) {
+      const role = String(roleValue || '').toLowerCase();
+      return ['admin', 'dev', 'developer', 'atendente', 'support', 'suporte', 'agent'].includes(role);
     }
 
     function buildUserOptions() {
@@ -159,7 +166,7 @@
       });
 
       widgetUser.innerHTML = options.map((item) => (
-        `<option value="${item.id}" data-name="${item.name.replace(/"/g, '&quot;')}">${item.name} (${item.id})</option>`
+        `<option value="${item.id}" data-name="${item.name.replace(/"/g, '&quot;')}" data-role="${String(item.role || 'user').replace(/"/g, '&quot;')}">${item.name} (${item.id})</option>`
       )).join('');
 
       if (sessionUser && sessionUser.id && seen.has(String(sessionUser.id))) {
@@ -197,6 +204,10 @@
 
     function userName() {
       return selectedUser()?.name || '';
+    }
+
+    function userRole() {
+      return String(selectedUser()?.role || 'user').toLowerCase();
     }
 
     function autoModeEnabled() {
@@ -270,7 +281,7 @@
         externalUserId: auto ? extUserId : '',
         userId: userId(),
         userName: userName(),
-        supportInbox: true,
+        supportInbox: canUseSupportInboxForRole(userRole()),
         mode: 'floating',
         position: 'bottom-right',
         offsetX: 16,

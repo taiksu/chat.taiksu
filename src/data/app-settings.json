@@ -1,5 +1,6 @@
 {
   "aiAttendantEnabled": true,
+  "aiAllowAdminChat": true,
   "aiBetaModeEnabled": false,
   "aiBetaAllowlist": [],
   "aiAgentName": "Marina",

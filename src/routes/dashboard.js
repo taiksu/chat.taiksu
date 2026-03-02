@@ -3,6 +3,7 @@ const DashboardController = require('../controllers/DashboardController');
 const KnowledgeBaseController = require('../controllers/KnowledgeBaseController');
 const SettingsController = require('../controllers/SettingsController');
 const FeedbackInsightsController = require('../controllers/FeedbackInsightsController');
+const AILearningInsightsController = require('../controllers/AILearningInsightsController');
 const MemoryDebugController = require('../controllers/MemoryDebugController');
 const AIModuleController = require('../controllers/AIModuleController');
 const AIToolsController = require('../controllers/AIToolsController');
@@ -23,6 +24,8 @@ router.get('/ai/operation', requireWebAuth, AIModuleController.operationPage.bin
 router.get('/ai/agent', requireWebAuth, SettingsController.page.bind(SettingsController));
 router.get('/ai/knowledge', requireWebAuth, KnowledgeBaseController.page.bind(KnowledgeBaseController));
 router.get('/ai/quality', requireWebAuth, FeedbackInsightsController.page.bind(FeedbackInsightsController));
+router.get('/ai/learning', requireWebAuth, AILearningInsightsController.page.bind(AILearningInsightsController));
+router.get('/ai/learning/data', requireWebAuth, AILearningInsightsController.data.bind(AILearningInsightsController));
 router.get('/ai/debug', requireWebAuth, MemoryDebugController.page.bind(MemoryDebugController));
 router.get('/ai/tools', requireWebAuth, AIToolsController.page.bind(AIToolsController));
 

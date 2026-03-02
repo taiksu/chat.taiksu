@@ -16,6 +16,34 @@
 
   let widgetScriptLoader = null;
 
+  function getAssetVersionFromScript() {
+    try {
+      const script = document.currentScript;
+      const src = String(script?.src || "").trim();
+      if (!src) return "";
+      const url = new URL(src, window.location.href);
+      return String(url.searchParams.get("v") || url.searchParams.get("ver") || "").trim();
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  function appendVersion(url, version) {
+    const base = String(url || "").trim();
+    const v = String(version || "").trim();
+    if (!base || !v) return base;
+    try {
+      const parsed = new URL(base, window.location.href);
+      if (!parsed.searchParams.has("v")) {
+        parsed.searchParams.set("v", v);
+      }
+      return parsed.toString();
+    } catch (_err) {
+      const separator = base.includes("?") ? "&" : "?";
+      return `${base}${separator}v=${encodeURIComponent(v)}`;
+    }
+  }
+
   function toBool(value, fallback) {
     if (value == null || value === "") return Boolean(fallback);
     const normalized = String(value).trim().toLowerCase();
@@ -135,9 +163,10 @@
 
     _getWidgetScriptUrl(serverUrl) {
       const override = String(this.getAttribute("widget-script-url") || "").trim();
-      if (override) return override;
+      const version = getAssetVersionFromScript();
+      if (override) return appendVersion(override, version);
       const base = serverUrl || window.location.origin;
-      return `${base.replace(/\/+$/, "")}/js/taiksu-widget.js`;
+      return appendVersion(`${base.replace(/\/+$/, "")}/js/taiksu-widget.js`, version);
     }
 
     _destroy() {

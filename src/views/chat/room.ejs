@@ -180,6 +180,70 @@
 
     .pulse-mic { animation: twPulseMic 1.5s infinite; }
 
+    .message-search-toggle {
+      display: inline-flex;
+      height: 32px;
+      width: 32px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9999px;
+      border: 1px solid #a7f3d0;
+      background: #ffffff;
+      color: #047857;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+    .message-search-toggle:hover { background: #ecfdf5; border-color: #6ee7b7; }
+    .message-search-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: 0;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transition: width 0.18s ease, opacity 0.18s ease;
+    }
+    .message-search-wrap.open {
+      width: min(250px, calc(100vw - 180px));
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .message-search-input {
+      height: 32px;
+      width: 100%;
+      border-radius: 9999px;
+      border: 1px solid #a7f3d0;
+      background: #fff;
+      padding: 0 12px;
+      font-size: 12px;
+      color: #065f46;
+      outline: none;
+    }
+    .message-search-input:focus { border-color: #34d399; box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15); }
+    .message-search-clear {
+      display: inline-flex;
+      height: 24px;
+      width: 24px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9999px;
+      border: 0;
+      background: transparent;
+      color: #6b7280;
+      cursor: pointer;
+    }
+    .message-search-clear:hover { background: #f3f4f6; color: #111827; }
+    .message-search-count {
+      font-size: 11px;
+      font-weight: 600;
+      color: #047857;
+      white-space: nowrap;
+    }
+    .message-search-count.hidden { display: none; }
+    .message.search-hit .message-bubble {
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.45), 0 1px 0.5px rgba(0,0,0,0.13);
+    }
+
     @media (max-width: 480px) {
       .message-content { max-width: 88% !important; }
     }
@@ -226,6 +290,23 @@
 
       <!-- Pills bar -->
       <div class="flex flex-wrap items-center gap-3 border-b border-emerald-50 bg-emerald-50 px-5 py-3 text-emerald-800">
+        <div class="flex items-center gap-2">
+          <button id="messageSearchToggle" type="button" class="message-search-toggle" title="Pesquisar nas mensagens">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="M20 20l-3.5-3.5"></path>
+            </svg>
+          </button>
+          <div id="messageSearchWrap" class="message-search-wrap">
+            <input id="messageSearchInput" type="search" class="message-search-input" placeholder="Buscar nesta conversa">
+            <button id="messageSearchClear" type="button" class="message-search-clear" title="Limpar busca">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+                <path d="M6 6l12 12M18 6L6 18"></path>
+              </svg>
+            </button>
+            <span id="messageSearchCount" class="message-search-count hidden">0</span>
+          </div>
+        </div>
         <div class="ml-auto flex flex-wrap items-center gap-2 text-xs">
           <button type="button" class="rounded-full border border-emerald-200 bg-white px-3 py-1 font-semibold text-emerald-700 transition hover:bg-emerald-100" onclick="markAllAsRead()">Marcar tudo como lido</button>
           <button type="button" class="rounded-full border border-emerald-200 bg-white px-3 py-1 font-semibold text-emerald-700 transition hover:bg-emerald-100" onclick="scrollMessagesToBottom(true)">Ir para o fim</button>
@@ -328,7 +409,7 @@
   </div>
 
   <%- include('../partials/sidebar-script') %>
-  <script src="/js/chat-template-core.js"></script>
+  <script src="/js/chat-template-core.js?v=<%= encodeURIComponent(String(assetVersion || '1')) %>"></script>
   </div>
 
   <script>
@@ -344,13 +425,17 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;'));
     const linkifyText = (content) => {
+      if (typeof templateCore.linkifyText === 'function') return templateCore.linkifyText(content);
       const source = String(content || '');
       const escaped = escapeHtml(source);
-      return escaped.replace(/(https?:\/\/[^\s<>"']+)/gi, (url) => {
+      const formatted = escaped
+        .replace(/(\*\*|__)([\s\S]*?)\1/g, '<strong>$2</strong>');
+      const linked = formatted.replace(/(https?:\/\/[^\s<>"']+)/gi, (url) => {
         const safeUrl = String(url || '').trim();
         if (!/^https?:\/\//i.test(safeUrl)) return safeUrl;
         return `<a href="${escapeAttr(safeUrl)}" target="_blank" rel="noopener noreferrer" class="font-semibold text-sky-600 underline hover:text-sky-700 break-all">${escapeHtml(safeUrl)}</a>`;
       });
+      return linked.replace(/\r?\n/g, '<br>');
     };
     const formatTimePtBr = templateCore.formatTimePtBr || ((dateValue) => new Date(dateValue).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     const insertTextAtCursor = templateCore.insertTextAtCursor || ((input, text) => {
@@ -386,6 +471,8 @@
     let roomDeletedHandled = false;
     let stickToBottom = true;
     let recordingBusy = false;
+    let messageSearchOpen = false;
+    let messageSearchQuery = '';
     const emojiStorageKey = 'taiksu_recent_emojis_v1';
     const emojis = Array.isArray(templateCore.EMOJI_LIST) && templateCore.EMOJI_LIST.length
       ? templateCore.EMOJI_LIST
@@ -406,6 +493,7 @@
       initAudioPlayers();
       enhanceRenderedTextLinks();
       bindMessageAreaScroll();
+      initMessageSearch();
       scheduleInitialBottomSync();
       
       // Reconhecer último sender para grouping inicial
@@ -553,6 +641,82 @@
         updateScrollButton();
       });
       updateScrollButton();
+    }
+
+    function initMessageSearch() {
+      const toggleBtn = document.getElementById('messageSearchToggle');
+      const wrap = document.getElementById('messageSearchWrap');
+      const input = document.getElementById('messageSearchInput');
+      const clearBtn = document.getElementById('messageSearchClear');
+      if (!toggleBtn || !wrap || !input || !clearBtn) return;
+
+      toggleBtn.addEventListener('click', () => {
+        messageSearchOpen = !messageSearchOpen;
+        wrap.classList.toggle('open', messageSearchOpen);
+        if (messageSearchOpen) {
+          requestAnimationFrame(() => input.focus());
+          return;
+        }
+        input.value = '';
+        messageSearchQuery = '';
+        applyMessageSearch('', { scrollToFirst: false });
+      });
+
+      input.addEventListener('input', () => {
+        messageSearchQuery = String(input.value || '').trim();
+        applyMessageSearch(messageSearchQuery, { scrollToFirst: true });
+      });
+
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          input.value = '';
+          messageSearchQuery = '';
+          applyMessageSearch('', { scrollToFirst: false });
+          messageSearchOpen = false;
+          wrap.classList.remove('open');
+          toggleBtn.focus();
+        }
+      });
+
+      clearBtn.addEventListener('click', () => {
+        input.value = '';
+        messageSearchQuery = '';
+        applyMessageSearch('', { scrollToFirst: false });
+        input.focus();
+      });
+    }
+
+    function applyMessageSearch(query, { scrollToFirst = false } = {}) {
+      const q = String(query || '').trim().toLowerCase();
+      const rows = Array.from(document.querySelectorAll('.message[data-id]'));
+      const counter = document.getElementById('messageSearchCount');
+      let firstMatch = null;
+      let matches = 0;
+
+      rows.forEach((row) => {
+        row.classList.remove('search-hit');
+        if (!q) return;
+        const bubble = row.querySelector('.message-bubble');
+        const content = String(bubble?.textContent || '').toLowerCase();
+        if (!content.includes(q)) return;
+        matches += 1;
+        row.classList.add('search-hit');
+        if (!firstMatch) firstMatch = row;
+      });
+
+      if (counter) {
+        if (!q) {
+          counter.classList.add('hidden');
+          counter.textContent = '0';
+        } else {
+          counter.classList.remove('hidden');
+          counter.textContent = String(matches);
+        }
+      }
+
+      if (q && scrollToFirst && firstMatch) {
+        firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
     }
 
     function initRenderedMessageIds() {
@@ -836,6 +1000,7 @@
            document.getElementById('messagesArea').innerHTML = '';
            renderedMessageIds.clear();
            lastSenderId = null;
+           applyMessageSearch('', { scrollToFirst: false });
            scrollMessagesToBottom(true);
         } else if (d.type === 'room_deleted') {
            handleRoomDeleted();
@@ -922,6 +1087,9 @@
 
       area.insertAdjacentHTML('beforeend', rowHtml);
       renderedMessageIds.add(String(msg.id));
+      if (messageSearchQuery) {
+        applyMessageSearch(messageSearchQuery, { scrollToFirst: false });
+      }
       if (shouldAutoScroll(area)) scrollMessagesToBottom(true);
       if (msg.type === 'audio') initAudioPlayers(area);
       updateScrollButton();
@@ -936,7 +1104,7 @@
         if (!bubble) return;
         if (bubble.querySelector('a, img, audio, .tw-audio-player')) return;
         const text = String(bubble.textContent || '').trim();
-        if (!/^.*https?:\/\/.+$/i.test(text)) return;
+        if (!text) return;
         bubble.innerHTML = linkifyText(text);
       });
     }
