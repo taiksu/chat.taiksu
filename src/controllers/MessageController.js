@@ -1011,6 +1011,9 @@ class MessageController {
       feedback_value: null,
       feedback_at: null,
       feedback_by: null,
+      reaction_emoji: null,
+      reaction_at: null,
+      reaction_by: null,
       actions: aiMessage.actions || normalizedActions
     });
     this.updateMemoryFromAiMessage(roomId, content);
@@ -1489,6 +1492,9 @@ class MessageController {
           feedback_value: null,
           feedback_at: null,
           feedback_by: null,
+          reaction_emoji: null,
+          reaction_at: null,
+          reaction_by: null,
           actions: Array.isArray(message.actions) ? message.actions : []
         };
 
@@ -1617,6 +1623,49 @@ class MessageController {
       });
 
       return res.json({ success: true, messageId, value });
+    } catch (error) {
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
+  async submitReaction(req, res) {
+    try {
+      const userId = req.session.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const { messageId } = req.params;
+      if (!messageId) {
+        return res.status(400).json({ error: 'messageId obrigatorio' });
+      }
+
+      const emoji = String(req.body?.emoji || '').trim();
+      if (emoji.length > 24) {
+        return res.status(400).json({ error: 'emoji invalido' });
+      }
+
+      const message = await Message.findById(messageId);
+      if (!message) {
+        return res.status(404).json({ error: 'Mensagem nao encontrada' });
+      }
+
+      await Message.setReaction({ messageId, emoji, userId });
+
+      const payload = {
+        type: 'message_reaction',
+        roomId: message.room_id,
+        messageId: String(messageId),
+        emoji: emoji || null,
+        reactionBy: emoji ? String(userId) : null,
+        reactionAt: emoji ? new Date().toISOString() : null
+      };
+      const clients = this.getRoomClients(message.room_id);
+      clients.forEach((client) => {
+        client.write(`data: ${JSON.stringify(payload)}\n\n`);
+      });
+
+      return res.json({ success: true, messageId: String(messageId), emoji: emoji || null });
     } catch (error) {
       return res.status(500).json({ error: error.message });
     }

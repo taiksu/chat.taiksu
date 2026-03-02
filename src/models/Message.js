@@ -47,7 +47,10 @@ class Message {
       actions: this.parseActions(created.actions),
       feedbackValue: created.feedback_value || null,
       feedbackAt: created.feedback_at || null,
-      feedbackBy: created.feedback_by || null
+      feedbackBy: created.feedback_by || null,
+      reactionEmoji: created.reaction_emoji || null,
+      reactionAt: created.reaction_at || null,
+      reactionBy: created.reaction_by || null
     };
   }
 
@@ -75,6 +78,9 @@ class Message {
           feedback_value: plain.feedback_value || null,
           feedback_at: plain.feedback_at || null,
           feedback_by: plain.feedback_by || null,
+          reaction_emoji: plain.reaction_emoji || null,
+          reaction_at: plain.reaction_at || null,
+          reaction_by: plain.reaction_by || null,
           actions: this.parseActions(plain.actions)
         };
       })
@@ -109,6 +115,9 @@ class Message {
           feedback_value: plain.feedback_value || null,
           feedback_at: plain.feedback_at || null,
           feedback_by: plain.feedback_by || null,
+          reaction_emoji: plain.reaction_emoji || null,
+          reaction_at: plain.reaction_at || null,
+          reaction_by: plain.reaction_by || null,
           actions: this.parseActions(plain.actions)
         };
       })
@@ -126,6 +135,19 @@ class Message {
         feedback_value: normalized,
         feedback_at: new Date(),
         feedback_by: userId ? String(userId) : null
+      },
+      { where: { id: messageId } }
+    );
+    return changes;
+  }
+
+  static async setReaction({ messageId, emoji, userId }) {
+    const normalized = String(emoji || '').trim();
+    const [changes] = await MessageModel.update(
+      {
+        reaction_emoji: normalized || null,
+        reaction_at: normalized ? new Date() : null,
+        reaction_by: normalized ? (userId ? String(userId) : null) : null
       },
       { where: { id: messageId } }
     );

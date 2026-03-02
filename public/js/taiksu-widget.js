@@ -109,86 +109,27 @@
     return value === true || String(value || "").trim().toLowerCase() === "true" || String(value || "") === "1";
   }
 
-  function getIdentityStorageKey() {
-    const server = String(config.serverUrl || "").trim().toLowerCase();
-    const app = String(config.clientAppId || "no-app").trim().toLowerCase();
-    return `taiksu_widget_identity:${server}:${app}`;
-  }
-
-  function getReactionsStorageKey() {
-    const server = String(config.serverUrl || "").trim().toLowerCase();
-    const room = String(config.roomId || "no-room").trim().toLowerCase();
-    const who = String(config.userId || config.externalUserId || "anon").trim().toLowerCase();
-    return `taiksu_widget_reactions:${server}:${room}:${who}`;
-  }
-
   function loadMessageReactions() {
     reactionsByMessage = new Map();
-    try {
-      const raw = localStorage.getItem(getReactionsStorageKey());
-      const parsed = JSON.parse(raw || "{}");
-      Object.entries(parsed || {}).forEach(([messageId, reaction]) => {
-        const id = String(messageId || "").trim();
-        const emoji = String(reaction || "").trim();
-        if (id && emoji) reactionsByMessage.set(id, emoji);
-      });
-    } catch (_err) {
-      reactionsByMessage = new Map();
-    }
-  }
-
-  function persistMessageReactions() {
-    try {
-      const out = {};
-      reactionsByMessage.forEach((value, key) => {
-        out[key] = value;
-      });
-      localStorage.setItem(getReactionsStorageKey(), JSON.stringify(out));
-    } catch (_err) {
-      // noop
-    }
-  }
-
-  function buildIdentityKey() {
-    const tokenSub = parseJwtSub(config.authToken);
-    const userId = String(config.userId || tokenSub || "").trim();
-    const externalUserId = String(config.externalUserId || userId || "").trim();
-    const app = String(config.clientAppId || "").trim();
-    return `${app}::${externalUserId || userId || "anon"}`;
   }
 
   function syncIdentityAndRoom() {
     const tokenSub = parseJwtSub(config.authToken);
     if (tokenSub) {
       config.userId = tokenSub;
-    }
-    if (!config.externalUserId) {
+      // Em app com JWT, o "dono" da sala deve seguir o token atual.
+      // Isso evita reaproveitar externalUserId antigo vindo de cache/frontend.
+      config.externalUserId = tokenSub;
+    } else if (!config.externalUserId) {
       config.externalUserId = config.userId || "";
     }
 
-    // Em app cliente (auto-sala), se trocar usuario no mesmo navegador,
-    // descartamos roomId antigo para evitar reaproveitar conversa errada.
+    // Em app cliente (auto-sala), nunca reaproveitar roomId localmente.
+    // A sala deve vir sempre do backend com base no token atual.
     if (!config.clientAppId) return;
-    const storageKey = getIdentityStorageKey();
-    const currentIdentity = buildIdentityKey();
-    let previousIdentity = "";
-    try {
-      previousIdentity = String(sessionStorage.getItem(storageKey) || "");
-    } catch (_err) {
-      previousIdentity = "";
-    }
-
-    if (previousIdentity && previousIdentity !== currentIdentity) {
-      config.roomId = "";
-      resetHistoryState();
-      renderedIds.clear();
-    }
-
-    try {
-      sessionStorage.setItem(storageKey, currentIdentity);
-    } catch (_err) {
-      // noop
-    }
+    config.roomId = "";
+    resetHistoryState();
+    renderedIds.clear();
   }
 
   function ensureTemplateCoreLoaded() {
@@ -1125,14 +1066,25 @@
     content.appendChild(node);
   }
 
-  function applyMessageReaction(messageId, emoji) {
+  async function applyMessageReaction(messageId, emoji) {
     const safeId = String(messageId || "").trim();
     const safeEmoji = String(emoji || "").trim();
     if (!safeId || !safeEmoji) return;
-    reactionsByMessage.set(safeId, safeEmoji);
-    persistMessageReactions();
-    applyReactionToRow(safeId);
-    closeReactionMenu();
+    try {
+      const response = await fetch(buildApiUrl(`/api/messages/${encodeURIComponent(safeId)}/reaction`), {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji: safeEmoji })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.success) return;
+      reactionsByMessage.set(safeId, safeEmoji);
+      applyReactionToRow(safeId);
+      closeReactionMenu();
+    } catch (_err) {
+      // noop
+    }
   }
 
   function openReactionMenu(anchorBubble, messageId) {
@@ -1385,6 +1337,7 @@
   }
 
   async function openWidget() {
+    syncIdentityAndRoom();
     widgetOpen = true;
     toggleUnreadCount = 0;
     resetHistoryState();
@@ -1422,9 +1375,9 @@
       const nextRoomId = String(data.roomId || data.room?.id || "").trim();
       if (!nextRoomId) return false;
       config.roomId = nextRoomId;
-      if (!config.title || config.title === DEFAULTS.title) {
-        config.title = String(data.room?.name || config.title || DEFAULTS.title);
-      }
+      config.title = String(data.room?.name || config.title || DEFAULTS.title);
+      const headerTitle = shadow && shadow.querySelector(".tw-title");
+      if (headerTitle) headerTitle.textContent = config.title;
       return true;
     } catch (_err) {
       return false;
@@ -1735,6 +1688,13 @@
           messageId: payload.messageId,
           value: payload.value
         });
+      } else if (payload.type === "message_reaction") {
+        const messageId = String(payload.messageId || "").trim();
+        if (!messageId) return;
+        const emoji = String(payload.emoji || "").trim();
+        if (emoji) reactionsByMessage.set(messageId, emoji);
+        else reactionsByMessage.delete(messageId);
+        applyReactionToRow(messageId);
       }
     };
     eventSource.onerror = () => {
@@ -1869,6 +1829,9 @@
       feedback_value: message.feedback_value ?? message.feedbackValue ?? null,
       feedback_at: message.feedback_at ?? message.feedbackAt ?? null,
       feedback_by: message.feedback_by ?? message.feedbackBy ?? null,
+      reaction_emoji: message.reaction_emoji ?? message.reactionEmoji ?? null,
+      reaction_at: message.reaction_at ?? message.reactionAt ?? null,
+      reaction_by: message.reaction_by ?? message.reactionBy ?? null,
       actions: normalizedActions
     };
   }
@@ -2079,6 +2042,10 @@
       upsertHistoryMessages([message]);
     }
     if (message.id) {
+      const safeMessageId = String(message.id);
+      const messageReaction = String(message.reaction_emoji || "").trim();
+      if (messageReaction) reactionsByMessage.set(safeMessageId, messageReaction);
+      else reactionsByMessage.delete(safeMessageId);
       applyReactionToRow(String(message.id));
     }
     bindBrokenMediaFallback(container);

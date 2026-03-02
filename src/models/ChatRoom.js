@@ -47,7 +47,25 @@ class ChatRoom {
       `SELECT cr.*
        FROM chat_rooms cr
        LEFT JOIN support_chamados_rooms scr ON scr.room_id = cr.id
+       LEFT JOIN external_client_rooms ecr ON ecr.room_id = cr.id
        WHERE scr.room_id IS NULL
+         AND (
+           ecr.room_id IS NULL
+           OR NOT EXISTS (
+             SELECT 1
+             FROM external_client_rooms ecr2
+             JOIN chat_rooms cr2 ON cr2.id = ecr2.room_id
+             WHERE ecr2.client_app_id = ecr.client_app_id
+               AND ecr2.client_user_id = ecr.client_user_id
+               AND (
+                 COALESCE(cr2.updated_at, cr2.created_at) > COALESCE(cr.updated_at, cr.created_at)
+                 OR (
+                   COALESCE(cr2.updated_at, cr2.created_at) = COALESCE(cr.updated_at, cr.created_at)
+                   AND cr2.id > cr.id
+                 )
+               )
+           )
+         )
        ORDER BY cr.created_at DESC`,
       { type: QueryTypes.SELECT }
     );
@@ -181,20 +199,22 @@ class ChatRoom {
     });
   }
 
-  static async findByExternalClient(clientAppId, clientUserId) {
+  static async findByExternalClient(clientAppId, clientUserId, options = {}) {
     const rows = await sequelize.query(
       `SELECT cr.*, ecr.client_app_id, ecr.client_user_id
        FROM external_client_rooms ecr
        JOIN chat_rooms cr ON cr.id = ecr.room_id
        WHERE ecr.client_app_id = :clientAppId
          AND ecr.client_user_id = :clientUserId
+       ORDER BY COALESCE(cr.updated_at, cr.created_at) DESC, cr.id DESC
        LIMIT 1`,
       {
         replacements: {
           clientAppId: String(clientAppId || ''),
           clientUserId: String(clientUserId || '')
         },
-        type: QueryTypes.SELECT
+        type: QueryTypes.SELECT,
+        transaction: options.transaction
       }
     );
     return rows[0] || null;
@@ -231,35 +251,50 @@ class ChatRoom {
       return { room: reopenedRoom || existing, created: false, reopened: true };
     }
 
-    return sequelize.transaction(async (transaction) => {
-      const roomId = uuidv4();
-      const createdRoom = await ChatRoomModel.create({
-        id: roomId,
-        name: name || `Cliente ${safeUser}`,
-        type: 'external_client',
-        description: description || `Atendimento do app ${safeApp} para usuario ${safeUser}`,
-        owner_id: ownerId
-      }, { transaction });
+    try {
+      return await sequelize.transaction(async (transaction) => {
+        const existingInTx = await this.findByExternalClient(safeApp, safeUser, { transaction });
+        if (existingInTx) {
+          return { room: existingInTx, created: false, reopened: false };
+        }
 
-      await ExternalClientRoomModel.create({
-        id: uuidv4(),
-        client_app_id: safeApp,
-        client_user_id: safeUser,
-        room_id: createdRoom.id,
-        created_by: ownerId,
-        created_at: new Date()
-      }, { transaction });
+        const roomId = uuidv4();
+        const createdRoom = await ChatRoomModel.create({
+          id: roomId,
+          name: name || `Cliente ${safeUser}`,
+          type: 'external_client',
+          description: description || `Atendimento do app ${safeApp} para usuario ${safeUser}`,
+          owner_id: ownerId
+        }, { transaction });
 
-      return {
-        room: {
-          ...createdRoom.get({ plain: true }),
+        await ExternalClientRoomModel.create({
+          id: uuidv4(),
           client_app_id: safeApp,
-          client_user_id: safeUser
-        },
-        created: true,
-        reopened: false
-      };
-    });
+          client_user_id: safeUser,
+          room_id: createdRoom.id,
+          created_by: ownerId,
+          created_at: new Date()
+        }, { transaction });
+
+        return {
+          room: {
+            ...createdRoom.get({ plain: true }),
+            client_app_id: safeApp,
+            client_user_id: safeUser
+          },
+          created: true,
+          reopened: false
+        };
+      });
+    } catch (error) {
+      const isUniqueViolation =
+        String(error?.name || '').toLowerCase().includes('unique') ||
+        String(error?.message || '').toLowerCase().includes('duplicate');
+      if (!isUniqueViolation) throw error;
+      const existingAfterRace = await this.findByExternalClient(safeApp, safeUser);
+      if (existingAfterRace) return { room: existingAfterRace, created: false, reopened: false };
+      throw error;
+    }
   }
 
   static async findPendingHumanRooms(limit = 20) {

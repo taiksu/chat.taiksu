@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, QueryTypes } = require('sequelize');
 const sequelize = require('../config/sequelize');
 
 const common = {
@@ -52,6 +52,9 @@ const MessageModel = sequelize.define('messages', {
   feedback_value: { type: DataTypes.STRING(8), allowNull: true },
   feedback_at: { type: DataTypes.DATE, allowNull: true },
   feedback_by: { type: DataTypes.STRING(64), allowNull: true },
+  reaction_emoji: { type: DataTypes.STRING(32), allowNull: true },
+  reaction_at: { type: DataTypes.DATE, allowNull: true },
+  reaction_by: { type: DataTypes.STRING(64), allowNull: true },
   is_read: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
   read_at: { type: DataTypes.DATE, allowNull: true },
   created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
@@ -286,6 +289,122 @@ async function ensureMessagesColumns() {
       allowNull: true
     });
   }
+  if (!columns.reaction_emoji) {
+    await qi.addColumn('messages', 'reaction_emoji', {
+      type: DataTypes.STRING(32),
+      allowNull: true
+    });
+  }
+  if (!columns.reaction_at) {
+    await qi.addColumn('messages', 'reaction_at', {
+      type: DataTypes.DATE,
+      allowNull: true
+    });
+  }
+  if (!columns.reaction_by) {
+    await qi.addColumn('messages', 'reaction_by', {
+      type: DataTypes.STRING(64),
+      allowNull: true
+    });
+  }
+}
+
+async function ensureExternalClientRoomUniqueness() {
+  const qi = sequelize.getQueryInterface();
+  let columns;
+  try {
+    columns = await qi.describeTable('external_client_rooms');
+  } catch (_err) {
+    return;
+  }
+
+  if (!columns.client_app_id || !columns.client_user_id || !columns.room_id) {
+    return;
+  }
+
+  const duplicateGroups = await sequelize.query(
+    `SELECT client_app_id, client_user_id, COUNT(*) AS total
+     FROM external_client_rooms
+     GROUP BY client_app_id, client_user_id
+     HAVING COUNT(*) > 1`,
+    { type: QueryTypes.SELECT }
+  );
+
+  for (const group of duplicateGroups) {
+    const rows = await sequelize.query(
+      `SELECT ecr.id, ecr.room_id, COALESCE(cr.updated_at, cr.created_at) AS sort_at
+       FROM external_client_rooms ecr
+       JOIN chat_rooms cr ON cr.id = ecr.room_id
+       WHERE ecr.client_app_id = :clientAppId
+         AND ecr.client_user_id = :clientUserId
+       ORDER BY COALESCE(cr.updated_at, cr.created_at) DESC, cr.id DESC`,
+      {
+        replacements: {
+          clientAppId: String(group.client_app_id || ''),
+          clientUserId: String(group.client_user_id || '')
+        },
+        type: QueryTypes.SELECT
+      }
+    );
+
+    if (!Array.isArray(rows) || rows.length < 2) continue;
+    const keep = rows[0];
+    const duplicates = rows.slice(1);
+
+    for (const duplicate of duplicates) {
+      const duplicateRoomId = String(duplicate.room_id || '');
+      const keepRoomId = String(keep.room_id || '');
+      if (!duplicateRoomId || !keepRoomId || duplicateRoomId === keepRoomId) continue;
+
+      await sequelize.transaction(async (transaction) => {
+        await MessageModel.update(
+          { room_id: keepRoomId },
+          { where: { room_id: duplicateRoomId }, transaction }
+        );
+        await RoomParticipantModel.update(
+          { room_id: keepRoomId },
+          { where: { room_id: duplicateRoomId }, transaction }
+        );
+        await TypingStatusModel.update(
+          { room_id: keepRoomId },
+          { where: { room_id: duplicateRoomId }, transaction }
+        );
+        await ChatQueueModel.update(
+          { room_id: keepRoomId },
+          { where: { room_id: duplicateRoomId }, transaction }
+        );
+        await ExternalClientRoomModel.destroy({
+          where: { id: String(duplicate.id || '') },
+          transaction
+        });
+        await ChatRoomModel.destroy({
+          where: { id: duplicateRoomId },
+          transaction
+        });
+      });
+    }
+  }
+
+  let indexes = [];
+  try {
+    indexes = await qi.showIndex('external_client_rooms');
+  } catch (_err) {
+    indexes = [];
+  }
+
+  const hasCompositeUnique = (indexes || []).some((idx) => {
+    if (!idx?.unique) return false;
+    const fields = (idx.fields || [])
+      .map((field) => String(field?.attribute || field?.name || '').toLowerCase());
+    return fields.includes('client_app_id') && fields.includes('client_user_id');
+  });
+
+  if (!hasCompositeUnique) {
+    await qi.addIndex('external_client_rooms', ['client_app_id', 'client_user_id'], {
+      name: 'idx_external_client_room_unique',
+      unique: true
+    });
+  }
 }
 
 async function syncDatabase() {
@@ -295,6 +414,7 @@ async function syncDatabase() {
   await ensureUsersColumns();
   await ensureChatRoomsColumns();
   await ensureMessagesColumns();
+  await ensureExternalClientRoomUniqueness();
   synced = true;
 }
 
