@@ -122,9 +122,9 @@ const ExternalClientRoomModel = sequelize.define('external_client_rooms', {
   timestamps: false,
   indexes: [
     {
-      name: 'idx_external_client_room_unique',
+      name: 'idx_external_client_room_user_unique',
       unique: true,
-      fields: ['client_app_id', 'client_user_id']
+      fields: ['client_user_id']
     }
   ]
 });
@@ -333,9 +333,9 @@ async function ensureExternalClientRoomUniqueness() {
   }
 
   const duplicateGroups = await sequelize.query(
-    `SELECT client_app_id, client_user_id, COUNT(*) AS total
+    `SELECT client_user_id, COUNT(*) AS total
      FROM external_client_rooms
-     GROUP BY client_app_id, client_user_id
+     GROUP BY client_user_id
      HAVING COUNT(*) > 1`,
     { type: QueryTypes.SELECT }
   );
@@ -345,12 +345,10 @@ async function ensureExternalClientRoomUniqueness() {
       `SELECT ecr.id, ecr.room_id, COALESCE(cr.updated_at, cr.created_at) AS sort_at
        FROM external_client_rooms ecr
        JOIN chat_rooms cr ON cr.id = ecr.room_id
-       WHERE ecr.client_app_id = :clientAppId
-         AND ecr.client_user_id = :clientUserId
+       WHERE ecr.client_user_id = :clientUserId
        ORDER BY COALESCE(cr.updated_at, cr.created_at) DESC, cr.id DESC`,
       {
         replacements: {
-          clientAppId: String(group.client_app_id || ''),
           clientUserId: String(group.client_user_id || '')
         },
         type: QueryTypes.SELECT
@@ -402,16 +400,33 @@ async function ensureExternalClientRoomUniqueness() {
     indexes = [];
   }
 
-  const hasCompositeUnique = (indexes || []).some((idx) => {
+  const hasUserUnique = (indexes || []).some((idx) => {
+    if (!idx?.unique) return false;
+    const fields = (idx.fields || [])
+      .map((field) => String(field?.attribute || field?.name || '').toLowerCase());
+    return fields.length === 1 && fields[0] === 'client_user_id';
+  });
+
+  const legacyUniqueIndexes = (indexes || []).filter((idx) => {
     if (!idx?.unique) return false;
     const fields = (idx.fields || [])
       .map((field) => String(field?.attribute || field?.name || '').toLowerCase());
     return fields.includes('client_app_id') && fields.includes('client_user_id');
   });
 
-  if (!hasCompositeUnique) {
-    await qi.addIndex('external_client_rooms', ['client_app_id', 'client_user_id'], {
-      name: 'idx_external_client_room_unique',
+  for (const index of legacyUniqueIndexes) {
+    const indexName = String(index?.name || '').trim();
+    if (!indexName) continue;
+    try {
+      await qi.removeIndex('external_client_rooms', indexName);
+    } catch (_err) {
+      // noop
+    }
+  }
+
+  if (!hasUserUnique) {
+    await qi.addIndex('external_client_rooms', ['client_user_id'], {
+      name: 'idx_external_client_room_user_unique',
       unique: true
     });
   }

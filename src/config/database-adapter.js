@@ -300,7 +300,7 @@ async function createTables() {
         room_id VARCHAR(64) NOT NULL UNIQUE,
         created_by VARCHAR(64) NOT NULL,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (client_app_id, client_user_id),
+        UNIQUE (client_user_id),
         FOREIGN KEY (room_id) REFERENCES chat_rooms(id),
         FOREIGN KEY (created_by) REFERENCES users(id)
       )

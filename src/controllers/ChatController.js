@@ -486,23 +486,21 @@ class ChatController {
       const requestedExternalUserId = req.body?.externalUserId || req.body?.external_user_id || user.id;
 
       const clientAppId = this.normalizeClientAppId(requestedAppId);
-      if (!clientAppId) {
-        return res.status(400).json({ error: 'clientAppId e obrigatorio' });
-      }
-
       const clientUserId = String(requestedExternalUserId || user.id).trim().slice(0, 120);
       if (!clientUserId) {
         return res.status(400).json({ error: 'externalUserId e obrigatorio' });
       }
 
-      const appLabel = String(requestedAppName || clientAppId).trim().slice(0, 80);
+      const appLabel = String(requestedAppName || clientAppId || '').trim().slice(0, 80);
       const displayName = String(user.name || 'Cliente').trim().slice(0, 80);
       const result = await ChatRoom.createOrGetExternalClientRoom({
         clientAppId,
         clientUserId,
         ownerId: user.id,
-        name: `${appLabel} - ${displayName}`,
-        description: `Atendimento originado pelo app ${appLabel}`
+        name: `Chat pessoal - ${displayName}`,
+        description: appLabel
+          ? `Atendimento pessoal unificado (origem: ${appLabel})`
+          : 'Atendimento pessoal unificado por usuario'
       });
 
       await ChatRoom.addParticipant(result.room.id, user.id);

@@ -55,8 +55,7 @@ class ChatRoom {
              SELECT 1
              FROM external_client_rooms ecr2
              JOIN chat_rooms cr2 ON cr2.id = ecr2.room_id
-             WHERE ecr2.client_app_id = ecr.client_app_id
-               AND ecr2.client_user_id = ecr.client_user_id
+             WHERE ecr2.client_user_id = ecr.client_user_id
                AND (
                  COALESCE(cr2.updated_at, cr2.created_at) > COALESCE(cr.updated_at, cr.created_at)
                  OR (
@@ -199,19 +198,19 @@ class ChatRoom {
     });
   }
 
-  static async findByExternalClient(clientAppId, clientUserId, options = {}) {
+  static async findByExternalClient(clientUserId, options = {}) {
+    const safeUser = String(clientUserId || '').trim();
+    if (!safeUser) return null;
     const rows = await sequelize.query(
       `SELECT cr.*, ecr.client_app_id, ecr.client_user_id
        FROM external_client_rooms ecr
        JOIN chat_rooms cr ON cr.id = ecr.room_id
-       WHERE ecr.client_app_id = :clientAppId
-         AND ecr.client_user_id = :clientUserId
+       WHERE ecr.client_user_id = :clientUserId
        ORDER BY COALESCE(cr.updated_at, cr.created_at) DESC, cr.id DESC
        LIMIT 1`,
       {
         replacements: {
-          clientAppId: String(clientAppId || ''),
-          clientUserId: String(clientUserId || '')
+          clientUserId: safeUser
         },
         type: QueryTypes.SELECT,
         transaction: options.transaction
@@ -229,12 +228,19 @@ class ChatRoom {
   }) {
     const safeApp = String(clientAppId || '').trim();
     const safeUser = String(clientUserId || '').trim();
-    if (!safeApp || !safeUser) {
-      throw new Error('clientAppId e clientUserId sao obrigatorios');
+    if (!safeUser) {
+      throw new Error('clientUserId e obrigatorio');
     }
+    const safeAppForStorage = safeApp || 'global';
 
-    const existing = await this.findByExternalClient(safeApp, safeUser);
+    const existing = await this.findByExternalClient(safeUser);
     if (existing) {
+      if (safeApp && String(existing.client_app_id || '') !== safeApp) {
+        await ExternalClientRoomModel.update(
+          { client_app_id: safeApp },
+          { where: { room_id: String(existing.id || '') } }
+        );
+      }
       const status = String(existing.status || '').trim().toLowerCase();
       const isClosed = ['fechado', 'closed', 'concluido', 'concluído', 'finalizado', 'resolved', 'resolvido'].includes(status);
       if (!isClosed) return { room: existing, created: false, reopened: false };
@@ -247,13 +253,13 @@ class ChatRoom {
         },
         { where: { id: String(existing.id) } }
       );
-      const reopenedRoom = await this.findByExternalClient(safeApp, safeUser);
+      const reopenedRoom = await this.findByExternalClient(safeUser);
       return { room: reopenedRoom || existing, created: false, reopened: true };
     }
 
     try {
       return await sequelize.transaction(async (transaction) => {
-        const existingInTx = await this.findByExternalClient(safeApp, safeUser, { transaction });
+        const existingInTx = await this.findByExternalClient(safeUser, { transaction });
         if (existingInTx) {
           return { room: existingInTx, created: false, reopened: false };
         }
@@ -263,13 +269,13 @@ class ChatRoom {
           id: roomId,
           name: name || `Cliente ${safeUser}`,
           type: 'external_client',
-          description: description || `Atendimento do app ${safeApp} para usuario ${safeUser}`,
+          description: description || `Atendimento pessoal do usuario ${safeUser}`,
           owner_id: ownerId
         }, { transaction });
 
         await ExternalClientRoomModel.create({
           id: uuidv4(),
-          client_app_id: safeApp,
+          client_app_id: safeAppForStorage,
           client_user_id: safeUser,
           room_id: createdRoom.id,
           created_by: ownerId,
@@ -279,7 +285,7 @@ class ChatRoom {
         return {
           room: {
             ...createdRoom.get({ plain: true }),
-            client_app_id: safeApp,
+            client_app_id: safeAppForStorage,
             client_user_id: safeUser
           },
           created: true,
@@ -291,7 +297,7 @@ class ChatRoom {
         String(error?.name || '').toLowerCase().includes('unique') ||
         String(error?.message || '').toLowerCase().includes('duplicate');
       if (!isUniqueViolation) throw error;
-      const existingAfterRace = await this.findByExternalClient(safeApp, safeUser);
+      const existingAfterRace = await this.findByExternalClient(safeUser);
       if (existingAfterRace) return { room: existingAfterRace, created: false, reopened: false };
       throw error;
     }
