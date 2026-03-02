@@ -214,7 +214,22 @@ class ChatRoom {
     }
 
     const existing = await this.findByExternalClient(safeApp, safeUser);
-    if (existing) return { room: existing, created: false };
+    if (existing) {
+      const status = String(existing.status || '').trim().toLowerCase();
+      const isClosed = ['fechado', 'closed', 'concluido', 'concluído', 'finalizado', 'resolved', 'resolvido'].includes(status);
+      if (!isClosed) return { room: existing, created: false, reopened: false };
+
+      await ChatRoomModel.update(
+        {
+          status: 'aberto',
+          chat_state: 'NEW',
+          assigned_agent_id: null
+        },
+        { where: { id: String(existing.id) } }
+      );
+      const reopenedRoom = await this.findByExternalClient(safeApp, safeUser);
+      return { room: reopenedRoom || existing, created: false, reopened: true };
+    }
 
     return sequelize.transaction(async (transaction) => {
       const roomId = uuidv4();
@@ -241,7 +256,8 @@ class ChatRoom {
           client_app_id: safeApp,
           client_user_id: safeUser
         },
-        created: true
+        created: true,
+        reopened: false
       };
     });
   }

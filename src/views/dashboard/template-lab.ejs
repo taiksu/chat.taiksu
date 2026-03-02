@@ -271,8 +271,10 @@
         userId: userId(),
         userName: userName(),
         supportInbox: true,
-        mode: 'inline',
-        mountSelector: mount,
+        mode: 'floating',
+        position: 'bottom-right',
+        offsetX: 16,
+        offsetY: 16,
         autoOpen: true,
         title: auto ? `Template Lab - ${String(clientAppIdInput.value || 'auto')}` : `Template Lab - ${roomId()}`
       });

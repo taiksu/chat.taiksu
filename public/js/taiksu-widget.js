@@ -11,6 +11,8 @@
     userId: "",
     title: "Chat de Atendimento",
     position: "bottom-right",
+    offsetX: 16,
+    offsetY: 16,
     width: 380,
     height: 620,
     zIndex: 2147483000,
@@ -57,8 +59,14 @@
   let historyHasMore = true;
   let historyLoading = false;
   let oldestMessageCursor = "";
+  let toggleUnreadCount = 0;
+  let reactionsByMessage = new Map();
+  let longPressTimer = null;
+  let longPressTarget = null;
+  let reactionMenuIgnoreCloseUntil = 0;
   let templateCore = (typeof window !== "undefined" && window.ChatTemplateCore) ? window.ChatTemplateCore : null;
   let templateCoreLoader = null;
+  const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🎉", "🔥"];
 
   const ICONS = {
     expand: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>`,
@@ -99,6 +107,88 @@
 
   function isTruthy(value) {
     return value === true || String(value || "").trim().toLowerCase() === "true" || String(value || "") === "1";
+  }
+
+  function getIdentityStorageKey() {
+    const server = String(config.serverUrl || "").trim().toLowerCase();
+    const app = String(config.clientAppId || "no-app").trim().toLowerCase();
+    return `taiksu_widget_identity:${server}:${app}`;
+  }
+
+  function getReactionsStorageKey() {
+    const server = String(config.serverUrl || "").trim().toLowerCase();
+    const room = String(config.roomId || "no-room").trim().toLowerCase();
+    const who = String(config.userId || config.externalUserId || "anon").trim().toLowerCase();
+    return `taiksu_widget_reactions:${server}:${room}:${who}`;
+  }
+
+  function loadMessageReactions() {
+    reactionsByMessage = new Map();
+    try {
+      const raw = localStorage.getItem(getReactionsStorageKey());
+      const parsed = JSON.parse(raw || "{}");
+      Object.entries(parsed || {}).forEach(([messageId, reaction]) => {
+        const id = String(messageId || "").trim();
+        const emoji = String(reaction || "").trim();
+        if (id && emoji) reactionsByMessage.set(id, emoji);
+      });
+    } catch (_err) {
+      reactionsByMessage = new Map();
+    }
+  }
+
+  function persistMessageReactions() {
+    try {
+      const out = {};
+      reactionsByMessage.forEach((value, key) => {
+        out[key] = value;
+      });
+      localStorage.setItem(getReactionsStorageKey(), JSON.stringify(out));
+    } catch (_err) {
+      // noop
+    }
+  }
+
+  function buildIdentityKey() {
+    const tokenSub = parseJwtSub(config.authToken);
+    const userId = String(config.userId || tokenSub || "").trim();
+    const externalUserId = String(config.externalUserId || userId || "").trim();
+    const app = String(config.clientAppId || "").trim();
+    return `${app}::${externalUserId || userId || "anon"}`;
+  }
+
+  function syncIdentityAndRoom() {
+    const tokenSub = parseJwtSub(config.authToken);
+    if (tokenSub) {
+      config.userId = tokenSub;
+    }
+    if (!config.externalUserId) {
+      config.externalUserId = config.userId || "";
+    }
+
+    // Em app cliente (auto-sala), se trocar usuario no mesmo navegador,
+    // descartamos roomId antigo para evitar reaproveitar conversa errada.
+    if (!config.clientAppId) return;
+    const storageKey = getIdentityStorageKey();
+    const currentIdentity = buildIdentityKey();
+    let previousIdentity = "";
+    try {
+      previousIdentity = String(sessionStorage.getItem(storageKey) || "");
+    } catch (_err) {
+      previousIdentity = "";
+    }
+
+    if (previousIdentity && previousIdentity !== currentIdentity) {
+      config.roomId = "";
+      resetHistoryState();
+      renderedIds.clear();
+    }
+
+    try {
+      sessionStorage.setItem(storageKey, currentIdentity);
+    } catch (_err) {
+      // noop
+    }
   }
 
   function ensureTemplateCoreLoaded() {
@@ -160,6 +250,9 @@
     if (host) return;
     host = document.createElement("div");
     host.id = "taiksu-widget-host";
+    const safeOffsetX = Math.max(0, Number(config.offsetX) || 0);
+    const safeOffsetY = Math.max(0, Number(config.offsetY) || 0);
+    const isLeft = config.position === "bottom-left";
     if (config.mode === "inline" && config.mountSelector) {
       const mountEl = document.querySelector(config.mountSelector);
       if (mountEl) {
@@ -169,17 +262,17 @@
       } else {
         console.warn(`TaiksuChat: mountSelector nao encontrado: ${config.mountSelector}`);
         host.style.position = "fixed";
-        host.style.bottom = "0";
-        host.style.right = "0";
-        host.style.left = "auto";
+        host.style.bottom = `${safeOffsetY}px`;
+        host.style.left = isLeft ? `${safeOffsetX}px` : "auto";
+        host.style.right = isLeft ? "auto" : `${safeOffsetX}px`;
         host.style.zIndex = String(config.zIndex);
         document.body.appendChild(host);
       }
     } else {
       host.style.position = "fixed";
-      host.style.bottom = "0";
-      host.style.right = "0";
-      host.style.left = "auto";
+      host.style.bottom = `${safeOffsetY}px`;
+      host.style.left = isLeft ? `${safeOffsetX}px` : "auto";
+      host.style.right = isLeft ? "auto" : `${safeOffsetX}px`;
       host.style.zIndex = String(config.zIndex);
       document.body.appendChild(host);
     }
@@ -205,10 +298,34 @@
         color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center;
         box-shadow: none; transition: transform 0.2s;
         padding: 0;
+        animation: twToggleIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
       }
       .tw-toggle:hover { transform: scale(1.05); }
+      @keyframes twToggleIn {
+        from { opacity: 0; transform: translateY(8px) scale(0.92); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
       .tw-toggle-icon { width: 100%; height: 100%; display: block; object-fit: contain; }
       .tw-toggle-icon { width: 48px; height: 48px; }
+      .tw-toggle-badge {
+        position: absolute;
+        right: 4px;
+        top: 2px;
+        min-width: 20px;
+        height: 20px;
+        border-radius: 9999px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 800;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 0 6px;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      }
+      .tw-toggle-badge.show { display: inline-flex; }
       
       .tw-widget { 
         width: var(--tw-widget-width);
@@ -222,6 +339,17 @@
         flex-direction: column; 
         position: relative;
         transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        transform-origin: bottom right;
+        animation: twWidgetIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .tw-widget.closing { animation: twWidgetOut 0.24s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
+      @keyframes twWidgetIn {
+        from { opacity: 0; transform: translateY(14px) scale(0.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes twWidgetOut {
+        from { opacity: 1; transform: translateY(0) scale(1); }
+        to { opacity: 0; transform: translateY(14px) scale(0.96); }
       }
       
       .tw-widget.expanded {
@@ -273,6 +401,12 @@
       .tw-header-btn:hover { background: rgba(255,255,255,0.1); }
 
       .tw-root { display: flex; align-items: stretch; gap: 10px; height: var(--tw-widget-height); }
+      .tw-root.tw-root-closed {
+        height: auto;
+        align-items: flex-end;
+        justify-content: flex-end;
+        gap: 0;
+      }
       .tw-main-content { flex: 1; display:flex; overflow:hidden; position: relative; }
       .tw-support-dock {
         width: 72px;
@@ -460,6 +594,48 @@
       .tw-feedback-btn:hover { background: #f8fafc; }
       .tw-feedback-btn.active.up { border-color: #10b981; color: #047857; background: #ecfdf5; }
       .tw-feedback-btn.active.down { border-color: #f43f5e; color: #be123c; background: #fff1f2; }
+      .tw-msg-reaction {
+        margin-top: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 26px;
+        height: 22px;
+        border-radius: 9999px;
+        background: #fff;
+        border: 1px solid #d1d5db;
+        font-size: 14px;
+        line-height: 1;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+      }
+      .tw-reaction-menu {
+        position: fixed;
+        z-index: 1500;
+        background: #fff;
+        border-radius: 9999px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 10px 26px rgba(15, 23, 42, 0.22);
+        display: flex;
+        gap: 6px;
+        padding: 8px 10px;
+        animation: twReactionIn 0.14s ease-out;
+      }
+      .tw-reaction-item {
+        border: 0;
+        background: transparent;
+        font-size: 24px;
+        line-height: 1;
+        cursor: pointer;
+        padding: 0;
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+      }
+      .tw-reaction-item:hover { background: #f1f5f9; transform: scale(1.06); }
+      @keyframes twReactionIn {
+        from { opacity: 0; transform: translateY(8px) scale(0.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
 
       .tw-media.image { max-width: 100%; border-radius: 12px; display: block; cursor: pointer; margin: 4px 0; }
       .tw-file-link { color: #075e54; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.05); padding: 8px; border-radius: 8px; }
@@ -573,16 +749,18 @@
   function renderClosed() {
     shadow.innerHTML = `
       <style>${styles()}</style>
-      <div class="tw-root">
-        <button class="tw-toggle" id="tw-toggle-btn" title="Abrir chat" aria-label="Abrir chat">
+      <div class="tw-root tw-root-closed">
+        <button class="tw-toggle" id="tw-toggle-btn" title="Abrir chat" aria-label="Abrir chat" style="position:relative">
           <img class="tw-toggle-icon" src="${escapeAttr(resolveMediaUrl('/images/svgdamassa.svg'))}" alt="Abrir chat" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
           <span style="display:none;">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4v-4H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
           </span>
+          <span id="tw-toggle-badge" class="tw-toggle-badge"></span>
         </button>
       </div>
     `;
     shadow.getElementById("tw-toggle-btn").addEventListener("click", openWidget);
+    updateToggleUnreadBadge();
   }
 
   function renderWidgetHeaderMarkup(participants) {
@@ -741,7 +919,27 @@
     const messagesArea = shadow.getElementById("tw-messages");
     if (messagesArea) messagesArea.addEventListener("click", closeUIExtras);
     if (messagesArea) {
+      const startLongPress = (event) => {
+        const bubble = event.target && event.target.closest(".tw-bubble");
+        const row = bubble && bubble.closest(".tw-message[data-message-id]");
+        const messageId = row ? String(row.getAttribute("data-message-id") || "") : "";
+        if (!bubble || !row || !messageId) return;
+        clearLongPress();
+        longPressTarget = { bubble, messageId };
+        longPressTimer = setTimeout(() => {
+          if (!longPressTarget) return;
+          openReactionMenu(longPressTarget.bubble, longPressTarget.messageId);
+        }, 480);
+      };
+      const endLongPress = () => clearLongPress();
+      messagesArea.addEventListener("pointerdown", startLongPress);
+      messagesArea.addEventListener("pointerup", endLongPress);
+      messagesArea.addEventListener("pointerleave", endLongPress);
+      messagesArea.addEventListener("pointercancel", endLongPress);
+    }
+    if (messagesArea) {
       messagesArea.addEventListener("scroll", () => {
+        closeReactionMenu();
         if (messagesArea.scrollTop > 36) return;
         loadOlderMessages().catch(() => {});
       });
@@ -819,6 +1017,13 @@
         setSupportInboxTab(tab);
       });
     }
+    if (shadow) {
+      shadow.addEventListener("click", (event) => {
+        if (Date.now() < Number(reactionMenuIgnoreCloseUntil || 0)) return;
+        const inReactionMenu = event.target && event.target.closest(".tw-reaction-menu");
+        if (!inReactionMenu) closeReactionMenu();
+      });
+    }
 
     // Inicializar Emoji Picker
     initEmojiPicker();
@@ -884,11 +1089,98 @@
     if (menu) menu.classList.remove("open");
   }
 
+  function clearLongPress() {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    longPressTarget = null;
+  }
+
+  function closeReactionMenu() {
+    const menu = shadow && shadow.getElementById("tw-reaction-menu");
+    if (menu) menu.remove();
+  }
+
+  function applyReactionToRow(messageId) {
+    const safeId = String(messageId || "").trim();
+    if (!safeId) return;
+    const row = shadow && shadow.querySelector(`.tw-message[data-message-id="${safeId}"]`);
+    if (!row) return;
+    const content = row.querySelector(".tw-message-content");
+    if (!content) return;
+    const existing = content.querySelector(".tw-msg-reaction");
+    const emoji = String(reactionsByMessage.get(safeId) || "").trim();
+    if (!emoji) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) {
+      existing.textContent = emoji;
+      return;
+    }
+    const node = document.createElement("span");
+    node.className = "tw-msg-reaction";
+    node.textContent = emoji;
+    content.appendChild(node);
+  }
+
+  function applyMessageReaction(messageId, emoji) {
+    const safeId = String(messageId || "").trim();
+    const safeEmoji = String(emoji || "").trim();
+    if (!safeId || !safeEmoji) return;
+    reactionsByMessage.set(safeId, safeEmoji);
+    persistMessageReactions();
+    applyReactionToRow(safeId);
+    closeReactionMenu();
+  }
+
+  function openReactionMenu(anchorBubble, messageId) {
+    if (!anchorBubble || !messageId || !shadow) return;
+    closeReactionMenu();
+    const menu = document.createElement("div");
+    menu.id = "tw-reaction-menu";
+    menu.className = "tw-reaction-menu";
+    menu.innerHTML = QUICK_REACTIONS
+      .map((emoji) => `<button type="button" class="tw-reaction-item" data-reaction="${escapeAttr(emoji)}">${emoji}</button>`)
+      .join("");
+    shadow.appendChild(menu);
+    reactionMenuIgnoreCloseUntil = Date.now() + 420;
+
+    const anchorRect = anchorBubble.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const top = Math.max(10, anchorRect.top - menuRect.height - 8);
+    const left = Math.min(
+      Math.max(10, anchorRect.left + (anchorRect.width / 2) - (menuRect.width / 2)),
+      Math.max(10, viewportW - menuRect.width - 10)
+    );
+    menu.style.top = `${Math.min(top, viewportH - menuRect.height - 10)}px`;
+    menu.style.left = `${left}px`;
+
+    menu.addEventListener("click", (event) => {
+      const button = event.target && event.target.closest(".tw-reaction-item");
+      if (!button) return;
+      const reaction = String(button.getAttribute("data-reaction") || "").trim();
+      if (!reaction) return;
+      applyMessageReaction(messageId, reaction);
+    });
+  }
+
   function resetHistoryState() {
     historyMessages = [];
     historyHasMore = true;
     historyLoading = false;
     oldestMessageCursor = "";
+  }
+
+  function updateToggleUnreadBadge() {
+    const badge = shadow && shadow.getElementById("tw-toggle-badge");
+    if (!badge) return;
+    const count = Math.max(0, Number(toggleUnreadCount || 0));
+    badge.textContent = count > 99 ? "99+" : String(count);
+    badge.classList.toggle("show", count > 0);
   }
 
   const EMOJI_STORAGE_KEY = "taiksu_widget_recent_emojis_v1";
@@ -1066,7 +1358,7 @@
     supportInboxExpanded = false;
     supportInboxTab = "active";
     supportInboxRoomsCache = [];
-    config.position = "bottom-right";
+    config.position = normalizePosition(config.position);
     config.mode = normalizeMode(config.mode);
     localUserName = String(config.userName || "").trim();
     selfAliases.clear();
@@ -1080,6 +1372,7 @@
     if (!config.externalUserId) {
       config.externalUserId = config.userId || "";
     }
+    syncIdentityAndRoom();
     loadArchivedRooms();
     if (!config.roomId && !config.clientAppId) {
       console.error("TaiksuChat: informe roomId ou clientAppId.");
@@ -1093,6 +1386,7 @@
 
   async function openWidget() {
     widgetOpen = true;
+    toggleUnreadCount = 0;
     resetHistoryState();
     await ensureTemplateCoreLoaded().catch(() => null);
     renderOpen();
@@ -1107,11 +1401,11 @@
     loadMessages();
     loadSupportInbox().catch(() => {});
     startSupportInboxRefresh();
+    updateToggleUnreadBadge();
   }
 
   async function resolveRoomIdIfNeeded() {
-    if (config.roomId) return true;
-    if (!config.clientAppId) return false;
+    if (!config.clientAppId) return Boolean(config.roomId);
     try {
       const response = await fetch(buildApiUrl("/api/chat/client/room"), {
         method: "POST",
@@ -1362,12 +1656,21 @@
   function closeWidget() {
     widgetOpen = false;
     resetHistoryState();
+    clearLongPress();
+    closeReactionMenu();
     aiProcessingActive = false;
     aiProcessingStartedAt = 0;
     clearAiProcessingTimer();
     stopRecording();
-    closeSSE();
     stopSupportInboxRefresh();
+    const widgetEl = shadow && shadow.getElementById("tw-widget");
+    if (widgetEl) {
+      widgetEl.classList.add("closing");
+      setTimeout(() => {
+        if (!widgetOpen) renderClosed();
+      }, 240);
+      return;
+    }
     renderClosed();
   }
 
@@ -1395,6 +1698,14 @@
       if (!payload) return;
       if (payload.type === "new_message") {
         const normalized = normalizeMessage(payload.message);
+        const isOwnIncoming = normalized && config.userId && String(normalized.user_id) === String(config.userId);
+        if (!widgetOpen) {
+          if (!isOwnIncoming) {
+            toggleUnreadCount += 1;
+            updateToggleUnreadBadge();
+          }
+          return;
+        }
         if (normalized) {
           const merged = headerParticipants
             .concat(collectParticipantsFromMessages([normalized]))
@@ -1407,7 +1718,6 @@
           updateWidgetHeader(merged);
         }
         addMessage(normalized);
-        const isOwnIncoming = normalized && config.userId && String(normalized.user_id) === String(config.userId);
         if (!isOwnIncoming) {
           markRoomAsRead();
         }
@@ -1515,6 +1825,7 @@
   function loadMessages() {
     historyLoading = true;
     historyHasMore = true;
+    loadMessageReactions();
     fetchMessagesPage("")
       .then((messages) => {
         historyMessages = [];
@@ -1767,6 +2078,9 @@
     if (trackHistory) {
       upsertHistoryMessages([message]);
     }
+    if (message.id) {
+      applyReactionToRow(String(message.id));
+    }
     bindBrokenMediaFallback(container);
     syncEmptyState();
     setTimeout(() => initAudioPlayers(container), 50);
@@ -1791,7 +2105,12 @@
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({})
-    }).catch(() => {});
+    })
+      .then(() => {
+        toggleUnreadCount = 0;
+        updateToggleUnreadBadge();
+      })
+      .catch(() => {});
   }
 
   function syncEmptyState() {
@@ -2444,6 +2763,8 @@
 
   function destroy() {
     stopRecording();
+    clearLongPress();
+    closeReactionMenu();
     closeSSE();
     stopSupportInboxRefresh();
     if (host && host.parentNode) host.parentNode.removeChild(host);

@@ -121,7 +121,7 @@ class MessageController {
 
   getAiUserName() {
     const settings = settingsService.load();
-    return String(settings.aiAgentName || process.env.AI_USER_NAME || 'Marina').trim() || 'Marina';
+    return String(settings.aiAgentName || process.env.AI_USER_NAME || 'Maria').trim() || 'Maria';
   }
 
   getAiUserAvatar() {
@@ -152,9 +152,9 @@ class MessageController {
   getWelcomeMessage(isChamadoRoom) {
     const agentName = this.getAiUserName();
     if (isChamadoRoom) {
-      return `Ol\u00E1! Eu sou a Assistente ${agentName} da Taiksu IA. Em que posso ajudar?`;
+      return `Ol\u00E1! Eu sou a Assistente ${agentName} da Taiksu IA. Seja bem-vindo(a)! Em que posso ajudar hoje?`;
     }
-    return `Ol\u00E1! Eu sou a Assistente ${agentName} da Taiksu IA. Em que posso ajudar?`;
+    return `Ol\u00E1! Eu sou a Assistente ${agentName} da Taiksu IA. Seja bem-vindo(a)! Em que posso ajudar hoje?`;
   }
 
   isHumanRequest(text) {

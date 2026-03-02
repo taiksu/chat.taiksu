@@ -4,10 +4,29 @@ const User = require('../models/User');
 const ChatQueue = require('../models/ChatQueue');
 const alertService = require('../services/alertService');
 const eventBrokerService = require('../services/eventBrokerService');
+const SSOController = require('./SSOController');
 const path = require('path');
 const fs = require('fs');
 
 class ChatController {
+  async ensurePersistedSessionUser(req) {
+    const sessionUser = req?.session?.user;
+    if (!sessionUser?.id) return null;
+
+    let persisted = await User.findById(sessionUser.id);
+    if (!persisted && req?.session?.ssoUser) {
+      try {
+        persisted = await SSOController.syncSSOUser(req.session.ssoUser);
+      } catch (error) {
+        console.error('[chat] Falha ao sincronizar usuario SSO antes de criar sala:', error.message);
+      }
+    }
+
+    if (!persisted) return null;
+    req.session.user = persisted;
+    return persisted;
+  }
+
   normalizeChatState(value) {
     const state = String(value || '').trim().toUpperCase();
     const allowed = ['NEW', 'IA', 'AGUARDANDO_HUMANO', 'FILA', 'HUMANO', 'FECHADO'];
@@ -457,9 +476,9 @@ class ChatController {
 
   async createOrGetClientRoom(req, res) {
     try {
-      const user = req.session.user;
+      const user = await this.ensurePersistedSessionUser(req);
       if (!user) {
-        return res.status(401).json({ error: 'Nao autenticado' });
+        return res.status(401).json({ error: 'Nao autenticado ou usuario nao sincronizado no chat' });
       }
 
       const requestedAppId = req.body?.clientAppId || req.body?.client_app_id || req.headers['x-client-app'] || '';
@@ -508,6 +527,7 @@ class ChatController {
       return res.json({
         success: true,
         created: Boolean(result.created),
+        reopened: Boolean(result.reopened),
         room: result.room,
         roomId: result.room.id,
         clientAppId,
@@ -521,9 +541,9 @@ class ChatController {
 
   async requestHumanForChamado(req, res) {
     try {
-      const user = req.session.user;
+      const user = await this.ensurePersistedSessionUser(req);
       if (!user) {
-        return res.status(401).json({ error: 'Nao autenticado' });
+        return res.status(401).json({ error: 'Nao autenticado ou usuario nao sincronizado no chat' });
       }
 
       const { chamadoId } = req.params;
