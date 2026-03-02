@@ -739,6 +739,12 @@
     const messagesArea = shadow.getElementById("tw-messages");
     if (messagesArea) messagesArea.addEventListener("click", closeUIExtras);
     if (messagesArea) {
+      messagesArea.addEventListener("scroll", () => {
+        if (messagesArea.scrollTop > 36) return;
+        loadOlderMessages().catch(() => {});
+      });
+    }
+    if (messagesArea) {
       messagesArea.addEventListener("click", (event) => {
         const feedbackButton = event.target && event.target.closest(".tw-feedback-btn");
         if (feedbackButton) {
@@ -1085,6 +1091,7 @@
 
   async function openWidget() {
     widgetOpen = true;
+    resetHistoryState();
     await ensureTemplateCoreLoaded().catch(() => null);
     renderOpen();
     const roomReady = await resolveRoomIdIfNeeded();
@@ -1306,6 +1313,7 @@
     if (!safeNext || safeNext === String(config.roomId || "")) return;
     closeSSE();
     renderedIds.clear();
+    resetHistoryState();
     const messagesEl = shadow.getElementById("tw-messages");
     if (messagesEl) messagesEl.innerHTML = "";
     config.roomId = safeNext;
@@ -1351,6 +1359,7 @@
 
   function closeWidget() {
     widgetOpen = false;
+    resetHistoryState();
     aiProcessingActive = false;
     aiProcessingStartedAt = 0;
     clearAiProcessingTimer();
@@ -1422,28 +1431,100 @@
     };
   }
 
+  function upsertHistoryMessages(messages) {
+    const incoming = Array.isArray(messages) ? messages.map(normalizeMessage).filter(Boolean) : [];
+    if (!incoming.length) return;
+    const byId = new Map();
+    historyMessages.forEach((msg) => {
+      if (msg && msg.id) byId.set(String(msg.id), msg);
+    });
+    incoming.forEach((msg) => {
+      if (msg && msg.id && byId.has(String(msg.id))) {
+        byId.set(String(msg.id), msg);
+      } else if (msg && msg.id) {
+        byId.set(String(msg.id), msg);
+      } else {
+        historyMessages.push(msg);
+      }
+    });
+    historyMessages = [...historyMessages.filter((msg) => !(msg && msg.id)), ...Array.from(byId.values())]
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    oldestMessageCursor = historyMessages.length ? String(historyMessages[0].created_at || "") : "";
+  }
+
+  function renderHistoryMessages(options = {}) {
+    const preserveScroll = Boolean(options.preserveScroll);
+    const container = shadow.getElementById("tw-messages");
+    if (!container) return;
+    const prevHeight = preserveScroll ? container.scrollHeight : 0;
+    const prevTop = preserveScroll ? container.scrollTop : 0;
+
+    renderedIds.clear();
+    container.innerHTML = "";
+    const participantsFromMessages = collectParticipantsFromMessages(historyMessages || []);
+    if (participantsFromMessages.length) {
+      updateWidgetHeader(participantsFromMessages);
+    } else {
+      updateWidgetHeader(getDefaultWidgetParticipants());
+    }
+    (historyMessages || []).forEach((msg) => addMessage(msg, { autoScroll: false, trackHistory: false }));
+    bindBrokenMediaFallback(container);
+    syncEmptyState();
+    initAudioPlayers(container);
+    if (preserveScroll) {
+      const nextHeight = container.scrollHeight;
+      container.scrollTop = Math.max(0, prevTop + (nextHeight - prevHeight));
+      return;
+    }
+    scrollToBottom();
+  }
+
+  async function fetchMessagesPage(beforeCursor = "") {
+    const params = new URLSearchParams();
+    params.set("limit", String(HISTORY_PAGE_SIZE));
+    if (beforeCursor) params.set("before", String(beforeCursor));
+    const url = buildApiUrl(`/api/messages/${encodeURIComponent(config.roomId)}${params.toString() ? `?${params.toString()}` : ""}`);
+    const response = await fetch(url, { method: "GET", credentials: "include" });
+    const data = await response.json().catch(() => []);
+    return Array.isArray(data) ? data : [];
+  }
+
+  async function loadOlderMessages() {
+    if (!widgetOpen || !config.roomId) return;
+    if (historyLoading || !historyHasMore) return;
+    if (!oldestMessageCursor) return;
+    historyLoading = true;
+    try {
+      const older = await fetchMessagesPage(oldestMessageCursor);
+      if (!older.length) {
+        historyHasMore = false;
+        return;
+      }
+      upsertHistoryMessages(older);
+      historyHasMore = older.length >= HISTORY_PAGE_SIZE;
+      renderHistoryMessages({ preserveScroll: true });
+    } catch (error) {
+      console.error("TaiksuChat: erro ao carregar historico antigo:", error);
+    } finally {
+      historyLoading = false;
+    }
+  }
+
   function loadMessages() {
-    fetch(buildApiUrl(`/api/messages/${encodeURIComponent(config.roomId)}`), { method: "GET", credentials: "include" })
-      .then((res) => res.json())
+    historyLoading = true;
+    historyHasMore = true;
+    fetchMessagesPage("")
       .then((messages) => {
-        renderedIds.clear();
-        const container = shadow.getElementById("tw-messages");
-        if (!container) return;
-        container.innerHTML = "";
-        const participantsFromMessages = collectParticipantsFromMessages(messages || []);
-        if (participantsFromMessages.length) {
-          updateWidgetHeader(participantsFromMessages);
-        } else {
-          updateWidgetHeader(getDefaultWidgetParticipants());
-        }
-        (messages || []).forEach(addMessage);
-        bindBrokenMediaFallback(container);
-        syncEmptyState();
-        initAudioPlayers(container);
+        historyMessages = [];
+        upsertHistoryMessages(messages || []);
+        historyHasMore = Array.isArray(messages) && messages.length >= HISTORY_PAGE_SIZE;
+        renderHistoryMessages({ preserveScroll: false });
         markRoomAsRead();
-        scrollToBottom();
       })
-      .catch((err) => console.error("TaiksuChat: erro ao carregar mensagens:", err));
+      .catch((err) => console.error("TaiksuChat: erro ao carregar mensagens:", err))
+      .finally(() => {
+        historyLoading = false;
+      });
   }
 
   function normalizeMessage(message) {
@@ -1593,7 +1674,9 @@
     `;
   }
 
-  function addMessage(rawMessage) {
+  function addMessage(rawMessage, opts = {}) {
+    const autoScroll = opts.autoScroll !== false;
+    const trackHistory = opts.trackHistory !== false;
     const message = normalizeMessage(rawMessage);
     if (!message) return;
     if (Boolean(message.is_ai) || String(message.sender_role || "").toLowerCase() === "system") {
@@ -1679,10 +1762,13 @@
         </div>
       `;
     container.insertAdjacentHTML("beforeend", rowHtml);
+    if (trackHistory) {
+      upsertHistoryMessages([message]);
+    }
     bindBrokenMediaFallback(container);
     syncEmptyState();
     setTimeout(() => initAudioPlayers(container), 50);
-    scrollToBottom();
+    if (autoScroll) scrollToBottom();
   }
 
   function applyReadReceipts(messageIds) {
