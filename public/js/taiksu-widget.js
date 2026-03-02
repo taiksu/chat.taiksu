@@ -31,6 +31,9 @@
   let reconnectTimer = null;
   let supportInboxRefreshTimer = null;
   let supportInboxExpanded = false;
+  let supportInboxTab = "active";
+  let supportInboxRoomsCache = [];
+  const archivedRoomIds = new Set();
   let typingTimer = null;
   let typingActive = false;
   let selectedUploadType = "";
@@ -49,6 +52,11 @@
   let aiProcessingTimer = null;
   let aiProcessingStartedAt = 0;
   const renderedIds = new Set();
+  const HISTORY_PAGE_SIZE = 35;
+  let historyMessages = [];
+  let historyHasMore = true;
+  let historyLoading = false;
+  let oldestMessageCursor = "";
   let templateCore = (typeof window !== "undefined" && window.ChatTemplateCore) ? window.ChatTemplateCore : null;
   let templateCoreLoader = null;
 
@@ -180,7 +188,14 @@
     return `
       :host { all: initial; }
       * { box-sizing: border-box; }
-      .tw-root { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #0f172a; line-height: 1.2; position: relative; }
+      .tw-root {
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        color: #0f172a;
+        line-height: 1.2;
+        position: relative;
+        --tw-widget-width: min(${Math.max(320, Number(config.width) || 400)}px, calc(100vw - 24px));
+        --tw-widget-height: min(${Math.max(460, Number(config.height) || 650)}px, calc(100vh - 24px));
+      }
       
       .tw-toggle { 
         width: 74px; height: 74px; border: 0; border-radius: 0;
@@ -191,10 +206,11 @@
       }
       .tw-toggle:hover { transform: scale(1.05); }
       .tw-toggle-icon { width: 100%; height: 100%; display: block; object-fit: contain; }
+      .tw-toggle-icon { width: 48px; height: 48px; }
       
       .tw-widget { 
-        width: min(${Math.max(320, Number(config.width) || 400)}px, calc(100vw - 24px)); 
-        height: min(${Math.max(460, Number(config.height) || 650)}px, calc(100vh - 24px)); 
+        width: var(--tw-widget-width);
+        height: var(--tw-widget-height);
         background: #e5ddd5; 
         border-radius: 16px; 
         border: 1px solid rgba(0,0,0,0.1); 
@@ -254,10 +270,12 @@
       .tw-header-btn { width:32px; height:32px; border-radius:9999px; border:0; background:transparent; color:#fff; cursor:pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
       .tw-header-btn:hover { background: rgba(255,255,255,0.1); }
 
-      .tw-root { display: flex; align-items: stretch; gap: 10px; }
+      .tw-root { display: flex; align-items: stretch; gap: 10px; height: var(--tw-widget-height); }
       .tw-main-content { flex: 1; display:flex; overflow:hidden; position: relative; }
       .tw-support-dock {
         width: 72px;
+        height: var(--tw-widget-height);
+        max-height: var(--tw-widget-height);
         border: 1px solid rgba(0,0,0,0.12);
         background: #f8fafc;
         border-radius: 16px;
@@ -286,6 +304,29 @@
         display: flex; align-items: center; justify-content: center; cursor: pointer;
       }
       .tw-inbox-list { flex: 1; overflow-y: auto; }
+      .tw-inbox-tabs {
+        display: none;
+        gap: 6px;
+        padding: 8px 12px;
+        border-bottom: 1px solid #e5e7eb;
+        background: #f8fafc;
+      }
+      .tw-support-dock.expanded .tw-inbox-tabs { display: flex; }
+      .tw-inbox-tab {
+        border: 1px solid #cbd5e1;
+        border-radius: 9999px;
+        padding: 4px 10px;
+        background: #fff;
+        color: #334155;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .tw-inbox-tab.active {
+        border-color: #34d399;
+        background: #ecfdf5;
+        color: #047857;
+      }
       .tw-inbox-item {
         width: 100%; border: 0; border-bottom: 1px solid #e5e7eb; background: transparent;
         display: flex; gap: 10px; align-items: center; padding: 10px 12px; cursor: pointer; text-align: left;
@@ -299,6 +340,21 @@
       .tw-inbox-name { margin: 0; font-size: 14px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .tw-inbox-preview { margin: 2px 0 0; font-size: 12px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .tw-inbox-unread { min-width: 24px; height: 24px; border-radius: 9999px; background: #0ea5e9; color: #fff; font-size: 12px; font-weight: 700; display:flex; align-items:center; justify-content:center; padding: 0 6px; }
+      .tw-inbox-actions { display: none; }
+      .tw-support-dock.expanded .tw-inbox-actions { display: flex; }
+      .tw-inbox-archive {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid #cbd5e1;
+        border-radius: 9999px;
+        background: #fff;
+        color: #475569;
+        font-size: 10px;
+        font-weight: 700;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+      .tw-inbox-archive:hover { background: #f1f5f9; }
       .tw-inbox-empty { padding: 20px 16px; font-size: 12px; color: #64748b; }
       .tw-support-dock:not(.expanded) .tw-inbox-empty { display: none; }
 
@@ -620,6 +676,10 @@
               <span>Suporte (dev/admin)</span>
             </div>
           </div>
+          <div class="tw-inbox-tabs" id="tw-inbox-tabs">
+            <button type="button" class="tw-inbox-tab active" data-tab="active">Ativas</button>
+            <button type="button" class="tw-inbox-tab" data-tab="archived">Arquivadas</button>
+          </div>
           <div class="tw-inbox-list" id="tw-inbox-list">
             <div class="tw-inbox-empty">Carregando conversas...</div>
           </div>
@@ -725,11 +785,30 @@
     const inboxList = shadow.getElementById("tw-inbox-list");
     if (inboxList) {
       inboxList.addEventListener("click", (event) => {
+        const archiveBtn = event.target && event.target.closest(".tw-inbox-archive");
+        if (archiveBtn) {
+          event.preventDefault();
+          event.stopPropagation();
+          const roomId = String(archiveBtn.getAttribute("data-room-id") || "");
+          const archived = String(archiveBtn.getAttribute("data-archived") || "false") === "true";
+          toggleRoomArchived(roomId, !archived).catch(() => {});
+          return;
+        }
         const roomBtn = event.target && event.target.closest("[data-room-id]");
         if (!roomBtn) return;
         const nextRoomId = String(roomBtn.getAttribute("data-room-id") || "");
         const nextRoomName = String(roomBtn.getAttribute("data-room-name") || "");
         switchToRoom(nextRoomId, nextRoomName).catch(() => {});
+      });
+    }
+
+    const inboxTabs = shadow.getElementById("tw-inbox-tabs");
+    if (inboxTabs) {
+      inboxTabs.addEventListener("click", (event) => {
+        const tabBtn = event.target && event.target.closest("[data-tab]");
+        if (!tabBtn) return;
+        const tab = String(tabBtn.getAttribute("data-tab") || "active");
+        setSupportInboxTab(tab);
       });
     }
 
@@ -795,6 +874,13 @@
     const menu = shadow.getElementById("tw-attach-menu");
     if (picker) picker.classList.remove("show");
     if (menu) menu.classList.remove("open");
+  }
+
+  function resetHistoryState() {
+    historyMessages = [];
+    historyHasMore = true;
+    historyLoading = false;
+    oldestMessageCursor = "";
   }
 
   const EMOJI_STORAGE_KEY = "taiksu_widget_recent_emojis_v1";
@@ -970,6 +1056,8 @@
   function init(options) {
     config = { ...DEFAULTS, ...(options || {}) };
     supportInboxExpanded = false;
+    supportInboxTab = "active";
+    supportInboxRoomsCache = [];
     config.position = normalizePosition(config.position);
     config.mode = normalizeMode(config.mode);
     localUserName = String(config.userName || "").trim();
@@ -984,6 +1072,7 @@
     if (!config.externalUserId) {
       config.externalUserId = config.userId || "";
     }
+    loadArchivedRooms();
     if (!config.roomId && !config.clientAppId) {
       console.error("TaiksuChat: informe roomId ou clientAppId.");
       return;
@@ -1043,6 +1132,62 @@
     return isTruthy(config.supportInbox);
   }
 
+  function getArchiveStorageKey() {
+    const server = String(config.serverUrl || "").trim().toLowerCase();
+    const scope = String(config.userId || config.externalUserId || "anon").trim().toLowerCase();
+    return `taiksu_widget_archived_rooms:${server}:${scope}`;
+  }
+
+  function loadArchivedRooms() {
+    archivedRoomIds.clear();
+    try {
+      const raw = localStorage.getItem(getArchiveStorageKey());
+      const parsed = JSON.parse(raw || "[]");
+      if (!Array.isArray(parsed)) return;
+      parsed.forEach((id) => {
+        const safe = String(id || "").trim();
+        if (safe) archivedRoomIds.add(safe);
+      });
+    } catch (_err) {
+      // noop
+    }
+  }
+
+  function persistArchivedRooms() {
+    try {
+      localStorage.setItem(getArchiveStorageKey(), JSON.stringify(Array.from(archivedRoomIds)));
+    } catch (_err) {
+      // noop
+    }
+  }
+
+  function setSupportInboxTab(tab) {
+    const next = String(tab || "active").toLowerCase() === "archived" ? "archived" : "active";
+    supportInboxTab = next;
+    renderSupportInbox(supportInboxRoomsCache);
+  }
+
+  async function toggleRoomArchived(roomId, archived) {
+    const safeRoomId = String(roomId || "").trim();
+    if (!safeRoomId) return;
+    const shouldArchive = Boolean(archived);
+    if (shouldArchive) archivedRoomIds.add(safeRoomId);
+    else archivedRoomIds.delete(safeRoomId);
+    persistArchivedRooms();
+
+    if (shouldArchive && String(config.roomId || "") === safeRoomId) {
+      const fallback = (supportInboxRoomsCache || []).find((room) => {
+        const id = String(room?.id || "");
+        return id && id !== safeRoomId && !archivedRoomIds.has(id);
+      });
+      if (fallback && fallback.id) {
+        await switchToRoom(String(fallback.id), String(fallback.name || ""));
+        return;
+      }
+    }
+    renderSupportInbox(supportInboxRoomsCache);
+  }
+
   function stopSupportInboxRefresh() {
     if (supportInboxRefreshTimer) {
       clearInterval(supportInboxRefreshTimer);
@@ -1073,6 +1218,7 @@
   function renderSupportInbox(rooms) {
     const dock = shadow.getElementById("tw-support-dock");
     const list = shadow.getElementById("tw-inbox-list");
+    const tabs = shadow.getElementById("tw-inbox-tabs");
     if (!dock || !list) return;
 
     if (!Array.isArray(rooms)) {
@@ -1080,20 +1226,41 @@
       return;
     }
 
+    supportInboxRoomsCache = rooms;
     dock.classList.add("show");
     updateSupportDockState();
-    if (!rooms.length) {
-      list.innerHTML = `<div class="tw-inbox-empty">Nenhuma conversa encontrada.</div>`;
+    const activeRooms = rooms.filter((room) => !archivedRoomIds.has(String(room?.id || "")));
+    const archivedRooms = rooms.filter((room) => archivedRoomIds.has(String(room?.id || "")));
+    const visibleRooms = supportInboxTab === "archived" ? archivedRooms : activeRooms;
+
+    if (tabs) {
+      const activeBtn = tabs.querySelector('[data-tab="active"]');
+      const archivedBtn = tabs.querySelector('[data-tab="archived"]');
+      if (activeBtn) {
+        activeBtn.classList.toggle("active", supportInboxTab === "active");
+        activeBtn.textContent = `Ativas (${activeRooms.length})`;
+      }
+      if (archivedBtn) {
+        archivedBtn.classList.toggle("active", supportInboxTab === "archived");
+        archivedBtn.textContent = `Arquivadas (${archivedRooms.length})`;
+      }
+    }
+
+    if (!visibleRooms.length) {
+      list.innerHTML = supportInboxTab === "archived"
+        ? `<div class="tw-inbox-empty">Nenhuma conversa arquivada.</div>`
+        : `<div class="tw-inbox-empty">Nenhuma conversa encontrada.</div>`;
       return;
     }
 
-    list.innerHTML = rooms.map((room) => {
+    list.innerHTML = visibleRooms.map((room) => {
       const roomId = String(room?.id || "");
       const name = escapeHtml(String(room?.name || "Sala"));
       const preview = escapeHtml(String(room?.lastMessagePreview || "Sem mensagens"));
       const avatar = String(room?.avatar || "").trim();
       const unread = Number(room?.unreadCount || 0);
       const active = String(roomId) === String(config.roomId || "");
+      const isArchived = archivedRoomIds.has(roomId);
       const avatarHtml = avatar
         ? `<img src="${escapeAttr(resolveMediaUrl(avatar))}" alt="${name}">`
         : `<span>${escapeHtml(String(name).charAt(0).toUpperCase() || "U")}</span>`;
@@ -1105,6 +1272,9 @@
             <p class="tw-inbox-preview">${preview}</p>
           </div>
           ${unread > 0 ? `<div class="tw-inbox-unread">${escapeHtml(String(unread > 99 ? "99+" : unread))}</div>` : ""}
+          <div class="tw-inbox-actions">
+            <span class="tw-inbox-archive" data-room-id="${escapeAttr(roomId)}" data-archived="${isArchived ? "true" : "false"}">${isArchived ? "Desarquivar" : "Arquivar"}</span>
+          </div>
         </button>
       `;
     }).join("");
@@ -1122,7 +1292,13 @@
     }
     const data = await response.json().catch(() => ({}));
     if (!data || data.success !== true) return;
-    renderSupportInbox(Array.isArray(data.rooms) ? data.rooms : []);
+    const rooms = Array.isArray(data.rooms) ? data.rooms : [];
+    const known = new Set(rooms.map((room) => String(room?.id || "")).filter(Boolean));
+    Array.from(archivedRoomIds).forEach((id) => {
+      if (!known.has(id)) archivedRoomIds.delete(id);
+    });
+    persistArchivedRooms();
+    renderSupportInbox(rooms);
   }
 
   async function switchToRoom(nextRoomId, nextRoomName = "") {

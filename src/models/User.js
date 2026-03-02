@@ -34,6 +34,17 @@ class User {
     return UserModel.findAll({ raw: true });
   }
 
+  static async findByIds(ids = []) {
+    const normalized = Array.isArray(ids)
+      ? ids.map((id) => String(id || '').trim()).filter(Boolean)
+      : [];
+    if (!normalized.length) return [];
+    return UserModel.findAll({
+      where: { id: { [Op.in]: normalized } },
+      raw: true
+    });
+  }
+
   static async updateStatus(userId, status) {
     const [changes] = await UserModel.update(
       { status },

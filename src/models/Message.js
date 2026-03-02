@@ -81,6 +81,40 @@ class Message {
       .reverse();
   }
 
+  static async findByRoomIdBefore(roomId, before, limit = 50) {
+    const beforeDate = new Date(before);
+    if (Number.isNaN(beforeDate.getTime())) {
+      return this.findByRoomId(roomId, limit);
+    }
+
+    const rows = await MessageModel.findAll({
+      where: {
+        room_id: roomId,
+        created_at: { [Op.lt]: beforeDate }
+      },
+      include: [{ model: UserModel, as: 'sender', attributes: ['name', 'avatar', 'role'] }],
+      order: [['created_at', 'DESC']],
+      limit: Number(limit)
+    });
+
+    return rows
+      .map((row) => {
+        const plain = row.get({ plain: true });
+        return {
+          ...plain,
+          name: plain.sender?.name || null,
+          avatar: plain.sender?.avatar || null,
+          sender_role: plain.sender?.role || null,
+          is_ai: String(plain.sender?.role || '').toLowerCase() === 'system',
+          feedback_value: plain.feedback_value || null,
+          feedback_at: plain.feedback_at || null,
+          feedback_by: plain.feedback_by || null,
+          actions: this.parseActions(plain.actions)
+        };
+      })
+      .reverse();
+  }
+
   static async setFeedback({ messageId, value, userId }) {
     const normalized = String(value || '').toLowerCase();
     if (!['up', 'down'].includes(normalized)) {

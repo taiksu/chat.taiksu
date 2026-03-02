@@ -168,6 +168,18 @@ class ChatController {
       merged.set(id, room);
     });
 
+    const ownerIds = Array.from(
+      new Set(
+        Array.from(merged.values())
+          .map((room) => String(room?.owner_id || '').trim())
+          .filter(Boolean)
+      )
+    );
+    const owners = ownerIds.length ? await User.findByIds(ownerIds) : [];
+    const ownerAvatarById = new Map(
+      (owners || []).map((user) => [String(user?.id || ''), String(user?.avatar || '')])
+    );
+
     const items = await Promise.all(Array.from(merged.values()).map(async (room) => {
       const [messages, unreadCount] = await Promise.all([
         Message.findByRoomId(room.id, 1),
@@ -175,10 +187,11 @@ class ChatController {
       ]);
       const lastMessage = Array.isArray(messages) && messages.length ? messages[messages.length - 1] : null;
       const updatedAt = lastMessage?.created_at || room.updated_at || room.created_at || null;
+      const ownerAvatar = ownerAvatarById.get(String(room?.owner_id || '')) || '';
       return {
         id: String(room.id || ''),
         name: String(room.name || 'Sala'),
-        avatar: String(lastMessage?.avatar || ''),
+        avatar: ownerAvatar,
         unreadCount: Number(unreadCount || 0),
         lastMessagePreview: this.summarizeMessagePreview(lastMessage),
         updatedAt,

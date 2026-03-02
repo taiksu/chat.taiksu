@@ -1669,7 +1669,10 @@ class MessageController {
     try {
       const { roomId } = req.params;
       const limit = parseInt(req.query.limit) || 50;
-      const messages = await Message.findByRoomId(roomId, limit);
+      const before = String(req.query.before || '').trim();
+      const messages = before
+        ? await Message.findByRoomIdBefore(roomId, before, limit)
+        : await Message.findByRoomId(roomId, limit);
       res.json(messages);
     } catch (error) {
       res.status(500).json({ error: error.message });
