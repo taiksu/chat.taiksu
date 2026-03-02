@@ -421,16 +421,18 @@
       .tw-inbox-archive {
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         border: 1px solid #cbd5e1;
         border-radius: 9999px;
         background: #fff;
         color: #475569;
-        font-size: 10px;
-        font-weight: 700;
-        padding: 4px 8px;
+        width: 28px;
+        height: 28px;
+        padding: 0;
         cursor: pointer;
       }
       .tw-inbox-archive:hover { background: #f1f5f9; }
+      .tw-inbox-archive svg { width: 14px; height: 14px; display: block; }
       .tw-inbox-empty { padding: 20px 16px; font-size: 12px; color: #64748b; }
       .tw-support-dock:not(.expanded) .tw-inbox-empty { display: none; }
 
@@ -945,6 +947,17 @@
         const nextRoomId = String(roomBtn.getAttribute("data-room-id") || "");
         const nextRoomName = String(roomBtn.getAttribute("data-room-name") || "");
         switchToRoom(nextRoomId, nextRoomName).catch(() => {});
+      });
+      inboxList.addEventListener("keydown", (event) => {
+        const key = String(event.key || "");
+        if (key !== "Enter" && key !== " ") return;
+        const archiveBtn = event.target && event.target.closest(".tw-inbox-archive");
+        if (!archiveBtn) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const roomId = String(archiveBtn.getAttribute("data-room-id") || "");
+        const archived = String(archiveBtn.getAttribute("data-archived") || "false") === "true";
+        toggleRoomArchived(roomId, !archived).catch(() => {});
       });
     }
 
@@ -1516,6 +1529,10 @@
       const unread = Number(room?.unreadCount || 0);
       const active = String(roomId) === String(config.roomId || "");
       const isArchived = archivedRoomIds.has(roomId);
+      const archiveLabel = isArchived ? "Desarquivar conversa" : "Arquivar conversa";
+      const archiveIcon = isArchived
+        ? `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.708" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M3 4v5h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+        : `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 7h18l-1.5 3v8a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2v-8L3 7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
       const avatarHtml = avatar
         ? `<img src="${escapeAttr(resolveMediaUrl(avatar))}" alt="${name}">`
         : `<span>${escapeHtml(String(name).charAt(0).toUpperCase() || "U")}</span>`;
@@ -1528,7 +1545,7 @@
           </div>
           ${unread > 0 ? `<div class="tw-inbox-unread">${escapeHtml(String(unread > 99 ? "99+" : unread))}</div>` : ""}
           <div class="tw-inbox-actions">
-            <span class="tw-inbox-archive" data-room-id="${escapeAttr(roomId)}" data-archived="${isArchived ? "true" : "false"}">${isArchived ? "Desarquivar" : "Arquivar"}</span>
+            <span class="tw-inbox-archive" role="button" tabindex="0" title="${archiveLabel}" aria-label="${archiveLabel}" data-room-id="${escapeAttr(roomId)}" data-archived="${isArchived ? "true" : "false"}">${archiveIcon}</span>
           </div>
         </button>
       `;
