@@ -1066,7 +1066,7 @@
     supportInboxExpanded = false;
     supportInboxTab = "active";
     supportInboxRoomsCache = [];
-    config.position = normalizePosition(config.position);
+    config.position = "bottom-right";
     config.mode = normalizeMode(config.mode);
     localUserName = String(config.userName || "").trim();
     selfAliases.clear();

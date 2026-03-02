@@ -1772,13 +1772,19 @@ class MessageController {
       global.sseClients[roomId] = [];
     }
 
-    // Headers para SSE
-    res.writeHead(200, {
+    // Headers para SSE (CORS com credenciais exige origem explicita, nunca '*')
+    const origin = String(req.headers?.origin || '').trim();
+    const headers = {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*'
-    });
+      'Connection': 'keep-alive'
+    };
+    if (origin) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Access-Control-Allow-Credentials'] = 'true';
+      headers.Vary = 'Origin';
+    }
+    res.writeHead(200, headers);
 
     res.write(':heartbeat\n\n');
     global.sseClients[roomId].push(res);
