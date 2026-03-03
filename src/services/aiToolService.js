@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const { URL } = require('url');
-const { AiToolModel, AiToolRunModel } = require('../models/sequelize-models');
+const { sequelize, AiToolModel, AiToolRunModel } = require('../models/sequelize-models');
 
 class AIToolService {
   normalizeMethod(method) {
@@ -243,9 +243,20 @@ class AIToolService {
   }
 
   async deleteTool(id) {
-    const row = await AiToolModel.findByPk(String(id || ''));
+    const toolId = String(id || '').trim();
+    if (!toolId) return false;
+    const row = await AiToolModel.findByPk(toolId);
     if (!row) return false;
-    await row.destroy();
+
+    await sequelize.transaction(async (transaction) => {
+      // Limpa historico de execucoes da ferramenta antes de remover o contrato principal
+      // para evitar violacao de FK (ai_tool_runs.tool_id -> ai_tools.id).
+      await AiToolRunModel.destroy({
+        where: { tool_id: toolId },
+        transaction
+      });
+      await row.destroy({ transaction });
+    });
     return true;
   }
 
@@ -276,7 +287,7 @@ class AIToolService {
   }
 
   async saveToolRun(input = {}) {
-    const created = await AiToolRunModel.create({
+    const payload = {
       id: uuidv4(),
       tool_id: String(input.toolId || ''),
       room_id: input.roomId ? String(input.roomId) : null,
@@ -288,15 +299,34 @@ class AIToolService {
       response_body: input.responseBody !== undefined ? JSON.stringify(input.responseBody) : null,
       error_message: input.errorMessage ? String(input.errorMessage) : null,
       latency_ms: input.latencyMs !== undefined ? Number(input.latencyMs) : null
-    });
-    return created;
+    };
+
+    try {
+      return await AiToolRunModel.create(payload);
+    } catch (error) {
+      const message = String(error?.message || '').toLowerCase();
+      if (!/foreign key|constraint/i.test(message)) throw error;
+      return AiToolRunModel.create({
+        ...payload,
+        room_id: null,
+        actor_id: null
+      });
+    }
+  }
+
+  async safeSaveToolRun(input = {}) {
+    try {
+      await this.saveToolRun(input);
+    } catch (_err) {
+      // Falha de auditoria nao pode quebrar o fluxo de execucao da ferramenta.
+    }
   }
 
   async runTool(tool, args = {}, context = {}) {
     const startedAt = Date.now();
     const validate = this.validateArgsWithSchema(args, tool.inputSchema || {});
     if (!validate.valid) {
-      await this.saveToolRun({
+      await this.safeSaveToolRun({
         toolId: tool.id,
         roomId: context.roomId,
         actorId: context.actorId,
@@ -343,7 +373,7 @@ class AIToolService {
       const rawText = await response.text();
       const parsedBody = this.safeParseJson(rawText, rawText);
 
-      await this.saveToolRun({
+      await this.safeSaveToolRun({
         toolId: tool.id,
         roomId: context.roomId,
         actorId: context.actorId,
@@ -375,7 +405,7 @@ class AIToolService {
         data: parsedBody
       };
     } catch (error) {
-      await this.saveToolRun({
+      await this.safeSaveToolRun({
         toolId: tool.id,
         roomId: context.roomId,
         actorId: context.actorId,

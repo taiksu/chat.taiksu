@@ -29,7 +29,7 @@ Entregas relacionadas:
 
 - Integracao de API de IA para primeiro contato (`/api/ai/first-contact`).
 - Estrategia de provedores com ordem configuravel:
-  - `AI_PROVIDER_ORDER=ollama,gemini` (ou ordem invertida por ambiente).
+  - `AI_PROVIDER_ORDER=ollama`.
 - Fallback automatico:
   - Falha no provedor primario -> tenta secundario.
   - Falha geral -> encaminha para humano.

@@ -36,6 +36,11 @@ class SettingsController {
 
   async listAiModels(req, res) {
     if (!this.isAdmin(req)) return this.deny(res);
+    const fetchMode = String(req.headers['sec-fetch-mode'] || '').toLowerCase();
+    const requestedWith = String(req.headers['x-requested-with'] || '').toLowerCase();
+    if (fetchMode === 'navigate' && requestedWith !== 'xmlhttprequest') {
+      return res.redirect('/dashboard/settings');
+    }
     try {
       const catalog = await AIController.listAvailableModels();
       return res.json({ success: true, ...catalog });
@@ -54,6 +59,10 @@ class SettingsController {
       const tokenToSave = informedToken === undefined
         ? (String(current.alertEmailToken || '').trim() ? undefined : (sessionToken || undefined))
         : (informedToken || sessionToken || undefined);
+      const informedOllamaToken = body.ollamaApiToken !== undefined ? String(body.ollamaApiToken || '').trim() : undefined;
+      const ollamaTokenToSave = informedOllamaToken === undefined
+        ? undefined
+        : informedOllamaToken;
       const next = await settingsService.save({
         aiAttendantEnabled: body.aiAttendantEnabled,
         aiAllowAdminChat: body.aiAllowAdminChat,
@@ -68,6 +77,7 @@ class SettingsController {
         aiPreferredProvider: body.aiPreferredProvider,
         aiPreferredModel: body.aiPreferredModel,
         aiCustomModels: body.aiCustomModels,
+        ollamaApiToken: ollamaTokenToSave,
         kbAutoPublishEnabled: body.kbAutoPublishEnabled,
         alertEmailEnabled: body.alertEmailEnabled,
         alertEmailApiUrl: body.alertEmailApiUrl,
@@ -145,6 +155,36 @@ class SettingsController {
     } catch (error) {
       return res.status(502).json({ error: error.message || 'Falha ao testar prompt' });
     }
+  }
+
+  async rotateOllamaToken(req, res) {
+    if (!this.isAdmin(req)) return this.deny(res);
+    try {
+      const rotated = await settingsService.rotateOllamaToken({
+        actorId: String(req.session?.user?.id || ''),
+        actorName: String(req.session?.user?.name || ''),
+        source: 'settings-page',
+        ip: String(req.headers['x-forwarded-for'] || req.socket?.remoteAddress || ''),
+        userAgent: String(req.headers['user-agent'] || '')
+      });
+      return res.json({
+        success: true,
+        token: rotated.token,
+        audit: rotated.audit,
+        recent: settingsService.loadOllamaTokenAudit(10)
+      });
+    } catch (error) {
+      return res.status(500).json({ error: error.message || 'Falha ao rotacionar token Ollama' });
+    }
+  }
+
+  getOllamaTokenAudit(req, res) {
+    if (!this.isAdmin(req)) return this.deny(res);
+    const limit = Number(req.query?.limit || 10);
+    return res.json({
+      success: true,
+      items: settingsService.loadOllamaTokenAudit(limit)
+    });
   }
 }
 

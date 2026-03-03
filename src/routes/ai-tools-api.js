@@ -5,6 +5,7 @@ const AIToolsController = require('../controllers/AIToolsController');
 const router = express.Router();
 
 router.get('/', requireApiAuth, AIToolsController.list.bind(AIToolsController));
+router.post('/import-openapi', requireApiAuth, AIToolsController.importOpenApi.bind(AIToolsController));
 router.post('/', requireApiAuth, AIToolsController.create.bind(AIToolsController));
 router.put('/:id', requireApiAuth, AIToolsController.update.bind(AIToolsController));
 router.delete('/:id', requireApiAuth, AIToolsController.remove.bind(AIToolsController));

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { AppSettingModel } = require('../models/sequelize-models');
 
 const SETTINGS_DB_ID = 'global';
@@ -16,7 +17,7 @@ class SettingsService {
   }
 
   getAllowedProviders() {
-    return ['ollama', 'gemini'];
+    return ['ollama'];
   }
 
   normalizeProvider(value, fallback = 'ollama') {
@@ -25,17 +26,14 @@ class SettingsService {
   }
 
   getDefaultProvider() {
-    const ordered = String(process.env.AI_PROVIDER_ORDER || 'ollama,gemini')
+    const ordered = String(process.env.AI_PROVIDER_ORDER || 'ollama')
       .split(',')
       .map((item) => this.normalizeProvider(item, ''))
       .filter(Boolean);
     return ordered[0] || 'ollama';
   }
 
-  getDefaultModelByProvider(provider) {
-    if (provider === 'gemini') {
-      return String(process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
-    }
+  getDefaultModelByProvider(_provider) {
     return String(process.env.OLLAMA_MODEL || process.env.ollama_MODEL || 'gemma3:1b').trim();
   }
 
@@ -64,6 +62,7 @@ class SettingsService {
         || this.getDefaultModelByProvider(preferredProvider)
       ).trim(),
       aiCustomModels: this.parseCustomModels(process.env.AI_CUSTOM_MODELS || ''),
+      ollamaApiToken: String(process.env.OLLAMA_API_TOKEN || '').trim(),
       kbAutoPublishEnabled: String(process.env.KB_AUTO_PUBLISH_ENABLED || 'false').toLowerCase() === 'true',
       alertEmailEnabled: String(process.env.ALERT_EMAIL_ENABLED || 'false').toLowerCase() === 'true',
       alertEmailApiUrl: String(process.env.ALERT_EMAIL_API_URL || 'https://email.taiksu.com.br/api/email/send').trim(),
@@ -132,6 +131,74 @@ class SettingsService {
   ensureDir() {
     const dir = path.dirname(this.filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  }
+
+  getOllamaTokenAuditPath() {
+    return path.join(this.dataDir, 'ollama-token-audit.json');
+  }
+
+  loadOllamaTokenAudit(limit = 20) {
+    this.ensureDir();
+    const filePath = this.getOllamaTokenAuditPath();
+    if (!fs.existsSync(filePath)) return [];
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const parsed = JSON.parse(raw || '[]');
+      const items = Array.isArray(parsed) ? parsed : [];
+      const normalized = items
+        .filter((entry) => entry && typeof entry === 'object')
+        .map((entry) => ({
+          id: String(entry.id || ''),
+          timestamp: String(entry.timestamp || ''),
+          action: String(entry.action || ''),
+          actorId: String(entry.actorId || ''),
+          actorName: String(entry.actorName || ''),
+          source: String(entry.source || ''),
+          ip: String(entry.ip || ''),
+          userAgent: String(entry.userAgent || '')
+        }))
+        .filter((entry) => entry.timestamp);
+      return normalized
+        .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)))
+        .slice(0, Math.max(1, Number(limit) || 20));
+    } catch (_err) {
+      return [];
+    }
+  }
+
+  appendOllamaTokenAudit(entry) {
+    this.ensureDir();
+    const filePath = this.getOllamaTokenAuditPath();
+    let current = [];
+    if (fs.existsSync(filePath)) {
+      try {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const parsed = JSON.parse(raw || '[]');
+        current = Array.isArray(parsed) ? parsed : [];
+      } catch (_err) {
+        current = [];
+      }
+    }
+    const next = [entry, ...current].slice(0, 200);
+    fs.writeFileSync(filePath, JSON.stringify(next, null, 2), 'utf-8');
+    return next;
+  }
+
+  async rotateOllamaToken(meta = {}) {
+    const token = crypto.randomBytes(32).toString('hex');
+    await this.save({ ollamaApiToken: token });
+    const entry = {
+      id: `tok_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+      timestamp: new Date().toISOString(),
+      action: 'rotate_ollama_api_token',
+      actorId: String(meta.actorId || ''),
+      actorName: String(meta.actorName || ''),
+      source: String(meta.source || 'settings-panel'),
+      ip: String(meta.ip || ''),
+      userAgent: String(meta.userAgent || '')
+    };
+    this.appendOllamaTokenAudit(entry);
+    return { token, audit: entry };
   }
 
   load() {
@@ -244,6 +311,9 @@ class SettingsService {
       aiCustomModels: input.aiCustomModels !== undefined
         ? this.parseCustomModels(input.aiCustomModels)
         : this.parseCustomModels(current.aiCustomModels || []),
+      ollamaApiToken: input.ollamaApiToken !== undefined
+        ? String(input.ollamaApiToken || '').trim()
+        : String(current.ollamaApiToken || '').trim(),
       kbAutoPublishEnabled: input.kbAutoPublishEnabled !== undefined
         ? Boolean(input.kbAutoPublishEnabled)
         : current.kbAutoPublishEnabled,
@@ -285,6 +355,7 @@ class SettingsService {
       aiPreferredModel: String(current.aiPreferredModel || '').trim()
         || this.getDefaultModelByProvider(this.normalizeProvider(current.aiPreferredProvider, this.getDefaultProvider())),
       aiCustomModels: this.parseCustomModels(current.aiCustomModels || []),
+      hasOllamaApiToken: Boolean(String(current.ollamaApiToken || '').trim()),
       kbAutoPublishEnabled: Boolean(current.kbAutoPublishEnabled),
       alertEmailEnabled: Boolean(current.alertEmailEnabled),
       alertEmailApiUrl: String(current.alertEmailApiUrl || ''),

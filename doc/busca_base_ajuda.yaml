@@ -1,0 +1,272 @@
+openapi: 3.0.3
+info:
+  title: API - Base de Conhecimento (Pesquisa de Artigos)
+  version: "1.0.2"
+  description: API para pesquisa textual de artigos da base de conhecimento.
+
+servers:
+  - url: https://ajuda.taiksu.com.br
+
+tags:
+  - name: Base de Conhecimento
+
+paths:
+  /api/v1/base-conhecimento/artigos/pesquisa:
+    post:
+      tags:
+        - Base de Conhecimento
+      summary: Pesquisar artigos
+      description: Retorna artigos relevantes com paginação e score de relevância.
+      operationId: pesquisarArtigos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PesquisaArtigosRequest"
+            examples:
+              minimo:
+                value:
+                  consulta: "Caixa"
+              completo:
+                value:
+                  consulta: "erro de login no portal"
+                  idioma: "pt-BR"
+                  categorias:
+                    - "Acesso"
+                  tags:
+                    - "login"
+                  status: "publicado"
+                  pagina: 1
+                  limite: 10
+                  ordenar_por: "relevancia"
+                  incluir_trechos: true
+      responses:
+        "200":
+          description: Resultado da pesquisa
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PesquisaArtigosResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /api/v1/base-conhecimento/artigos/{artigo_id}:
+    get:
+      tags:
+        - Base de Conhecimento
+      summary: Obter artigo por ID
+      operationId: obterArtigoPorId
+      parameters:
+        - name: artigo_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Artigo encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtigoDetalheResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+components:
+  schemas:
+    PesquisaArtigosRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - consulta
+      properties:
+        consulta:
+          type: string
+          minLength: 2
+          maxLength: 500
+          example: redefinir senha do email
+        idioma:
+          type: string
+          default: pt-BR
+          example: pt-BR
+        categorias:
+          type: array
+          description: Filtro por nome exato da categoria
+          default: []
+          items:
+            type: string
+            minLength: 1
+          maxItems: 20
+        tags:
+          type: array
+          description: Filtro por nome exato da tag
+          default: []
+          items:
+            type: string
+            minLength: 1
+          maxItems: 20
+        status:
+          type: string
+          enum: [publicado, rascunho]
+          default: publicado
+        pagina:
+          type: integer
+          minimum: 1
+          default: 1
+        limite:
+          type: integer
+          minimum: 1
+          maximum: 50
+          default: 10
+        ordenar_por:
+          type: string
+          enum: [relevancia, atualizacao, titulo]
+          default: relevancia
+        incluir_trechos:
+          type: boolean
+          default: true
+
+    PesquisaArtigosResponse:
+      type: object
+      additionalProperties: false
+      required: [consulta, idioma, pagina, limite, total, resultados]
+      properties:
+        consulta:
+          type: string
+        idioma:
+          type: string
+        pagina:
+          type: integer
+        limite:
+          type: integer
+        total:
+          type: integer
+        resultados:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtigoResumo"
+
+    ArtigoResumo:
+      type: object
+      additionalProperties: false
+      required: [id, titulo, status, score, atualizado_em, link]
+      properties:
+        id:
+          type: string
+          format: uuid
+        titulo:
+          type: string
+        categoria:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [publicado, rascunho]
+        score:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          example: 0.93
+        trecho:
+          type: string
+          description: Trecho relevante para destacar o motivo da correspondência.
+          nullable: true
+        atualizado_em:
+          type: string
+          format: date-time
+        link:
+          type: string
+          format: uri
+
+    ArtigoDetalheResponse:
+      type: object
+      additionalProperties: false
+      required: [id, titulo, conteudo_markdown, status, criado_em, atualizado_em]
+      properties:
+        id:
+          type: string
+          format: uuid
+        titulo:
+          type: string
+        resumo:
+          type: string
+        conteudo_markdown:
+          type: string
+        categoria:
+          type: string
+          nullable: true
+        tags:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+          enum: [publicado, rascunho]
+        autor:
+          type: string
+          nullable: true
+        criado_em:
+          type: string
+          format: date-time
+        atualizado_em:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              issue:
+                type: string
+
+  responses:
+    BadRequest:
+      description: Requisição inválida
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: BAD_REQUEST
+            message: Campo 'consulta' é obrigatório.
+    NotFound:
+      description: Artigo não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: NOT_FOUND
+            message: Artigo não encontrado.
+    InternalServerError:
+      description: Erro interno
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            code: INTERNAL_ERROR
+            message: Erro interno ao processar a solicitação.

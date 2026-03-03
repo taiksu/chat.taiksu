@@ -2087,7 +2087,7 @@
     const time = (templateCore && typeof templateCore.formatTimePtBr === "function") ? templateCore.formatTimePtBr(message.created_at) : new Date(message.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const isRead = Number(message.is_read) === 1;
     
-    // Grouping logic for Gemini v2
+    // Grouping logic for current chat UI
     const messages = container.querySelectorAll(".tw-message");
     const previousMessage = messages.length > 0 ? messages[messages.length - 1] : null;
     let isGrouped = false;

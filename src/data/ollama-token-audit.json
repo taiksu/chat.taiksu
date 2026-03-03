@@ -1,0 +1,22 @@
+[
+  {
+    "id": "tok_1772542807978_987723f7",
+    "timestamp": "2026-03-03T13:00:07.978Z",
+    "action": "rotate_ollama_api_token",
+    "actorId": "user_alice",
+    "actorName": "Alice Dev",
+    "source": "settings-page",
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  },
+  {
+    "id": "tok_1772542361362_e1c7dc26",
+    "timestamp": "2026-03-03T12:52:41.362Z",
+    "action": "rotate_ollama_api_token",
+    "actorId": "user_alice",
+    "actorName": "Alice Dev",
+    "source": "settings-page",
+    "ip": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36"
+  }
+]

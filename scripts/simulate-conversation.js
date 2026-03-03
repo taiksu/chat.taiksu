@@ -53,7 +53,7 @@ async function run() {
       log(`Criando sala de teste: ${roomId}`);
       room = await ChatRoomModel.create({
         id: roomId,
-        name: 'Sala de Teste Gemini v2',
+        name: 'Sala de Teste IA v2',
         type: 'support',
         description: 'Sala gerada pelo script de simulação',
         owner_id: 'system'

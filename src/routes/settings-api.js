@@ -6,6 +6,8 @@ const router = express.Router();
 
 router.get('/', requireApiAuth, SettingsController.getSettings.bind(SettingsController));
 router.get('/ai-models', requireApiAuth, SettingsController.listAiModels.bind(SettingsController));
+router.get('/ollama-token/audit', requireApiAuth, SettingsController.getOllamaTokenAudit.bind(SettingsController));
+router.post('/ollama-token/rotate', requireApiAuth, SettingsController.rotateOllamaToken.bind(SettingsController));
 router.put('/', requireApiAuth, SettingsController.updateSettings.bind(SettingsController));
 router.post('/test-prompt', requireApiAuth, SettingsController.testPrompt.bind(SettingsController));
 

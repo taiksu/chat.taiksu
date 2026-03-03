@@ -17,14 +17,6 @@ class AIController {
     return String(process.env.API_AI_TOKEN || '').trim();
   }
 
-  getGeminiApiKey() {
-    return String(process.env.GEMINI_API_KEY || '').trim();
-  }
-
-  getGeminiModel() {
-    return String(process.env.GEMINI_MODEL || 'gemini-2.5-flash').trim();
-  }
-
   getAiSettings(overrides = {}) {
     const settings = settingsService.load();
     const personality = String(
@@ -56,7 +48,7 @@ class AIController {
   }
 
   getAllowedProviders() {
-    return ['ollama', 'gemini'];
+    return ['ollama'];
   }
 
   normalizeProvider(value, fallback = 'ollama') {
@@ -86,10 +78,13 @@ class AIController {
       return settingsModel;
     }
 
-    return normalizedProvider === 'gemini' ? this.getGeminiModel() : this.getOllamaModel();
+    return this.getOllamaModel();
   }
 
   getOllamaApiToken() {
+    const settings = settingsService.load();
+    const fromSettings = String(settings?.ollamaApiToken || '').trim();
+    if (fromSettings) return fromSettings;
     return String(process.env.OLLAMA_API_TOKEN || '').trim();
   }
 
@@ -109,7 +104,7 @@ class AIController {
   }
 
   getProviderOrderFromEnv() {
-    const raw = String(process.env.AI_PROVIDER_ORDER || 'ollama,gemini')
+    const raw = String(process.env.AI_PROVIDER_ORDER || 'ollama')
       .split(',')
       .map((item) => String(item || '').trim().toLowerCase())
       .filter(Boolean);
@@ -169,6 +164,10 @@ class AIController {
     }
     if (/(auditoria|modo-estrito|modo-restrito)/.test(slug)) {
       ['auditoria', 'restrito', 'estrito', 'caixa'].forEach((item) => keywords.add(item));
+    }
+    if (/(pesquis|busca|buscar|artigo|knowledge|base-conhecimento|kb)/.test(slug)) {
+      ['pesquisar', 'pesquisa', 'pesquise', 'buscar', 'busca', 'artigo', 'artigos', 'base', 'conhecimento']
+        .forEach((item) => keywords.add(item));
     }
 
     const message = this.normalizeText(payload?.message || '');
@@ -434,26 +433,6 @@ class AIController {
     ].join('\n\n');
   }
 
-  extractTextFromGeminiResponse(data) {
-    const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
-    if (!candidates.length) return '';
-    const parts = Array.isArray(candidates[0]?.content?.parts) ? candidates[0].content.parts : [];
-    return parts
-      .map((part) => String(part?.text || '').trim())
-      .filter(Boolean)
-      .join('\n')
-      .trim();
-  }
-
-  extractUsageFromGemini(data) {
-    const usage = data?.usageMetadata || {};
-    return {
-      promptTokens: Number(usage.promptTokenCount || 0),
-      completionTokens: Number(usage.candidatesTokenCount || 0),
-      totalTokens: Number(usage.totalTokenCount || 0)
-    };
-  }
-
   extractTextFromOllama(data) {
     if (typeof data?.response === 'string') return data.response.trim();
     if (typeof data?.message?.content === 'string') return data.message.content.trim();
@@ -486,27 +465,6 @@ class AIController {
       .filter(Boolean);
   }
 
-  async listGeminiModels() {
-    const apiKey = this.getGeminiApiKey();
-    if (!apiKey) return [];
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
-      { method: 'GET' }
-    );
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(`gemini_http_${response.status}:${data?.error?.message || 'unknown'}`);
-    }
-
-    const models = Array.isArray(data?.models) ? data.models : [];
-    return models
-      .filter((item) => Array.isArray(item?.supportedGenerationMethods)
-        && item.supportedGenerationMethods.includes('generateContent'))
-      .map((item) => String(item?.name || '').trim().replace(/^models\//i, ''))
-      .filter(Boolean);
-  }
-
   getConfiguredCustomModels() {
     const settings = settingsService.load();
     const raw = Array.isArray(settings.aiCustomModels) ? settings.aiCustomModels : [];
@@ -529,10 +487,7 @@ class AIController {
     const preferredModel = this.getModelForProvider(preferredProvider, overrides);
     const providers = this.getAllowedProviders();
     const custom = this.getConfiguredCustomModels();
-    const byProvider = {
-      ollama: [],
-      gemini: []
-    };
+    const byProvider = { ollama: [] };
     const errors = {};
 
     for (const item of custom) {
@@ -546,15 +501,8 @@ class AIController {
       errors.ollama = error.message;
     }
 
-    try {
-      const geminiModels = await this.listGeminiModels();
-      byProvider.gemini.push(...geminiModels);
-    } catch (error) {
-      errors.gemini = error.message;
-    }
-
     providers.forEach((provider) => {
-      const fallbackModel = provider === 'gemini' ? this.getGeminiModel() : this.getOllamaModel();
+      const fallbackModel = this.getOllamaModel();
       byProvider[provider].push(fallbackModel);
       if (provider === preferredProvider) byProvider[provider].push(preferredModel);
       byProvider[provider] = Array.from(new Set(byProvider[provider].filter(Boolean)));
@@ -571,43 +519,6 @@ class AIController {
         model: preferredModel
       },
       providerOrder: this.getProviderOrder(overrides)
-    };
-  }
-
-  async callGemini({ userPrompt, systemInstruction, overrides = {} }) {
-    const apiKey = this.getGeminiApiKey();
-    if (!apiKey) throw new Error('missing_gemini_api_key');
-
-    const model = this.getModelForProvider('gemini', overrides);
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-          generationConfig: {
-            temperature: this.getTemperature(0.25, overrides),
-            maxOutputTokens: this.getMaxOutputTokens(280, overrides)
-          }
-        })
-      }
-    );
-
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(`gemini_http_${response.status}:${data?.error?.message || 'unknown'}`);
-    }
-
-    const reply = this.sanitizeReplyText(this.extractTextFromGeminiResponse(data), overrides);
-    if (!reply) throw new Error('gemini_empty_reply');
-
-    return {
-      provider: 'gemini',
-      model,
-      reply,
-      usage: this.extractUsageFromGemini(data)
     };
   }
 
@@ -654,9 +565,10 @@ class AIController {
     for (const provider of providers) {
       const startedAt = Date.now();
       try {
-        const result = provider === 'ollama'
-          ? await this.callOllama({ userPrompt, systemInstruction, overrides })
-          : await this.callGemini({ userPrompt, systemInstruction, overrides });
+        if (provider !== 'ollama') {
+          throw new Error(`provider_not_supported:${provider}`);
+        }
+        const result = await this.callOllama({ userPrompt, systemInstruction, overrides });
 
         this.logAiMetric('provider_success', {
           provider,
