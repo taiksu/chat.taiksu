@@ -147,11 +147,12 @@ class MessageController {
 
   getTranscriptionSettings() {
     const settings = settingsService.load();
+    const enabled = Boolean(settings.aiAudioTranscriptionEnabled);
     const provider = String(settings.aiTranscriptionProvider || settings.aiPreferredProvider || 'ollama')
       .trim()
       .toLowerCase() || 'ollama';
     const model = String(settings.aiTranscriptionModel || '').trim();
-    return { provider, model };
+    return { enabled, provider, model };
   }
 
   buildOllamaAuthHeaders() {
@@ -1965,6 +1966,11 @@ class MessageController {
       }
 
       const transcriptionCfg = this.getTranscriptionSettings();
+      if (!transcriptionCfg.enabled) {
+        return res.status(403).json({
+          error: 'Transcricao de audio desativada pelo administrador.'
+        });
+      }
       if (!transcriptionCfg.model) {
         return res.status(400).json({
           error: 'Modelo de transcricao nao configurado. Defina em IA > Agente > Modelo de transcricao.'

@@ -70,6 +70,7 @@ class SettingsService {
         || process.env.OLLAMA_STT_MODEL
         || ''
       ).trim(),
+      aiAudioTranscriptionEnabled: String(process.env.AI_AUDIO_TRANSCRIPTION_ENABLED || 'false').toLowerCase() === 'true',
       aiCustomModels: this.parseCustomModels(process.env.AI_CUSTOM_MODELS || ''),
       ollamaApiToken: String(process.env.OLLAMA_API_TOKEN || '').trim(),
       kbAutoPublishEnabled: String(process.env.KB_AUTO_PUBLISH_ENABLED || 'false').toLowerCase() === 'true',
@@ -323,6 +324,9 @@ class SettingsService {
       aiTranscriptionModel: input.aiTranscriptionModel !== undefined
         ? String(input.aiTranscriptionModel || '').trim()
         : String(current.aiTranscriptionModel || '').trim(),
+      aiAudioTranscriptionEnabled: input.aiAudioTranscriptionEnabled !== undefined
+        ? Boolean(input.aiAudioTranscriptionEnabled)
+        : Boolean(current.aiAudioTranscriptionEnabled),
       aiCustomModels: input.aiCustomModels !== undefined
         ? this.parseCustomModels(input.aiCustomModels)
         : this.parseCustomModels(current.aiCustomModels || []),
@@ -374,6 +378,7 @@ class SettingsService {
         this.normalizeProvider(current.aiPreferredProvider, this.getDefaultProvider())
       ),
       aiTranscriptionModel: String(current.aiTranscriptionModel || '').trim(),
+      aiAudioTranscriptionEnabled: Boolean(current.aiAudioTranscriptionEnabled),
       aiCustomModels: this.parseCustomModels(current.aiCustomModels || []),
       hasOllamaApiToken: Boolean(String(current.ollamaApiToken || '').trim()),
       kbAutoPublishEnabled: Boolean(current.kbAutoPublishEnabled),

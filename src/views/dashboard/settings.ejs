@@ -206,6 +206,16 @@
                 </select>
               </label>
               <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Transcricao de audio</span>
+                <div class="switch-row">
+                  <span class="text-xs font-semibold text-slate-700">Ativar no widget</span>
+                  <span class="switch-control">
+                    <input id="aiAudioTranscriptionEnabled" type="checkbox" <%= settings.aiAudioTranscriptionEnabled ? 'checked' : '' %>>
+                    <span class="switch-track"></span>
+                  </span>
+                </div>
+              </label>
+              <label class="text-sm">
                 <span class="mb-1 block font-semibold text-gray-600">Modelo de transcricao</span>
                 <select id="aiTranscriptionModel" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
                   <option value="<%= settings.aiTranscriptionModel %>" selected><%= settings.aiTranscriptionModel || 'Selecione um modelo STT' %></option>
@@ -550,6 +560,7 @@
         aiPreferredModel: modelEl.value || '',
         aiTranscriptionProvider: transcriptionProviderEl.value || 'ollama',
         aiTranscriptionModel: transcriptionModelEl.value || '',
+        aiAudioTranscriptionEnabled: document.getElementById('aiAudioTranscriptionEnabled').checked,
         aiCustomModels: document.getElementById('aiCustomModels').value || '',
         kbAutoPublishEnabled: document.getElementById('kbAutoPublishEnabled').checked,
         alertEmailEnabled: document.getElementById('alertEmailEnabled').checked,

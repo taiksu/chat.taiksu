@@ -78,6 +78,7 @@ class SettingsController {
         aiPreferredModel: body.aiPreferredModel,
         aiTranscriptionProvider: body.aiTranscriptionProvider,
         aiTranscriptionModel: body.aiTranscriptionModel,
+        aiAudioTranscriptionEnabled: body.aiAudioTranscriptionEnabled,
         aiCustomModels: body.aiCustomModels,
         ollamaApiToken: ollamaTokenToSave,
         kbAutoPublishEnabled: body.kbAutoPublishEnabled,
