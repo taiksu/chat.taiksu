@@ -2881,6 +2881,72 @@
     });
   }
 
+  function pcmTo16Bit(value) {
+    const clamped = Math.max(-1, Math.min(1, Number(value) || 0));
+    return clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+  }
+
+  function audioBufferToWavBlob(audioBuffer) {
+    const numChannels = Math.max(1, Number(audioBuffer.numberOfChannels || 1));
+    const sampleRate = Math.max(8000, Number(audioBuffer.sampleRate || 44100));
+    const numFrames = Math.max(0, Number(audioBuffer.length || 0));
+    const bytesPerSample = 2; // PCM16
+    const blockAlign = numChannels * bytesPerSample;
+    const dataSize = numFrames * blockAlign;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+
+    function writeString(offset, text) {
+      for (let i = 0; i < text.length; i += 1) {
+        view.setUint8(offset + i, text.charCodeAt(i));
+      }
+    }
+
+    writeString(0, "RIFF");
+    view.setUint32(4, 36 + dataSize, true);
+    writeString(8, "WAVE");
+    writeString(12, "fmt ");
+    view.setUint32(16, 16, true); // PCM chunk size
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, 16, true);
+    writeString(36, "data");
+    view.setUint32(40, dataSize, true);
+
+    const channels = [];
+    for (let c = 0; c < numChannels; c += 1) {
+      channels.push(audioBuffer.getChannelData(c));
+    }
+
+    let offset = 44;
+    for (let i = 0; i < numFrames; i += 1) {
+      for (let c = 0; c < numChannels; c += 1) {
+        view.setInt16(offset, pcmTo16Bit(channels[c][i]), true);
+        offset += 2;
+      }
+    }
+
+    return new Blob([buffer], { type: "audio/wav" });
+  }
+
+  async function convertAudioBlobToWav(blob) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) throw new Error("AudioContext indisponivel");
+    const ctx = new Ctx();
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+      return audioBufferToWavBlob(audioBuffer);
+    } finally {
+      if (typeof ctx.close === "function") {
+        await ctx.close().catch(() => {});
+      }
+    }
+  }
+
   function startRecording() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       showSystemMessage("Seu navegador não suporta gravação de áudio.", "error");
@@ -2908,27 +2974,27 @@
         mediaRecorder.ondataavailable = (e) => {
           if (e.data.size > 0) audioChunks.push(e.data);
         };
-        mediaRecorder.onstop = () => {
-          const blob = new Blob(audioChunks, { type: outputMime });
-          const extMap = {
-            "audio/wav": ".wav",
-            "audio/wave": ".wav",
-            "audio/ogg": ".ogg",
-            "audio/ogg;codecs=opus": ".ogg",
-            "audio/webm": ".webm",
-            "audio/webm;codecs=opus": ".webm"
-          };
-          const normalizedMime = String(outputMime || "").toLowerCase();
-          const ext = extMap[normalizedMime] || (normalizedMime.includes("wav") ? ".wav" : ".webm");
-          const fileMime = normalizedMime || "audio/webm";
-          const file = new File([blob], `audio_message${ext}`, { type: fileMime });
-          sendFile(file, "audio");
-          if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
-          mediaStream = null;
-          mediaRecorder = null;
-          audioChunks = [];
-          updateRecordingUI(false);
-          postTyping(false, "idle");
+        mediaRecorder.onstop = async () => {
+          try {
+            const rawBlob = new Blob(audioChunks, { type: outputMime });
+            let wavBlob = rawBlob;
+            const normalizedMime = String(outputMime || "").toLowerCase();
+            if (!normalizedMime.includes("wav")) {
+              wavBlob = await convertAudioBlobToWav(rawBlob);
+            }
+            const file = new File([wavBlob], "audio_message.wav", { type: "audio/wav" });
+            sendFile(file, "audio");
+          } catch (error) {
+            console.error("TaiksuChat: falha ao converter audio para wav:", error);
+            showSystemMessage("Falha ao converter audio para WAV.", "error");
+          } finally {
+            if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
+            mediaStream = null;
+            mediaRecorder = null;
+            audioChunks = [];
+            updateRecordingUI(false);
+            postTyping(false, "idle");
+          }
         };
         mediaRecorder.start();
         recording = true;
