@@ -11,7 +11,14 @@ const aiLearningLogService = require('../services/aiLearningLogService');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const dns = require('dns');
 const { v4: uuidv4 } = require('uuid');
+let UndiciAgent = null;
+try {
+  ({ Agent: UndiciAgent } = require('undici'));
+} catch (_err) {
+  UndiciAgent = null;
+}
 
 // Configurar multer
 const defaultPublicDir = process.env.PUBLIC_DIR
@@ -43,6 +50,7 @@ function getExtFromMime(mime) {
     'audio/ogg': '.ogg',
     'audio/mpeg': '.mp3',
     'audio/wav': '.wav',
+    'audio/wave': '.wav',
     'audio/x-wav': '.wav',
     'video/mp4': '.mp4',
     'video/webm': '.webm',
@@ -230,6 +238,56 @@ class MessageController {
     return String(settings.aiTranscriptionResponseFormat || process.env.AI_TRANSCRIPTION_RESPONSE_FORMAT || 'json').trim() || 'json';
   }
 
+  parseTranscriptionResolveRule(endpoint) {
+    const raw = String(
+      process.env.AI_TRANSCRIPTION_RESOLVE
+      || process.env.WHISPER_RESOLVE
+      || ''
+    ).trim();
+    if (!raw) return null;
+    try {
+      const parsedEndpoint = new URL(String(endpoint || '').trim());
+      const endpointHost = String(parsedEndpoint.hostname || '').trim().toLowerCase();
+      const endpointPort = Number(parsedEndpoint.port || (parsedEndpoint.protocol === 'https:' ? 443 : 80));
+      if (!endpointHost) return null;
+
+      const triple = raw.match(/^([^:]+):(\d+):([^:]+)$/);
+      if (triple) {
+        const host = String(triple[1] || '').trim().toLowerCase();
+        const port = Number(triple[2] || 0);
+        const ip = String(triple[3] || '').trim();
+        if (!host || !port || !ip) return null;
+        if (host !== endpointHost || port !== endpointPort) return null;
+        return { host, ip };
+      }
+
+      const maybeIp = raw;
+      if (!maybeIp) return null;
+      return { host: endpointHost, ip: maybeIp };
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  getTranscriptionDispatcher(endpoint) {
+    const rule = this.parseTranscriptionResolveRule(endpoint);
+    if (!rule || !UndiciAgent) return null;
+    const insecureTls = String(process.env.AI_TRANSCRIPTION_TLS_INSECURE || 'false').trim().toLowerCase() === 'true';
+    return new UndiciAgent({
+      connect: {
+        ...(insecureTls ? { rejectUnauthorized: false } : {}),
+        lookup(hostname, options, callback) {
+          const safeHost = String(hostname || '').trim().toLowerCase();
+          if (safeHost === String(rule.host || '').trim().toLowerCase()) {
+            callback(null, rule.ip, 4);
+            return;
+          }
+          dns.lookup(hostname, options, callback);
+        }
+      }
+    });
+  }
+
   buildOllamaAuthHeaders() {
     const headers = {};
     const token = String(settingsService.load()?.ollamaApiToken || process.env.OLLAMA_API_TOKEN || '').trim();
@@ -299,12 +357,14 @@ class MessageController {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 90000);
+    const dispatcher = this.getTranscriptionDispatcher(endpoint);
     try {
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: authHeaders,
         body: formData,
-        signal: controller.signal
+        signal: controller.signal,
+        ...(dispatcher ? { dispatcher } : {})
       });
 
       const contentType = String(response.headers.get('content-type') || '').toLowerCase();
@@ -327,6 +387,9 @@ class MessageController {
       return { text: transcript, endpoint };
     } finally {
       clearTimeout(timeout);
+      if (dispatcher && typeof dispatcher.close === 'function') {
+        dispatcher.close().catch(() => {});
+      }
     }
   }
 

@@ -2890,14 +2890,38 @@
       .getUserMedia({ audio: true })
       .then((stream) => {
         mediaStream = stream;
-        mediaRecorder = new MediaRecorder(stream);
+        const preferred = [
+          "audio/wav",
+          "audio/wave",
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/ogg;codecs=opus",
+          "audio/ogg"
+        ];
+        let pickedMime = "";
+        if (typeof MediaRecorder !== "undefined" && typeof MediaRecorder.isTypeSupported === "function") {
+          pickedMime = preferred.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+        }
+        mediaRecorder = pickedMime ? new MediaRecorder(stream, { mimeType: pickedMime }) : new MediaRecorder(stream);
+        const outputMime = String(mediaRecorder.mimeType || pickedMime || "audio/webm;codecs=opus");
         audioChunks = [];
         mediaRecorder.ondataavailable = (e) => {
           if (e.data.size > 0) audioChunks.push(e.data);
         };
         mediaRecorder.onstop = () => {
-          const blob = new Blob(audioChunks, { type: "audio/ogg; codecs=opus" });
-          const file = new File([blob], "audio_message.ogg", { type: "audio/ogg" });
+          const blob = new Blob(audioChunks, { type: outputMime });
+          const extMap = {
+            "audio/wav": ".wav",
+            "audio/wave": ".wav",
+            "audio/ogg": ".ogg",
+            "audio/ogg;codecs=opus": ".ogg",
+            "audio/webm": ".webm",
+            "audio/webm;codecs=opus": ".webm"
+          };
+          const normalizedMime = String(outputMime || "").toLowerCase();
+          const ext = extMap[normalizedMime] || (normalizedMime.includes("wav") ? ".wav" : ".webm");
+          const fileMime = normalizedMime || "audio/webm";
+          const file = new File([blob], `audio_message${ext}`, { type: fileMime });
           sendFile(file, "audio");
           if (mediaStream) mediaStream.getTracks().forEach((t) => t.stop());
           mediaStream = null;
