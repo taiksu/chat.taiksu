@@ -779,14 +779,11 @@
       .tw-transcribe-btn:hover { background: #eef2f7; }
       .tw-transcribe-btn:disabled { opacity: 0.65; cursor: not-allowed; }
       .tw-transcript-box {
-        border: 1px solid #e2e8f0;
-        background: #f8fafc;
-        border-radius: 10px;
         padding: 8px;
-        font-size: 12px;
+        font-size: 11px;
         line-height: 1.4;
         color: #334155;
-        white-space: pre-wrap;
+       
       }
       .tw-transcript-meta { font-size: 10px; font-weight: 700; color: #64748b; margin-bottom: 4px; display: block; }
       .tw-transcript-status { font-size: 11px; color: #475569; }
@@ -2137,7 +2134,6 @@
         ${error ? `<div class="tw-transcript-status error" data-transcribe-status="${escapeAttr(key)}">${escapeHtml(error)}</div>` : ""}
         ${text ? `
           <div class="tw-transcript-box" data-transcribe-text="${escapeAttr(key)}">
-            <span class="tw-transcript-meta">Transcricao</span>
             ${escapeHtml(text)}
           </div>
         ` : ""}
