@@ -61,6 +61,7 @@
   let oldestMessageCursor = "";
   let toggleUnreadCount = 0;
   let reactionsByMessage = new Map();
+  let transcriptionByMessage = new Map();
   let longPressTimer = null;
   let longPressTarget = null;
   let reactionMenuIgnoreCloseUntil = 0;
@@ -760,6 +761,33 @@
       .tw-audio-progress { position: absolute; left: 0; top: 0; height: 100%; background: #075e54; border-radius: 2px; width: 0; }
       .tw-audio-dot { position: absolute; right: -6px; top: -4px; width: 12px; height: 12px; background: #075e54; border-radius: 50%; border: 2px solid white; }
       .tw-audio-time { font-size: 10px; color: #555; }
+      .tw-audio-tools { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+      .tw-transcribe-btn {
+        align-self: flex-start;
+        border: 1px solid #94a3b8;
+        background: #f8fafc;
+        color: #0f172a;
+        border-radius: 9999px;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .tw-transcribe-btn:hover { background: #eef2f7; }
+      .tw-transcribe-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+      .tw-transcript-box {
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        border-radius: 10px;
+        padding: 8px;
+        font-size: 12px;
+        line-height: 1.4;
+        color: #334155;
+        white-space: pre-wrap;
+      }
+      .tw-transcript-meta { font-size: 10px; font-weight: 700; color: #64748b; margin-bottom: 4px; display: block; }
+      .tw-transcript-status { font-size: 11px; color: #475569; }
+      .tw-transcript-status.error { color: #b91c1c; }
 
       @media (max-width: 480px) {
         .tw-root { gap: 0; }
@@ -982,6 +1010,12 @@
           if (messageId && (value === "up" || value === "down")) {
             submitFeedback(messageId, value);
           }
+          return;
+        }
+        const transcribeButton = event.target && event.target.closest(".tw-transcribe-btn");
+        if (transcribeButton) {
+          const messageId = String(transcribeButton.getAttribute("data-message-id") || "");
+          if (messageId) submitTranscription(messageId);
           return;
         }
         const actionButton = event.target && event.target.closest(".tw-msg-action");
@@ -2018,13 +2052,15 @@
     const mediaUrl = resolveMediaUrl(message.file_url);
     if (!mediaUrl) return `Arquivo sem URL`;
     if (message.type === "image") return `<img class="tw-media image" src="${escapeAttr(mediaUrl)}" alt="Imagem" loading="lazy">`;
-    if (message.type === "audio") return buildAudioPlayerHtml(mediaUrl);
+    if (message.type === "audio") return buildAudioPlayerHtml(mediaUrl, message);
     return `<a class="tw-file-link" href="${escapeAttr(mediaUrl)}" download>${ICONS.filePdf} ${escapeHtml(message.filename || "documento.pdf")}</a>`;
   }
 
-  function buildAudioPlayerHtml(mediaUrl) {
+  function buildAudioPlayerHtml(mediaUrl, message) {
+    const messageId = String(message?.id || "").trim();
+    const transcriptHtml = renderAudioTranscriptHtml(messageId);
     return `
-      <div class="tw-audio-player" data-audio-url="${escapeAttr(mediaUrl)}">
+      <div class="tw-audio-player" data-audio-url="${escapeAttr(mediaUrl)}" data-message-id="${escapeAttr(messageId)}">
         <button type="button" class="tw-audio-toggle" aria-label="Reproduzir audio">
           <span class="tw-audio-icon-play" style="display: flex; align-items: center; justify-content: center;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
@@ -2042,8 +2078,84 @@
           <span class="tw-audio-time">00:00</span>
         </div>
         <audio preload="auto" class="tw-native-audio" style="display:none" src="${escapeAttr(mediaUrl)}"></audio>
+        ${transcriptHtml}
       </div>
     `;
+  }
+
+  function getTranscriptionState(messageId) {
+    const key = String(messageId || "").trim();
+    if (!key) return null;
+    return transcriptionByMessage.get(key) || null;
+  }
+
+  function renderAudioTranscriptHtml(messageId) {
+    const key = String(messageId || "").trim();
+    if (!key) return "";
+    const state = getTranscriptionState(key);
+    const loading = Boolean(state?.loading);
+    const text = String(state?.text || "").trim();
+    const error = String(state?.error || "").trim();
+    const model = String(state?.model || "").trim();
+    return `
+      <div class="tw-audio-tools" data-transcribe-wrap="${escapeAttr(key)}">
+        <button type="button" class="tw-transcribe-btn" data-message-id="${escapeAttr(key)}" ${loading ? "disabled" : ""}>
+          ${loading ? "Transcrevendo..." : "Transcrever"}
+        </button>
+        ${error ? `<div class="tw-transcript-status error" data-transcribe-status="${escapeAttr(key)}">${escapeHtml(error)}</div>` : ""}
+        ${text ? `
+          <div class="tw-transcript-box" data-transcribe-text="${escapeAttr(key)}">
+            <span class="tw-transcript-meta">${model ? `Transcricao (${escapeHtml(model)})` : "Transcricao"}</span>
+            ${escapeHtml(text)}
+          </div>
+        ` : ""}
+      </div>
+    `;
+  }
+
+  function updateTranscriptionUI(messageId) {
+    const key = String(messageId || "").trim();
+    if (!key) return;
+    const wrap = shadow && shadow.querySelector(`[data-transcribe-wrap="${key}"]`);
+    if (!wrap) return;
+    wrap.outerHTML = renderAudioTranscriptHtml(key);
+  }
+
+  function submitTranscription(messageId) {
+    const key = String(messageId || "").trim();
+    if (!key) return;
+
+    transcriptionByMessage.set(key, { loading: true, text: "", error: "", model: "" });
+    updateTranscriptionUI(key);
+
+    fetch(buildApiUrl(`/api/messages/${encodeURIComponent(key)}/transcribe`), {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({})
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data || !data.success) {
+          throw new Error(String(data?.error || `Falha HTTP ${res.status}`));
+        }
+        transcriptionByMessage.set(key, {
+          loading: false,
+          text: String(data.transcript || "").trim(),
+          error: "",
+          model: String(data.model || "").trim()
+        });
+        updateTranscriptionUI(key);
+      })
+      .catch((error) => {
+        transcriptionByMessage.set(key, {
+          loading: false,
+          text: "",
+          error: String(error?.message || "Falha ao transcrever audio"),
+          model: ""
+        });
+        updateTranscriptionUI(key);
+      });
   }
 
   function addMessage(rawMessage, opts = {}) {

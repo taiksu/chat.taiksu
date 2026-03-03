@@ -76,6 +76,8 @@ class SettingsController {
         aiMaxReplyChars: body.aiMaxReplyChars,
         aiPreferredProvider: body.aiPreferredProvider,
         aiPreferredModel: body.aiPreferredModel,
+        aiTranscriptionProvider: body.aiTranscriptionProvider,
+        aiTranscriptionModel: body.aiTranscriptionModel,
         aiCustomModels: body.aiCustomModels,
         ollamaApiToken: ollamaTokenToSave,
         kbAutoPublishEnabled: body.kbAutoPublishEnabled,

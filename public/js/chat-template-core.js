@@ -250,7 +250,7 @@
 
     if (type === "audio") {
       if (typeof opts.audioRenderer === "function") {
-        return opts.audioRenderer(mediaUrl);
+        return opts.audioRenderer(mediaUrl, message);
       }
       return `<audio controls src="${escapeAttr(mediaUrl)}"></audio>`;
     }

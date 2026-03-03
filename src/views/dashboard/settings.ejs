@@ -199,6 +199,18 @@
                   <option value="<%= settings.aiPreferredModel %>" selected><%= settings.aiPreferredModel %></option>
                 </select>
               </label>
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Provider de transcricao</span>
+                <select id="aiTranscriptionProvider" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                  <option value="ollama" <%= settings.aiTranscriptionProvider === 'ollama' ? 'selected' : '' %>>Ollama</option>
+                </select>
+              </label>
+              <label class="text-sm">
+                <span class="mb-1 block font-semibold text-gray-600">Modelo de transcricao</span>
+                <select id="aiTranscriptionModel" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                  <option value="<%= settings.aiTranscriptionModel %>" selected><%= settings.aiTranscriptionModel || 'Selecione um modelo STT' %></option>
+                </select>
+              </label>
             </div>
             <p id="modelsStatus" class="mt-2 text-xs font-semibold text-gray-500">Lista de modelos aguardando atualizacao.</p>
             <div class="mt-3 grid gap-2">
@@ -322,6 +334,8 @@
     const modelsStatusEl = document.getElementById('modelsStatus');
     const providerEl = document.getElementById('aiPreferredProvider');
     const modelEl = document.getElementById('aiPreferredModel');
+    const transcriptionProviderEl = document.getElementById('aiTranscriptionProvider');
+    const transcriptionModelEl = document.getElementById('aiTranscriptionModel');
     const ollamaApiTokenEl = document.getElementById('ollamaApiToken');
     const ollamaTokenStatusEl = document.getElementById('ollamaTokenStatus');
     const ollamaTokenAuditEl = document.getElementById('ollamaTokenAudit');
@@ -464,6 +478,28 @@
       if (targetModel) modelEl.value = targetModel;
     }
 
+    function renderTranscriptionModelOptions(preferredModel) {
+      const provider = transcriptionProviderEl.value;
+      const custom = parseCustomModels(document.getElementById('aiCustomModels').value || '');
+      const catalog = uniqueModels([...(providerModels[provider] || []), ...(custom[provider] || [])]);
+      transcriptionModelEl.innerHTML = '';
+      catalog.forEach((modelName) => {
+        const option = document.createElement('option');
+        option.value = modelName;
+        option.textContent = modelName;
+        transcriptionModelEl.appendChild(option);
+      });
+
+      const targetModel = String(preferredModel || transcriptionModelEl.value || '').trim();
+      if (targetModel && !catalog.includes(targetModel)) {
+        const option = document.createElement('option');
+        option.value = targetModel;
+        option.textContent = `${targetModel} (manual)`;
+        transcriptionModelEl.appendChild(option);
+      }
+      if (targetModel) transcriptionModelEl.value = targetModel;
+    }
+
     async function refreshModelCatalog() {
       setModelsStatus('Carregando modelos disponiveis...', 'info');
       try {
@@ -481,6 +517,7 @@
         });
         if (data?.selected?.provider) providerEl.value = data.selected.provider;
         renderModelOptions(data?.selected?.model || modelEl.value);
+        renderTranscriptionModelOptions(transcriptionModelEl.value);
         const warn = (Array.isArray(data.providers) ? data.providers : [])
           .map((entry) => entry?.error ? `${entry.provider}: ${entry.error}` : '')
           .filter(Boolean);
@@ -491,6 +528,7 @@
         }
       } catch (error) {
         renderModelOptions(modelEl.value);
+        renderTranscriptionModelOptions(transcriptionModelEl.value);
         setModelsStatus(`Falha ao carregar modelos automaticamente: ${error.message}`, 'error');
       }
     }
@@ -510,6 +548,8 @@
         aiMaxReplyChars: Number(document.getElementById('aiMaxReplyChars').value || 520),
         aiPreferredProvider: providerEl.value || 'ollama',
         aiPreferredModel: modelEl.value || '',
+        aiTranscriptionProvider: transcriptionProviderEl.value || 'ollama',
+        aiTranscriptionModel: transcriptionModelEl.value || '',
         aiCustomModels: document.getElementById('aiCustomModels').value || '',
         kbAutoPublishEnabled: document.getElementById('kbAutoPublishEnabled').checked,
         alertEmailEnabled: document.getElementById('alertEmailEnabled').checked,
@@ -645,7 +685,11 @@
       setOllamaTokenStatus('Token Ollama limpo no formulario. Clique em Salvar Configuracoes para persistir.', 'info');
     });
     providerEl.addEventListener('change', () => renderModelOptions(modelEl.value));
-    document.getElementById('aiCustomModels').addEventListener('input', () => renderModelOptions(modelEl.value));
+    transcriptionProviderEl.addEventListener('change', () => renderTranscriptionModelOptions(transcriptionModelEl.value));
+    document.getElementById('aiCustomModels').addEventListener('input', () => {
+      renderModelOptions(modelEl.value);
+      renderTranscriptionModelOptions(transcriptionModelEl.value);
+    });
     document.getElementById('addCustomModelBtn').addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -664,6 +708,7 @@
       if (!lines.includes(line)) lines.push(line);
       textarea.value = lines.join('\n');
       renderModelOptions(model);
+      renderTranscriptionModelOptions(model);
       document.getElementById('customModelName').value = '';
       setModelsStatus(`Modelo ${line} adicionado no cadastro local. Salve para persistir.`, 'success');
     });

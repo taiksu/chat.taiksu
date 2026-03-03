@@ -109,8 +109,9 @@ class FeedbackInsightsController {
       const limit = Math.min(30, Math.max(1, Number(req.query.limit || 10)));
       const days = this.parseDays(req.query.days);
       const draftItems = knowledgeAdmin.getDraft();
+      const liveItems = knowledgeAdmin.getKnowledge();
       const suggestedMessageIds = new Set(
-        (draftItems || [])
+        [...(draftItems || []), ...(liveItems || [])]
           .map((item) => String(item?.sourceMessageId || '').trim())
           .filter(Boolean)
       );

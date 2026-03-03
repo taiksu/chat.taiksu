@@ -78,6 +78,7 @@ class MessageController {
     this.bootstrapLocks = new Set();
     this.pendingDialog = new Map();
     this.roomMemory = new Map();
+    this.transcriptionCache = new Map();
   }
 
   logAiMetric(event, data = {}) {
@@ -142,6 +143,121 @@ class MessageController {
     const envAvatar = String(process.env.AI_USER_AVATAR || '').trim();
     if (envAvatar) return envAvatar;
     return '/images/marina.png';
+  }
+
+  getTranscriptionSettings() {
+    const settings = settingsService.load();
+    const provider = String(settings.aiTranscriptionProvider || settings.aiPreferredProvider || 'ollama')
+      .trim()
+      .toLowerCase() || 'ollama';
+    const model = String(settings.aiTranscriptionModel || '').trim();
+    return { provider, model };
+  }
+
+  buildOllamaAuthHeaders() {
+    const headers = {};
+    const token = String(settingsService.load()?.ollamaApiToken || process.env.OLLAMA_API_TOKEN || '').trim();
+    if (!token) return headers;
+    const mode = String(process.env.OLLAMA_AUTH_MODE || 'bearer').trim().toLowerCase();
+    if (mode === 'x-api-key') {
+      headers['x-api-key'] = token;
+      return headers;
+    }
+    headers.Authorization = `Bearer ${token}`;
+    return headers;
+  }
+
+  resolveUploadPathFromUrl(fileUrl) {
+    const safeUrl = String(fileUrl || '').split('?')[0].trim();
+    if (!safeUrl) return '';
+    const filename = path.basename(safeUrl);
+    if (!filename) return '';
+    return path.join(uploadsDir, filename);
+  }
+
+  getTranscriptionCacheKey(messageId, provider, model) {
+    return `${String(messageId || '').trim()}::${String(provider || '').trim()}::${String(model || '').trim()}`;
+  }
+
+  extractTranscriptionText(payload) {
+    if (!payload) return '';
+    if (typeof payload === 'string') return payload.trim();
+    if (typeof payload !== 'object') return '';
+    const candidates = [
+      payload.text,
+      payload.transcript,
+      payload.transcription,
+      payload.output,
+      payload.response,
+      payload.data?.text,
+      payload.data?.transcript
+    ];
+    for (const item of candidates) {
+      const value = String(item || '').trim();
+      if (value) return value;
+    }
+    return '';
+  }
+
+  async requestOllamaTranscription({ filePath, fileType, fileName, model }) {
+    const FormDataCtor = typeof FormData !== 'undefined' ? FormData : null;
+    const BlobCtor = typeof Blob !== 'undefined' ? Blob : (require('buffer').Blob);
+    if (!FormDataCtor || !BlobCtor) {
+      throw new Error('Runtime sem suporte a FormData/Blob para transcricao');
+    }
+    const baseUrl = AIController.getOllamaBaseUrl();
+    const authHeaders = this.buildOllamaAuthHeaders();
+    const fileBuffer = await fs.promises.readFile(filePath);
+    const safeType = String(fileType || '').trim() || 'application/octet-stream';
+    const safeName = String(fileName || path.basename(filePath) || 'audio.bin').trim();
+    const candidates = [
+      `${baseUrl}/api/transcribe`,
+      `${baseUrl}/v1/audio/transcriptions`
+    ];
+    const errors = [];
+
+    for (const endpoint of candidates) {
+      const formData = new FormDataCtor();
+      const blob = new BlobCtor([fileBuffer], { type: safeType });
+      formData.append('file', blob, safeName);
+      if (model) formData.append('model', model);
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90000);
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: authHeaders,
+          body: formData,
+          signal: controller.signal
+        });
+
+        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+        const data = contentType.includes('application/json')
+          ? await response.json().catch(() => ({}))
+          : { text: await response.text().catch(() => '') };
+
+        if (!response.ok) {
+          const detail = String(data?.error || data?.message || '').trim();
+          errors.push(`${endpoint} -> HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
+          continue;
+        }
+
+        const transcript = this.extractTranscriptionText(data);
+        if (!transcript) {
+          errors.push(`${endpoint} -> resposta sem texto de transcricao`);
+          continue;
+        }
+
+        return { text: transcript, endpoint };
+      } catch (error) {
+        errors.push(`${endpoint} -> ${error.message}`);
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    throw new Error(errors.join(' | ') || 'falha_transcricao_ollama');
   }
 
   getChamadoCreateUrl() {
@@ -1824,6 +1940,86 @@ class MessageController {
       return res.json({ success: true, messageId, value });
     } catch (error) {
       return res.status(500).json({ error: error.message });
+    }
+  }
+
+  async transcribeAudio(req, res) {
+    try {
+      const userId = req.session.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Nao autenticado' });
+      }
+
+      const messageId = String(req.params?.messageId || '').trim();
+      if (!messageId) {
+        return res.status(400).json({ error: 'messageId obrigatorio' });
+      }
+
+      const message = await Message.findById(messageId);
+      if (!message) {
+        return res.status(404).json({ error: 'Mensagem nao encontrada' });
+      }
+
+      if (String(message.type || '').toLowerCase() !== 'audio') {
+        return res.status(400).json({ error: 'Apenas mensagens de audio podem ser transcritas' });
+      }
+
+      const transcriptionCfg = this.getTranscriptionSettings();
+      if (!transcriptionCfg.model) {
+        return res.status(400).json({
+          error: 'Modelo de transcricao nao configurado. Defina em IA > Agente > Modelo de transcricao.'
+        });
+      }
+
+      if (transcriptionCfg.provider !== 'ollama') {
+        return res.status(400).json({ error: `Provider de transcricao nao suportado: ${transcriptionCfg.provider}` });
+      }
+
+      const cacheKey = this.getTranscriptionCacheKey(messageId, transcriptionCfg.provider, transcriptionCfg.model);
+      const cached = this.transcriptionCache.get(cacheKey);
+      if (cached && cached.text) {
+        return res.json({
+          success: true,
+          messageId,
+          provider: transcriptionCfg.provider,
+          model: transcriptionCfg.model,
+          transcript: cached.text,
+          cached: true
+        });
+      }
+
+      const filePath = this.resolveUploadPathFromUrl(message.file_url);
+      if (!filePath || !fs.existsSync(filePath)) {
+        return res.status(404).json({ error: 'Arquivo de audio nao encontrado no servidor' });
+      }
+
+      const transcribed = await this.requestOllamaTranscription({
+        filePath,
+        fileType: String(message.file_type || '').trim(),
+        fileName: path.basename(String(message.file_url || '').split('?')[0] || filePath),
+        model: transcriptionCfg.model
+      });
+
+      const transcript = String(transcribed.text || '').trim();
+      if (!transcript) {
+        return res.status(502).json({ error: 'Nao foi possivel extrair texto da transcricao' });
+      }
+
+      this.transcriptionCache.set(cacheKey, {
+        text: transcript,
+        at: Date.now()
+      });
+
+      return res.json({
+        success: true,
+        messageId,
+        provider: transcriptionCfg.provider,
+        model: transcriptionCfg.model,
+        transcript,
+        cached: false
+      });
+    } catch (error) {
+      return res.status(502).json({ error: error.message || 'Falha ao transcrever audio' });
     }
   }
 

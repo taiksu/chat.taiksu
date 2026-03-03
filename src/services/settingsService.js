@@ -61,6 +61,15 @@ class SettingsService {
         process.env.AI_DEFAULT_MODEL
         || this.getDefaultModelByProvider(preferredProvider)
       ).trim(),
+      aiTranscriptionProvider: this.normalizeProvider(
+        process.env.AI_TRANSCRIPTION_PROVIDER,
+        preferredProvider
+      ),
+      aiTranscriptionModel: String(
+        process.env.AI_TRANSCRIPTION_MODEL
+        || process.env.OLLAMA_STT_MODEL
+        || ''
+      ).trim(),
       aiCustomModels: this.parseCustomModels(process.env.AI_CUSTOM_MODELS || ''),
       ollamaApiToken: String(process.env.OLLAMA_API_TOKEN || '').trim(),
       kbAutoPublishEnabled: String(process.env.KB_AUTO_PUBLISH_ENABLED || 'false').toLowerCase() === 'true',
@@ -308,6 +317,12 @@ class SettingsService {
         : this.clampInt(current.aiMaxReplyChars, 120, 4000, 420),
       aiPreferredProvider: preferredProvider,
       aiPreferredModel: preferredModel || this.getDefaultModelByProvider(preferredProvider),
+      aiTranscriptionProvider: input.aiTranscriptionProvider !== undefined
+        ? this.normalizeProvider(input.aiTranscriptionProvider, preferredProvider)
+        : this.normalizeProvider(current.aiTranscriptionProvider, preferredProvider),
+      aiTranscriptionModel: input.aiTranscriptionModel !== undefined
+        ? String(input.aiTranscriptionModel || '').trim()
+        : String(current.aiTranscriptionModel || '').trim(),
       aiCustomModels: input.aiCustomModels !== undefined
         ? this.parseCustomModels(input.aiCustomModels)
         : this.parseCustomModels(current.aiCustomModels || []),
@@ -354,6 +369,11 @@ class SettingsService {
       aiPreferredProvider: this.normalizeProvider(current.aiPreferredProvider, this.getDefaultProvider()),
       aiPreferredModel: String(current.aiPreferredModel || '').trim()
         || this.getDefaultModelByProvider(this.normalizeProvider(current.aiPreferredProvider, this.getDefaultProvider())),
+      aiTranscriptionProvider: this.normalizeProvider(
+        current.aiTranscriptionProvider,
+        this.normalizeProvider(current.aiPreferredProvider, this.getDefaultProvider())
+      ),
+      aiTranscriptionModel: String(current.aiTranscriptionModel || '').trim(),
       aiCustomModels: this.parseCustomModels(current.aiCustomModels || []),
       hasOllamaApiToken: Boolean(String(current.ollamaApiToken || '').trim()),
       kbAutoPublishEnabled: Boolean(current.kbAutoPublishEnabled),
