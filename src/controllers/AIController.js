@@ -449,6 +449,8 @@ class AIController {
       .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/gi, '$1')
       .replace(/https?:\/\/\S+/gi, '')
       .replace(/\[\]\(\)/g, '')
+      .replace(/\b(?:transquito|tranquito)\b/gi, '')
+      .replace(/\s{2,}/g, ' ')
       .trim();
     const maxChars = this.getMaxReplyChars(overrides);
     if (safe.length > maxChars) {

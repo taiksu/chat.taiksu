@@ -785,7 +785,6 @@
         color: #334155;
        
       }
-      .tw-transcript-meta { font-size: 10px; font-weight: 700; color: #64748b; margin-bottom: 4px; display: block; }
       .tw-transcript-status { font-size: 11px; color: #475569; }
       .tw-transcript-status.error { color: #b91c1c; }
 

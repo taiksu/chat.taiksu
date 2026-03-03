@@ -313,9 +313,27 @@ class MessageController {
     return `${String(messageId || '').trim()}::${String(provider || '').trim()}::${String(model || '').trim()}`;
   }
 
+  sanitizeTranscriptionText(value) {
+    return String(value || '')
+      .replace(/\u0000/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/[ \t]{2,}/g, ' ')
+      .trim();
+  }
+
+  looksLikeHtmlPayload(value) {
+    const text = this.sanitizeTranscriptionText(value).toLowerCase();
+    if (!text) return false;
+    return /<(?:!doctype|html|head|body|script|style|iframe|img|meta|link)\b/.test(text)
+      || /<\/(?:html|head|body|script|style)>/.test(text);
+  }
+
   extractTranscriptionText(payload) {
     if (!payload) return '';
-    if (typeof payload === 'string') return payload.trim();
+    if (typeof payload === 'string') {
+      const direct = this.sanitizeTranscriptionText(payload);
+      return this.looksLikeHtmlPayload(direct) ? '' : direct;
+    }
     if (typeof payload !== 'object') return '';
     const candidates = [
       payload.text,
@@ -327,7 +345,9 @@ class MessageController {
       payload.data?.transcript
     ];
     for (const item of candidates) {
-      const value = String(item || '').trim();
+      const value = this.sanitizeTranscriptionText(item);
+      if (!value) continue;
+      if (this.looksLikeHtmlPayload(value)) continue;
       if (value) return value;
     }
     return '';
@@ -379,12 +399,20 @@ class MessageController {
         throw error;
       }
 
-      const transcript = this.extractTranscriptionText(data);
-      if (!transcript) {
-        throw new Error(`${endpoint} -> resposta sem texto de transcricao`);
+      if (contentType.includes('text/html') || contentType.includes('application/xhtml+xml')) {
+        const error = new Error(`${endpoint} -> resposta invalida de transcricao (HTML retornado)`);
+        error.status = 502;
+        throw error;
       }
 
-      return { text: transcript, endpoint };
+      const transcript = this.extractTranscriptionText(data);
+      if (!transcript) {
+        const error = new Error(`${endpoint} -> resposta sem texto valido de transcricao`);
+        error.status = 502;
+        throw error;
+      }
+
+      return { text: transcript.slice(0, 8000), endpoint };
     } finally {
       clearTimeout(timeout);
       if (dispatcher && typeof dispatcher.close === 'function') {
@@ -2173,15 +2201,19 @@ class MessageController {
 
       const cacheKey = this.getTranscriptionCacheKey(messageId, transcriptionCfg.provider, transcriptionCfg.model);
       const cached = this.transcriptionCache.get(cacheKey);
-      if (cached && cached.text) {
+      const cachedText = this.sanitizeTranscriptionText(cached?.text || '');
+      if (cached && cachedText && !this.looksLikeHtmlPayload(cachedText)) {
         return res.json({
           success: true,
           messageId,
           provider: transcriptionCfg.provider,
           model: transcriptionCfg.model,
-          transcript: cached.text,
+          transcript: cachedText,
           cached: true
         });
+      }
+      if (cached && (!cachedText || this.looksLikeHtmlPayload(cachedText))) {
+        this.transcriptionCache.delete(cacheKey);
       }
 
       const filePath = this.resolveUploadPathFromUrl(message.file_url);
