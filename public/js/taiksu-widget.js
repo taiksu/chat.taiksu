@@ -2151,6 +2151,29 @@
     wrap.outerHTML = renderAudioTranscriptHtml(key);
   }
 
+  function humanizeTranscriptionError(rawError) {
+    const raw = String(rawError || "").trim();
+    if (!raw) return "Nao foi possivel transcrever este audio agora.";
+    const lower = raw.toLowerCase();
+
+    if (lower.includes("401") || lower.includes("403") || lower.includes("authorization") || lower.includes("unauthorized")) {
+      return "Servico de transcricao indisponivel no momento. Tente novamente em instantes.";
+    }
+    if (lower.includes("resposta sem texto")) {
+      return "Nao foi possivel identificar fala neste audio.";
+    }
+    if (lower.includes("arquivo de audio nao encontrado")) {
+      return "Arquivo de audio indisponivel para transcricao.";
+    }
+    if (lower.includes("timeout") || lower.includes("abort")) {
+      return "A transcricao demorou demais. Tente novamente.";
+    }
+    if (lower.includes("falha http") || lower.includes("http")) {
+      return "Falha temporaria ao transcrever audio.";
+    }
+    return "Nao foi possivel transcrever este audio agora.";
+  }
+
   function submitTranscription(messageId) {
     const key = String(messageId || "").trim();
     if (!key) return;
@@ -2185,7 +2208,7 @@
         transcriptionByMessage.set(key, {
           loading: false,
           text: "",
-          error: String(error?.message || "Falha ao transcrever audio"),
+          error: humanizeTranscriptionError(error?.message || "Falha ao transcrever audio"),
           model: ""
         });
         updateTranscriptionUI(key);
