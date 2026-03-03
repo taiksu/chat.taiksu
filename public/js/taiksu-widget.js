@@ -756,7 +756,8 @@
         box-shadow: 0 16px 48px rgba(0,0,0,0.45);
       }
 
-      .tw-audio-player { background: rgba(255,255,255,0.8); padding: 8px; border-radius: 12px; display: flex; align-items: center; gap: 10px; min-width: 200px; }
+      .tw-audio-player { background: rgba(255,255,255,0.8); padding: 8px; border-radius: 12px; display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 200px; }
+      .tw-audio-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
       .tw-audio-toggle { width: 34px; height: 34px; border-radius: 50%; border: 0; background: #075e54; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; }
       .tw-audio-main { flex: 1; display: flex; flex-direction: column; gap: 4px; }
       .tw-audio-wave { height: 4px; background: #ccc; border-radius: 2px; position: relative; }
@@ -2090,21 +2091,23 @@
     const transcriptHtml = renderAudioTranscriptHtml(messageId);
     return `
       <div class="tw-audio-player" data-audio-url="${escapeAttr(mediaUrl)}" data-message-id="${escapeAttr(messageId)}">
-        <button type="button" class="tw-audio-toggle" aria-label="Reproduzir audio">
-          <span class="tw-audio-icon-play" style="display: flex; align-items: center; justify-content: center;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
-          </span>
-          <span class="tw-audio-icon-pause" style="display:none; align-items: center; justify-content: center;">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
-          </span>
-        </button>
-        <div class="tw-audio-main">
-          <div class="tw-audio-wave">
-            <div class="tw-audio-progress">
-              <span class="tw-audio-dot"></span>
+        <div class="tw-audio-head">
+          <button type="button" class="tw-audio-toggle" aria-label="Reproduzir audio">
+            <span class="tw-audio-icon-play" style="display: flex; align-items: center; justify-content: center;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"></path></svg>
+            </span>
+            <span class="tw-audio-icon-pause" style="display:none; align-items: center; justify-content: center;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
+            </span>
+          </button>
+          <div class="tw-audio-main">
+            <div class="tw-audio-wave">
+              <div class="tw-audio-progress">
+                <span class="tw-audio-dot"></span>
+              </div>
             </div>
+            <span class="tw-audio-time">00:00</span>
           </div>
-          <span class="tw-audio-time">00:00</span>
         </div>
         <audio preload="auto" class="tw-native-audio" style="display:none" src="${escapeAttr(mediaUrl)}"></audio>
         ${transcriptHtml}
@@ -2126,7 +2129,6 @@
     const loading = Boolean(state?.loading);
     const text = String(state?.text || "").trim();
     const error = String(state?.error || "").trim();
-    const model = String(state?.model || "").trim();
     return `
       <div class="tw-audio-tools" data-transcribe-wrap="${escapeAttr(key)}">
         <button type="button" class="tw-transcribe-btn" data-message-id="${escapeAttr(key)}" ${loading ? "disabled" : ""}>
@@ -2135,7 +2137,7 @@
         ${error ? `<div class="tw-transcript-status error" data-transcribe-status="${escapeAttr(key)}">${escapeHtml(error)}</div>` : ""}
         ${text ? `
           <div class="tw-transcript-box" data-transcribe-text="${escapeAttr(key)}">
-            <span class="tw-transcript-meta">${model ? `Transcricao (${escapeHtml(model)})` : "Transcricao"}</span>
+            <span class="tw-transcript-meta">Transcricao</span>
             ${escapeHtml(text)}
           </div>
         ` : ""}

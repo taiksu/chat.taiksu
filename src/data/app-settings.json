@@ -3,7 +3,8 @@
   "aiAllowAdminChat": true,
   "aiBetaModeEnabled": true,
   "aiBetaAllowlist": [
-    "user_carol"
+    "user_carol",
+    "user_alice"
   ],
   "aiAgentName": "Marina",
   "aiAgentAvatar": "/images/marina.png",
@@ -15,7 +16,7 @@
   "aiPreferredModel": "qwen2.5:3b-instruct",
   "aiTranscriptionProvider": "ollama",
   "aiTranscriptionModel": "",
-  "aiAudioTranscriptionEnabled": false,
+  "aiAudioTranscriptionEnabled": true,
   "aiTranscriptionApiUrl": "https://whisper.taiksu.com.br/api/transcribe",
   "aiTranscriptionApiToken": "",
   "aiTranscriptionLanguage": "pt",
