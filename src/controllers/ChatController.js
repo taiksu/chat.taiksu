@@ -4,6 +4,7 @@ const User = require('../models/User');
 const ChatQueue = require('../models/ChatQueue');
 const alertService = require('../services/alertService');
 const eventBrokerService = require('../services/eventBrokerService');
+const settingsService = require('../services/settingsService');
 const SSOController = require('./SSOController');
 const path = require('path');
 const fs = require('fs');
@@ -58,9 +59,25 @@ class ChatController {
     return User.supportRoles().includes(role);
   }
 
-  canAccessSupportInbox(user) {
+  isPrivilegedSupportInboxUser(user) {
     const role = String(user?.role || '').toLowerCase();
     return ['admin', 'dev', 'developer', 'atendente', 'support', 'suporte', 'agent'].includes(role);
+  }
+
+  isBetaAllowedUser(user) {
+    const settings = settingsService.load();
+    if (!Boolean(settings.aiBetaModeEnabled)) return false;
+    const allowlist = Array.isArray(settings.aiBetaAllowlist)
+      ? settings.aiBetaAllowlist.map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean)
+      : [];
+    if (!allowlist.length) return false;
+    const userId = String(user?.id || '').trim().toLowerCase();
+    const email = String(user?.email || '').trim().toLowerCase();
+    return Boolean((userId && allowlist.includes(userId)) || (email && allowlist.includes(email)));
+  }
+
+  canAccessSupportInbox(user) {
+    return this.isPrivilegedSupportInboxUser(user) || this.isBetaAllowedUser(user);
   }
 
   normalizeAttendanceState(value) {
@@ -174,11 +191,21 @@ class ChatController {
     return text.length > 72 ? `${text.slice(0, 69).trim()}...` : text;
   }
 
-  async buildSupportInboxRooms(currentRoomId) {
-    const [normalRooms, chamadoRooms] = await Promise.all([
-      ChatRoom.findAll(),
-      ChatRoom.findChamadoRooms()
-    ]);
+  async buildSupportInboxRooms({ currentRoomId = '', actor = null } = {}) {
+    const isPrivileged = this.isPrivilegedSupportInboxUser(actor);
+    const actorId = String(actor?.id || '').trim();
+
+    let normalRooms = [];
+    let chamadoRooms = [];
+    if (isPrivileged) {
+      [normalRooms, chamadoRooms] = await Promise.all([
+        ChatRoom.findAll(),
+        ChatRoom.findChamadoRooms()
+      ]);
+    } else {
+      const ownChamados = await ChatRoom.findChamadoRooms();
+      chamadoRooms = ownChamados.filter((room) => String(room?.owner_id || '') === actorId);
+    }
 
     const merged = new Map();
     [...(normalRooms || []), ...(chamadoRooms || [])].forEach((room) => {
@@ -324,12 +351,16 @@ class ChatController {
         return res.status(401).json({ error: 'Nao autenticado' });
       }
       if (!this.canAccessSupportInbox(actor)) {
-        return res.status(403).json({ error: 'Acesso restrito para suporte' });
+        return res.status(403).json({ error: 'Acesso restrito para esta conta' });
       }
 
       const currentRoomId = String(req.query?.roomId || '').trim();
-      const rooms = await this.buildSupportInboxRooms(currentRoomId);
-      return res.json({ success: true, rooms });
+      const rooms = await this.buildSupportInboxRooms({ currentRoomId, actor });
+      return res.json({
+        success: true,
+        scope: this.isPrivilegedSupportInboxUser(actor) ? 'support' : 'self',
+        rooms
+      });
     } catch (error) {
       console.error('Error listing support inbox rooms api:', error);
       return res.status(500).json({ error: error.message });

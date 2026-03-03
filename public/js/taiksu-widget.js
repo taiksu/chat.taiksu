@@ -36,6 +36,7 @@
   let supportInboxTab = "active";
   let supportInboxRoomsCache = [];
   let supportInboxBlocked = false;
+  let supportInboxScope = "support";
   const archivedRoomIds = new Set();
   let typingTimer = null;
   let typingActive = false;
@@ -62,6 +63,7 @@
   let toggleUnreadCount = 0;
   let reactionsByMessage = new Map();
   let transcriptionByMessage = new Map();
+  let audioTranscriptionEnabled = false;
   let longPressTimer = null;
   let longPressTarget = null;
   let reactionMenuIgnoreCloseUntil = 0;
@@ -910,7 +912,7 @@
             </button>
             <div class="tw-inbox-head-text">
               <strong>Conversas</strong>
-              <span>Suporte (dev/admin)</span>
+              <span id="tw-inbox-scope-text">Suporte (dev/admin)</span>
             </div>
           </div>
           <div class="tw-inbox-tabs" id="tw-inbox-tabs">
@@ -1444,6 +1446,7 @@
     supportInboxTab = "active";
     supportInboxRoomsCache = [];
     supportInboxBlocked = false;
+    supportInboxScope = "support";
     config.position = normalizePosition(config.position);
     config.mode = normalizeMode(config.mode);
     localUserName = String(config.userName || "").trim();
@@ -1605,6 +1608,24 @@
     }
   }
 
+  function updateSupportInboxScopeText() {
+    const scopeEl = shadow && shadow.getElementById("tw-inbox-scope-text");
+    if (!scopeEl) return;
+    scopeEl.textContent = supportInboxScope === "self"
+      ? "Meus chamados (beta)"
+      : "Suporte (dev/admin)";
+  }
+
+  function syncToggleBadgeFromInbox(rooms) {
+    if (widgetOpen) return;
+    const source = Array.isArray(rooms) ? rooms : [];
+    const unreadTotal = source
+      .filter((room) => !archivedRoomIds.has(String(room?.id || "")))
+      .reduce((acc, room) => acc + Math.max(0, Number(room?.unreadCount || 0)), 0);
+    toggleUnreadCount = unreadTotal;
+    updateToggleUnreadBadge();
+  }
+
   function renderSupportInbox(rooms) {
     const dock = shadow.getElementById("tw-support-dock");
     const list = shadow.getElementById("tw-inbox-list");
@@ -1619,6 +1640,7 @@
     supportInboxRoomsCache = rooms;
     dock.classList.add("show");
     updateSupportDockState();
+    updateSupportInboxScopeText();
     const activeRooms = rooms.filter((room) => !archivedRoomIds.has(String(room?.id || "")));
     const archivedRooms = rooms.filter((room) => archivedRoomIds.has(String(room?.id || "")));
     const visibleRooms = supportInboxTab === "archived" ? archivedRooms : activeRooms;
@@ -1690,6 +1712,7 @@
     }
     const data = await response.json().catch(() => ({}));
     if (!data || data.success !== true) return;
+    supportInboxScope = String(data.scope || "support").toLowerCase() === "self" ? "self" : "support";
     const rooms = Array.isArray(data.rooms) ? data.rooms : [];
     const known = new Set(rooms.map((room) => String(room?.id || "")).filter(Boolean));
     Array.from(archivedRoomIds).forEach((id) => {
@@ -1697,6 +1720,7 @@
     });
     persistArchivedRooms();
     renderSupportInbox(rooms);
+    syncToggleBadgeFromInbox(rooms);
   }
 
   async function switchToRoom(nextRoomId, nextRoomName = "") {
@@ -1739,6 +1763,11 @@
     })
       .then((res) => res.json())
       .then((data) => {
+        const previous = audioTranscriptionEnabled;
+        audioTranscriptionEnabled = Boolean(data && data.audioTranscriptionEnabled === true);
+        if (previous !== audioTranscriptionEnabled && widgetOpen) {
+          renderHistoryMessages({ preserveScroll: true });
+        }
         if (data && data.closed) {
           setComposerDisabled(true, data.reason || "Chat encerrado");
         } else {
@@ -2092,6 +2121,7 @@
   function renderAudioTranscriptHtml(messageId) {
     const key = String(messageId || "").trim();
     if (!key) return "";
+    if (!audioTranscriptionEnabled) return "";
     const state = getTranscriptionState(key);
     const loading = Boolean(state?.loading);
     const text = String(state?.text || "").trim();
@@ -2124,6 +2154,10 @@
   function submitTranscription(messageId) {
     const key = String(messageId || "").trim();
     if (!key) return;
+    if (!audioTranscriptionEnabled) {
+      showSystemMessage("Transcricao de audio desativada pelo administrador.", "error");
+      return;
+    }
 
     transcriptionByMessage.set(key, { loading: true, text: "", error: "", model: "" });
     updateTranscriptionUI(key);

@@ -155,6 +155,38 @@ class MessageController {
     return { enabled, provider, model };
   }
 
+  getTranscriptionApiUrl() {
+    const settings = settingsService.load();
+    return String(
+      settings.aiTranscriptionApiUrl
+      || process.env.AI_TRANSCRIPTION_API_URL
+      || process.env.WHISPER_API_URL
+      || 'https://whisper.taiksu.com.br/api/transcribe'
+    ).trim();
+  }
+
+  getTranscriptionApiToken() {
+    const settings = settingsService.load();
+    return String(
+      settings.aiTranscriptionApiToken
+      || process.env.AI_TRANSCRIPTION_API_TOKEN
+      || process.env.WHISPER_API_TOKEN
+      || settings.ollamaApiToken
+      || process.env.OLLAMA_API_TOKEN
+      || ''
+    ).trim();
+  }
+
+  getTranscriptionLanguage() {
+    const settings = settingsService.load();
+    return String(settings.aiTranscriptionLanguage || process.env.AI_TRANSCRIPTION_LANGUAGE || 'pt').trim() || 'pt';
+  }
+
+  getTranscriptionResponseFormat() {
+    const settings = settingsService.load();
+    return String(settings.aiTranscriptionResponseFormat || process.env.AI_TRANSCRIPTION_RESPONSE_FORMAT || 'json').trim() || 'json';
+  }
+
   buildOllamaAuthHeaders() {
     const headers = {};
     const token = String(settingsService.load()?.ollamaApiToken || process.env.OLLAMA_API_TOKEN || '').trim();
@@ -200,65 +232,58 @@ class MessageController {
     return '';
   }
 
-  async requestOllamaTranscription({ filePath, fileType, fileName, model }) {
+  async requestExternalTranscription({ filePath, fileType, fileName, model }) {
     const FormDataCtor = typeof FormData !== 'undefined' ? FormData : null;
     const BlobCtor = typeof Blob !== 'undefined' ? Blob : (require('buffer').Blob);
     if (!FormDataCtor || !BlobCtor) {
       throw new Error('Runtime sem suporte a FormData/Blob para transcricao');
     }
-    const baseUrl = AIController.getOllamaBaseUrl();
-    const authHeaders = this.buildOllamaAuthHeaders();
+    const endpoint = this.getTranscriptionApiUrl();
+    if (!endpoint) throw new Error('Endpoint de transcricao nao configurado');
+
+    const token = this.getTranscriptionApiToken();
+    const authHeaders = {};
+    if (token) authHeaders.Authorization = `Bearer ${token}`;
+
     const fileBuffer = await fs.promises.readFile(filePath);
     const safeType = String(fileType || '').trim() || 'application/octet-stream';
     const safeName = String(fileName || path.basename(filePath) || 'audio.bin').trim();
-    const candidates = [
-      `${baseUrl}/api/transcribe`,
-      `${baseUrl}/v1/audio/transcriptions`
-    ];
-    const errors = [];
+    const formData = new FormDataCtor();
+    const blob = new BlobCtor([fileBuffer], { type: safeType });
+    formData.append('file', blob, safeName);
+    if (model) formData.append('model', model);
+    formData.append('language', this.getTranscriptionLanguage());
+    formData.append('response_format', this.getTranscriptionResponseFormat());
 
-    for (const endpoint of candidates) {
-      const formData = new FormDataCtor();
-      const blob = new BlobCtor([fileBuffer], { type: safeType });
-      formData.append('file', blob, safeName);
-      if (model) formData.append('model', model);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 90000);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: authHeaders,
+        body: formData,
+        signal: controller.signal
+      });
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 90000);
-      try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: authHeaders,
-          body: formData,
-          signal: controller.signal
-        });
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase();
+      const data = contentType.includes('application/json')
+        ? await response.json().catch(() => ({}))
+        : { text: await response.text().catch(() => '') };
 
-        const contentType = String(response.headers.get('content-type') || '').toLowerCase();
-        const data = contentType.includes('application/json')
-          ? await response.json().catch(() => ({}))
-          : { text: await response.text().catch(() => '') };
-
-        if (!response.ok) {
-          const detail = String(data?.error || data?.message || '').trim();
-          errors.push(`${endpoint} -> HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
-          continue;
-        }
-
-        const transcript = this.extractTranscriptionText(data);
-        if (!transcript) {
-          errors.push(`${endpoint} -> resposta sem texto de transcricao`);
-          continue;
-        }
-
-        return { text: transcript, endpoint };
-      } catch (error) {
-        errors.push(`${endpoint} -> ${error.message}`);
-      } finally {
-        clearTimeout(timeout);
+      if (!response.ok) {
+        const detail = String(data?.error || data?.message || '').trim();
+        throw new Error(`${endpoint} -> HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
       }
-    }
 
-    throw new Error(errors.join(' | ') || 'falha_transcricao_ollama');
+      const transcript = this.extractTranscriptionText(data);
+      if (!transcript) {
+        throw new Error(`${endpoint} -> resposta sem texto de transcricao`);
+      }
+
+      return { text: transcript, endpoint };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   getChamadoCreateUrl() {
@@ -897,6 +922,20 @@ class MessageController {
     return true;
   }
 
+  shouldRunAiAudioFlow({ room, req, messageType }) {
+    if (!this.isAiAllowedForUser(req.session?.user)) return false;
+    if (String(messageType || 'text').toLowerCase() !== 'audio') return false;
+    if (!this.getTranscriptionSettings().enabled) return false;
+    if (!room) return false;
+
+    const roomState = this.normalizeChatState(room.chat_state);
+    if (['HUMANO', 'FECHADO'].includes(roomState)) return false;
+
+    const role = String(req.session?.user?.role || '').toLowerCase();
+    if (this.isHumanRole(role) && !this.isAiAllowedForAdmin(req.session?.user)) return false;
+    return true;
+  }
+
   isHumanRole(roleValue) {
     const role = String(roleValue || '').toLowerCase();
     const humanRoles = ['admin', 'atendente', 'agent', 'suporte', 'support'];
@@ -907,6 +946,7 @@ class MessageController {
     if (!this.isAiAllowedForUser(req.session?.user)) return false;
     const normalizedType = String(messageType || 'text').toLowerCase();
     if (!['image', 'audio', 'video', 'document', 'file'].includes(normalizedType)) return false;
+    if (normalizedType === 'audio' && this.getTranscriptionSettings().enabled) return false;
     if (!room) return false;
     const roomState = this.normalizeChatState(room.chat_state);
     if (['HUMANO', 'FECHADO'].includes(roomState)) return false;
@@ -1819,6 +1859,58 @@ class MessageController {
             .catch((aiError) => {
               console.error('[AI] Erro no fluxo IA primeiro contato:', aiError.message);
             });
+        } else if (this.shouldRunAiAudioFlow({ room: finalRoom, req, messageType: type || 'text' })) {
+          const audioPath = req.file ? this.resolveUploadPathFromUrl(fileUrl) : '';
+          const audioMime = String(fileType || '').trim();
+          const audioName = req.file?.filename || path.basename(String(fileUrl || '').split('?')[0] || '');
+          if (audioPath && fs.existsSync(audioPath)) {
+            this.requestExternalTranscription({
+              filePath: audioPath,
+              fileType: audioMime,
+              fileName: audioName,
+              model: this.getTranscriptionSettings().model
+            })
+              .then(async (result) => {
+                const transcript = String(result?.text || '').trim();
+                if (!transcript) {
+                  await this.sendAiMessage({
+                    roomId,
+                    content: 'Recebi seu audio, mas nao consegui transcrever. Pode me enviar em texto ou pedir atendimento humano.'
+                  });
+                  return;
+                }
+                const enriched = `Mensagem de audio transcrita do cliente: ${transcript}`;
+                this.updateMemoryFromUserMessage(roomId, transcript);
+                await this.logLearningEvent('user_message_received', {
+                  roomId: String(roomId || ''),
+                  chamadoId: chamadoId ? String(chamadoId) : (finalRoom?.chamado_id ? String(finalRoom.chamado_id) : ''),
+                  userId: String(userId || ''),
+                  messageId: String(message?.id || ''),
+                  chatState: this.normalizeChatState(finalRoom?.chat_state),
+                  message: this.buildBrokerTextPreview(transcript, 320),
+                  intent: this.inferMemoryIntent(transcript),
+                  topicLabel: this.detectTopicLabel(transcript),
+                  topic: this.buildBrokerTextPreview(this.extractTopicFromText(transcript), 180),
+                  preferredReplyStyle: this.detectReplyStylePreference(transcript),
+                  topicShiftSignal: this.isTopicShiftMessage(transcript),
+                  source: 'audio_transcription'
+                });
+                await this.processAiFirstContactFlow({
+                  room: finalRoom,
+                  roomId,
+                  chamadoId,
+                  content: enriched,
+                  req
+                });
+              })
+              .catch(async (error) => {
+                console.error('[AI] Falha ao transcrever audio:', error.message);
+                await this.sendAiMessage({
+                  roomId,
+                  content: 'Recebi seu audio, mas a transcricao falhou no momento. Pode me enviar em texto ou pedir atendimento humano.'
+                });
+              });
+          }
         } else if (this.shouldNotifyUnsupportedMedia({ room: finalRoom, req, messageType: type || 'text' })) {
           const actions = this.buildChamadoActions({
             roomId,
@@ -1971,15 +2063,6 @@ class MessageController {
           error: 'Transcricao de audio desativada pelo administrador.'
         });
       }
-      if (!transcriptionCfg.model) {
-        return res.status(400).json({
-          error: 'Modelo de transcricao nao configurado. Defina em IA > Agente > Modelo de transcricao.'
-        });
-      }
-
-      if (transcriptionCfg.provider !== 'ollama') {
-        return res.status(400).json({ error: `Provider de transcricao nao suportado: ${transcriptionCfg.provider}` });
-      }
 
       const cacheKey = this.getTranscriptionCacheKey(messageId, transcriptionCfg.provider, transcriptionCfg.model);
       const cached = this.transcriptionCache.get(cacheKey);
@@ -1999,7 +2082,7 @@ class MessageController {
         return res.status(404).json({ error: 'Arquivo de audio nao encontrado no servidor' });
       }
 
-      const transcribed = await this.requestOllamaTranscription({
+      const transcribed = await this.requestExternalTranscription({
         filePath,
         fileType: String(message.file_type || '').trim(),
         fileName: path.basename(String(message.file_url || '').split('?')[0] || filePath),
@@ -2206,7 +2289,8 @@ class MessageController {
         success: true,
         roomId,
         closed: closureState.closed,
-        reason: closureState.reason
+        reason: closureState.reason,
+        audioTranscriptionEnabled: Boolean(this.getTranscriptionSettings().enabled)
       });
     } catch (error) {
       return res.status(500).json({ error: error.message });

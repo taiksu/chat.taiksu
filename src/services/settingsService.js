@@ -71,6 +71,18 @@ class SettingsService {
         || ''
       ).trim(),
       aiAudioTranscriptionEnabled: String(process.env.AI_AUDIO_TRANSCRIPTION_ENABLED || 'false').toLowerCase() === 'true',
+      aiTranscriptionApiUrl: String(
+        process.env.AI_TRANSCRIPTION_API_URL
+        || process.env.WHISPER_API_URL
+        || 'https://whisper.taiksu.com.br/api/transcribe'
+      ).trim(),
+      aiTranscriptionApiToken: String(
+        process.env.AI_TRANSCRIPTION_API_TOKEN
+        || process.env.WHISPER_API_TOKEN
+        || ''
+      ).trim(),
+      aiTranscriptionLanguage: String(process.env.AI_TRANSCRIPTION_LANGUAGE || 'pt').trim() || 'pt',
+      aiTranscriptionResponseFormat: String(process.env.AI_TRANSCRIPTION_RESPONSE_FORMAT || 'json').trim() || 'json',
       aiCustomModels: this.parseCustomModels(process.env.AI_CUSTOM_MODELS || ''),
       ollamaApiToken: String(process.env.OLLAMA_API_TOKEN || '').trim(),
       kbAutoPublishEnabled: String(process.env.KB_AUTO_PUBLISH_ENABLED || 'false').toLowerCase() === 'true',
@@ -327,6 +339,18 @@ class SettingsService {
       aiAudioTranscriptionEnabled: input.aiAudioTranscriptionEnabled !== undefined
         ? Boolean(input.aiAudioTranscriptionEnabled)
         : Boolean(current.aiAudioTranscriptionEnabled),
+      aiTranscriptionApiUrl: input.aiTranscriptionApiUrl !== undefined
+        ? String(input.aiTranscriptionApiUrl || '').trim()
+        : String(current.aiTranscriptionApiUrl || '').trim(),
+      aiTranscriptionApiToken: input.aiTranscriptionApiToken !== undefined
+        ? String(input.aiTranscriptionApiToken || '').trim()
+        : String(current.aiTranscriptionApiToken || '').trim(),
+      aiTranscriptionLanguage: input.aiTranscriptionLanguage !== undefined
+        ? (String(input.aiTranscriptionLanguage || '').trim() || 'pt')
+        : (String(current.aiTranscriptionLanguage || '').trim() || 'pt'),
+      aiTranscriptionResponseFormat: input.aiTranscriptionResponseFormat !== undefined
+        ? (String(input.aiTranscriptionResponseFormat || '').trim() || 'json')
+        : (String(current.aiTranscriptionResponseFormat || '').trim() || 'json'),
       aiCustomModels: input.aiCustomModels !== undefined
         ? this.parseCustomModels(input.aiCustomModels)
         : this.parseCustomModels(current.aiCustomModels || []),
@@ -379,6 +403,10 @@ class SettingsService {
       ),
       aiTranscriptionModel: String(current.aiTranscriptionModel || '').trim(),
       aiAudioTranscriptionEnabled: Boolean(current.aiAudioTranscriptionEnabled),
+      aiTranscriptionApiUrl: String(current.aiTranscriptionApiUrl || '').trim(),
+      aiTranscriptionLanguage: String(current.aiTranscriptionLanguage || '').trim() || 'pt',
+      aiTranscriptionResponseFormat: String(current.aiTranscriptionResponseFormat || '').trim() || 'json',
+      hasAiTranscriptionApiToken: Boolean(String(current.aiTranscriptionApiToken || '').trim()),
       aiCustomModels: this.parseCustomModels(current.aiCustomModels || []),
       hasOllamaApiToken: Boolean(String(current.ollamaApiToken || '').trim()),
       kbAutoPublishEnabled: Boolean(current.kbAutoPublishEnabled),

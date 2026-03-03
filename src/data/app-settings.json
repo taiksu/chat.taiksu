@@ -1,8 +1,10 @@
 {
   "aiAttendantEnabled": true,
   "aiAllowAdminChat": true,
-  "aiBetaModeEnabled": false,
-  "aiBetaAllowlist": [],
+  "aiBetaModeEnabled": true,
+  "aiBetaAllowlist": [
+    "user_carol"
+  ],
   "aiAgentName": "Marina",
   "aiAgentAvatar": "/images/marina.png",
   "aiPersonalityPrompt": "Seja profissional, objetiva e acolhedora. Foque em resolver no chat e escalar para humano quando necessario.",
@@ -13,6 +15,11 @@
   "aiPreferredModel": "qwen2.5:3b-instruct",
   "aiTranscriptionProvider": "ollama",
   "aiTranscriptionModel": "",
+  "aiAudioTranscriptionEnabled": false,
+  "aiTranscriptionApiUrl": "https://whisper.taiksu.com.br/api/transcribe",
+  "aiTranscriptionApiToken": "",
+  "aiTranscriptionLanguage": "pt",
+  "aiTranscriptionResponseFormat": "json",
   "aiCustomModels": [],
   "ollamaApiToken": "64b5fc980e046f2b6911e1ffa63e44c6f07f5cd5cab0ec72d8924f3cc17ab799",
   "kbAutoPublishEnabled": false,

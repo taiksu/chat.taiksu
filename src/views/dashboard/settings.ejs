@@ -73,6 +73,12 @@
       border-top: 1px solid #d1fae5;
       backdrop-filter: blur(3px);
     }
+    .settings-subcard {
+      border: 1px solid #dcfce7;
+      border-radius: 14px;
+      background: #f9fffb;
+      padding: 12px;
+    }
   </style>
 </head>
 <body class="min-h-dvh text-green-700">
@@ -181,64 +187,105 @@
             <div class="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h2 class="text-lg font-bold text-green-800">Modelo de IA</h2>
-                <p class="mt-1 text-sm text-gray-500">Escolha provider/modelo principal e recarregue catalogo automatico.</p>
+                <p class="mt-1 text-sm text-gray-500">Organize modelo principal, transcricao e credenciais em blocos separados.</p>
               </div>
               <button id="reloadModelsBtn" type="button" class="rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50">Atualizar lista</button>
             </div>
 
-            <div class="mt-3 grid gap-3 sm:grid-cols-2">
-              <label class="text-sm">
-                <span class="mb-1 block font-semibold text-gray-600">Provider padrao</span>
-                <select id="aiPreferredProvider" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-                  <option value="ollama" <%= settings.aiPreferredProvider === 'ollama' ? 'selected' : '' %>>Ollama</option>
-                </select>
-              </label>
-              <label class="text-sm">
-                <span class="mb-1 block font-semibold text-gray-600">Modelo padrao</span>
-                <select id="aiPreferredModel" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-                  <option value="<%= settings.aiPreferredModel %>" selected><%= settings.aiPreferredModel %></option>
-                </select>
-              </label>
-              <label class="text-sm">
-                <span class="mb-1 block font-semibold text-gray-600">Provider de transcricao</span>
-                <select id="aiTranscriptionProvider" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-                  <option value="ollama" <%= settings.aiTranscriptionProvider === 'ollama' ? 'selected' : '' %>>Ollama</option>
-                </select>
-              </label>
-              <label class="text-sm">
-                <span class="mb-1 block font-semibold text-gray-600">Transcricao de audio</span>
-                <div class="switch-row">
-                  <span class="text-xs font-semibold text-slate-700">Ativar no widget</span>
-                  <span class="switch-control">
-                    <input id="aiAudioTranscriptionEnabled" type="checkbox" <%= settings.aiAudioTranscriptionEnabled ? 'checked' : '' %>>
-                    <span class="switch-track"></span>
-                  </span>
+            <div class="mt-3 space-y-3">
+              <div class="settings-subcard">
+                <div class="mb-3">
+                  <p class="text-sm font-semibold text-green-900">Modelo principal</p>
+                  <p class="text-xs text-gray-500">Define provider e modelo usado no atendimento padrao.</p>
                 </div>
-              </label>
-              <label class="text-sm">
-                <span class="mb-1 block font-semibold text-gray-600">Modelo de transcricao</span>
-                <select id="aiTranscriptionModel" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-                  <option value="<%= settings.aiTranscriptionModel %>" selected><%= settings.aiTranscriptionModel || 'Selecione um modelo STT' %></option>
-                </select>
-              </label>
-            </div>
-            <p id="modelsStatus" class="mt-2 text-xs font-semibold text-gray-500">Lista de modelos aguardando atualizacao.</p>
-            <div class="mt-3 grid gap-2">
-              <label class="text-sm">
-                <span class="mb-1 block font-semibold text-gray-600">Token da API Ollama</span>
-                <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto_auto]">
-                  <input id="ollamaApiToken" type="password" placeholder="<%= settings.hasOllamaApiToken ? 'Token configurado (digite para substituir)' : 'Cole o token Bearer ou x-api-key' %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
-                  <button id="copyOllamaTokenBtn" type="button" class="rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50">Copiar</button>
-                  <button id="rotateOllamaTokenBtn" type="button" class="rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50">Rotacionar</button>
-                  <button id="generateOllamaTokenBtn" type="button" class="rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50">Gerar token</button>
-                  <button id="clearOllamaTokenBtn" type="button" class="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Limpar</button>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="text-sm">
+                    <span class="mb-1 block font-semibold text-gray-600">Provider padrao</span>
+                    <select id="aiPreferredProvider" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                      <option value="ollama" <%= settings.aiPreferredProvider === 'ollama' ? 'selected' : '' %>>Ollama</option>
+                    </select>
+                  </label>
+                  <label class="text-sm">
+                    <span class="mb-1 block font-semibold text-gray-600">Modelo padrao</span>
+                    <select id="aiPreferredModel" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                      <option value="<%= settings.aiPreferredModel %>" selected><%= settings.aiPreferredModel %></option>
+                    </select>
+                  </label>
                 </div>
-              </label>
-              <p id="ollamaTokenStatus" class="text-xs font-semibold text-gray-500">Salvo no banco/config local. Para ativar no servidor Ollama em nuvem, atualize o mesmo token no lado do agente.</p>
-              <div>
-                <p class="text-xs font-semibold text-gray-600">Auditoria de rotacao (recente)</p>
-                <div id="ollamaTokenAudit" class="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600">Carregando historico...</div>
               </div>
+
+              <div class="settings-subcard">
+                <div class="mb-3">
+                  <p class="text-sm font-semibold text-green-900">Transcricao de audio</p>
+                  <p class="text-xs text-gray-500">Ative STT no widget e configure endpoint/token da API.</p>
+                </div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="text-sm">
+                    <span class="mb-1 block font-semibold text-gray-600">Provider de transcricao</span>
+                    <select id="aiTranscriptionProvider" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                      <option value="ollama" <%= settings.aiTranscriptionProvider === 'ollama' ? 'selected' : '' %>>Ollama</option>
+                    </select>
+                  </label>
+                  <label class="text-sm">
+                    <span class="mb-1 block font-semibold text-gray-600">Ativar transcricao</span>
+                    <div class="switch-row">
+                      <span class="text-xs font-semibold text-slate-700">Ativar no widget</span>
+                      <span class="switch-control">
+                        <input id="aiAudioTranscriptionEnabled" type="checkbox" <%= settings.aiAudioTranscriptionEnabled ? 'checked' : '' %>>
+                        <span class="switch-track"></span>
+                      </span>
+                    </div>
+                  </label>
+                  <label class="text-sm">
+                    <span class="mb-1 block font-semibold text-gray-600">Modelo de transcricao</span>
+                    <select id="aiTranscriptionModel" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                      <option value="<%= settings.aiTranscriptionModel %>" selected><%= settings.aiTranscriptionModel || 'Selecione um modelo STT' %></option>
+                    </select>
+                  </label>
+                  <label class="text-sm">
+                    <span class="mb-1 block font-semibold text-gray-600">Idioma da transcricao</span>
+                    <input id="aiTranscriptionLanguage" type="text" value="<%= settings.aiTranscriptionLanguage || 'pt' %>" placeholder="pt" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                  </label>
+                  <label class="text-sm sm:col-span-2">
+                    <span class="mb-1 block font-semibold text-gray-600">Endpoint de transcricao (Whisper)</span>
+                    <input id="aiTranscriptionApiUrl" type="text" value="<%= settings.aiTranscriptionApiUrl || '' %>" placeholder="https://whisper.taiksu.com.br/api/transcribe" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                  </label>
+                  <label class="text-sm sm:col-span-2">
+                    <span class="mb-1 block font-semibold text-gray-600">Token da API de transcricao</span>
+                    <input id="aiTranscriptionApiToken" type="password" placeholder="<%= settings.hasAiTranscriptionApiToken ? 'Token configurado (digite para substituir)' : 'Cole o token Bearer aqui' %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                  </label>
+                  <label class="text-sm">
+                    <span class="mb-1 block font-semibold text-gray-600">Formato da resposta</span>
+                    <input id="aiTranscriptionResponseFormat" type="text" value="<%= settings.aiTranscriptionResponseFormat || 'json' %>" placeholder="json" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-subcard">
+                <div class="mb-3">
+                  <p class="text-sm font-semibold text-green-900">Autenticacao Ollama</p>
+                  <p class="text-xs text-gray-500">Gerencie o token usado para autenticar chamadas no servidor.</p>
+                </div>
+                <label class="text-sm">
+                  <span class="mb-1 block font-semibold text-gray-600">Token da API Ollama</span>
+                  <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto] lg:grid-cols-[1fr_auto_auto_auto_auto]">
+                    <input id="ollamaApiToken" type="password" placeholder="<%= settings.hasOllamaApiToken ? 'Token configurado (digite para substituir)' : 'Cole o token Bearer ou x-api-key' %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                    <button id="copyOllamaTokenBtn" type="button" class="rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50">Copiar</button>
+                    <button id="rotateOllamaTokenBtn" type="button" class="rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50">Rotacionar</button>
+                    <button id="generateOllamaTokenBtn" type="button" class="rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50">Gerar token</button>
+                    <button id="clearOllamaTokenBtn" type="button" class="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50">Limpar</button>
+                  </div>
+                </label>
+                <p id="ollamaTokenStatus" class="mt-2 text-xs font-semibold text-gray-500">Salvo no banco/config local. Para ativar no servidor Ollama em nuvem, atualize o mesmo token no lado do agente.</p>
+                <div class="mt-2">
+                  <p class="text-xs font-semibold text-gray-600">Auditoria de rotacao (recente)</p>
+                  <div id="ollamaTokenAudit" class="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600">Carregando historico...</div>
+                </div>
+              </div>
+            </div>
+            <div class="mt-3 rounded-xl border border-green-100 bg-green-50 px-3 py-2">
+              <p class="text-[11px] font-semibold uppercase tracking-wide text-green-700">Status do catalogo</p>
+              <p id="modelsStatus" class="mt-1 text-xs font-semibold text-gray-500">Lista de modelos aguardando atualizacao.</p>
             </div>
 
             <details class="fold-section mt-3 rounded-xl border border-green-100 bg-green-50 p-3">
@@ -346,10 +393,15 @@
     const modelEl = document.getElementById('aiPreferredModel');
     const transcriptionProviderEl = document.getElementById('aiTranscriptionProvider');
     const transcriptionModelEl = document.getElementById('aiTranscriptionModel');
+    const transcriptionApiUrlEl = document.getElementById('aiTranscriptionApiUrl');
+    const transcriptionApiTokenEl = document.getElementById('aiTranscriptionApiToken');
+    const transcriptionLanguageEl = document.getElementById('aiTranscriptionLanguage');
+    const transcriptionResponseFormatEl = document.getElementById('aiTranscriptionResponseFormat');
     const ollamaApiTokenEl = document.getElementById('ollamaApiToken');
     const ollamaTokenStatusEl = document.getElementById('ollamaTokenStatus');
     const ollamaTokenAuditEl = document.getElementById('ollamaTokenAudit');
     let ollamaTokenDirty = false;
+    let transcriptionTokenDirty = false;
     let providerModels = { ollama: [] };
 
     function setStatus(text, type) {
@@ -545,6 +597,7 @@
 
     async function saveSettings() {
       const ollamaTokenPayload = ollamaTokenDirty ? String(ollamaApiTokenEl.value || '').trim() : undefined;
+      const transcriptionTokenPayload = transcriptionTokenDirty ? String(transcriptionApiTokenEl.value || '').trim() : undefined;
       const payload = {
         aiAttendantEnabled: document.getElementById('aiAttendantEnabled').checked,
         aiAllowAdminChat: document.getElementById('aiAllowAdminChat').checked,
@@ -561,6 +614,10 @@
         aiTranscriptionProvider: transcriptionProviderEl.value || 'ollama',
         aiTranscriptionModel: transcriptionModelEl.value || '',
         aiAudioTranscriptionEnabled: document.getElementById('aiAudioTranscriptionEnabled').checked,
+        aiTranscriptionApiUrl: transcriptionApiUrlEl.value || '',
+        aiTranscriptionApiToken: transcriptionTokenPayload,
+        aiTranscriptionLanguage: transcriptionLanguageEl.value || 'pt',
+        aiTranscriptionResponseFormat: transcriptionResponseFormatEl.value || 'json',
         aiCustomModels: document.getElementById('aiCustomModels').value || '',
         kbAutoPublishEnabled: document.getElementById('kbAutoPublishEnabled').checked,
         alertEmailEnabled: document.getElementById('alertEmailEnabled').checked,
@@ -583,6 +640,8 @@
         document.getElementById('alertEmailToken').value = '';
         ollamaApiTokenEl.value = '';
         ollamaTokenDirty = false;
+        transcriptionApiTokenEl.value = '';
+        transcriptionTokenDirty = false;
         loadOllamaTokenAudit();
         setStatus('Configuracoes salvas com sucesso', 'success');
       } catch (error) {
@@ -646,6 +705,9 @@
     });
     ollamaApiTokenEl.addEventListener('input', () => {
       ollamaTokenDirty = true;
+    });
+    transcriptionApiTokenEl.addEventListener('input', () => {
+      transcriptionTokenDirty = true;
     });
     document.getElementById('copyOllamaTokenBtn').addEventListener('click', async (event) => {
       event.preventDefault();

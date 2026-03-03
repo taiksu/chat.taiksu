@@ -63,6 +63,12 @@ class SettingsController {
       const ollamaTokenToSave = informedOllamaToken === undefined
         ? undefined
         : informedOllamaToken;
+      const informedTranscriptionToken = body.aiTranscriptionApiToken !== undefined
+        ? String(body.aiTranscriptionApiToken || '').trim()
+        : undefined;
+      const transcriptionTokenToSave = informedTranscriptionToken === undefined
+        ? undefined
+        : informedTranscriptionToken;
       const next = await settingsService.save({
         aiAttendantEnabled: body.aiAttendantEnabled,
         aiAllowAdminChat: body.aiAllowAdminChat,
@@ -79,6 +85,10 @@ class SettingsController {
         aiTranscriptionProvider: body.aiTranscriptionProvider,
         aiTranscriptionModel: body.aiTranscriptionModel,
         aiAudioTranscriptionEnabled: body.aiAudioTranscriptionEnabled,
+        aiTranscriptionApiUrl: body.aiTranscriptionApiUrl,
+        aiTranscriptionApiToken: transcriptionTokenToSave,
+        aiTranscriptionLanguage: body.aiTranscriptionLanguage,
+        aiTranscriptionResponseFormat: body.aiTranscriptionResponseFormat,
         aiCustomModels: body.aiCustomModels,
         ollamaApiToken: ollamaTokenToSave,
         kbAutoPublishEnabled: body.kbAutoPublishEnabled,
