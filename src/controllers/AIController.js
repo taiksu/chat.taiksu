@@ -278,6 +278,28 @@ class AIController {
 
     const data = result?.data;
     if (data && typeof data === 'object') {
+      const total = Number(data.total);
+      const resultados = Array.isArray(data.resultados) ? data.resultados : [];
+      const consulta = String(data.consulta || '').trim();
+      if (Number.isFinite(total) && resultados.length >= 0) {
+        if (!resultados.length) {
+          return consulta
+            ? `Pesquisei por "${consulta}", mas nao encontrei artigos relacionados.`
+            : 'Fiz a pesquisa, mas nao encontrei artigos relacionados.';
+        }
+
+        const top = resultados.slice(0, 3);
+        const lines = top.map((item, idx) => {
+          const titulo = String(item?.titulo || item?.title || `Artigo ${idx + 1}`).trim();
+          const resumo = String(item?.resumo || item?.snippet || '').trim();
+          return resumo ? `${idx + 1}. ${titulo} - ${resumo}` : `${idx + 1}. ${titulo}`;
+        });
+        const prefix = consulta
+          ? `Encontrei ${total} artigo(s) sobre "${consulta}".`
+          : `Encontrei ${total} artigo(s) relacionados.`;
+        return `${prefix}\n${lines.join('\n')}`;
+      }
+
       const message = String(data.message || data.msg || data.detail || data.statusText || '').trim();
       if (message) return message;
       if (typeof data.reply === 'string' && data.reply.trim()) return data.reply.trim();
@@ -285,6 +307,50 @@ class AIController {
     }
 
     return `Ferramenta "${name}" executada com sucesso.`;
+  }
+
+  isKnowledgeSearchTool(tool = {}) {
+    const slug = this.normalizeText(tool?.slug || '');
+    const name = this.normalizeText(tool?.name || '');
+    const text = `${slug} ${name}`;
+    return /(pesquis|busca|buscar|artigo|knowledge|base conhecimento|kb)/.test(text);
+  }
+
+  extractKnowledgeDocsFromToolResult(result = {}) {
+    const data = result && typeof result.data === 'object' ? result.data : {};
+    const raw = Array.isArray(data.resultados)
+      ? data.resultados
+      : Array.isArray(data.items)
+        ? data.items
+        : [];
+    return raw
+      .map((item, idx) => {
+        const title = String(item?.titulo || item?.title || item?.nome || `Artigo ${idx + 1}`).trim();
+        const url = String(item?.url || item?.link || item?.permalink || '').trim();
+        const snippet = String(item?.resumo || item?.snippet || item?.descricao || item?.summary || '').trim();
+        if (!title && !url && !snippet) return null;
+        return {
+          id: String(item?.id || item?.slug || `tool-${idx + 1}`),
+          title: title || `Artigo ${idx + 1}`,
+          url,
+          snippet
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 5);
+  }
+
+  appendSourcesToReply(reply = '', docs = []) {
+    const text = String(reply || '').trim();
+    const urls = Array.from(new Set(
+      (Array.isArray(docs) ? docs : [])
+        .map((doc) => String(doc?.url || '').trim())
+        .filter(Boolean)
+    )).slice(0, 3);
+    if (!urls.length) return text;
+    if (/fonte:\s*https?:\/\//i.test(text)) return text;
+    const footer = urls.map((url) => `Fonte: ${url}`).join('\n');
+    return text ? `${text}\n\n${footer}` : footer;
   }
 
   async runAutoToolIfNeeded(payload = {}) {
@@ -341,6 +407,7 @@ class AIController {
       'Se o usuario ja escolheu formato (ex.: visao geral ou passo a passo), nao repita pergunta de clarificacao de formato.',
       'Nao invente nem altere o nome do usuario; se usar nome, use exatamente o nome informado no prompt.',
       'Quando houver base de conhecimento enviada, use essa base como fonte principal.',
+      'Se houver artigos recuperados por ferramenta e o usuario pedir pesquisa/lista, apresente os titulos mais relevantes.',
       'Se a resposta nao estiver na base enviada, diga que precisa de mais informacoes ou ofereca humano.',
       'Nunca coloque links no texto da resposta.',
       'Nunca use placeholders como [](), [link], ou URL incompleta.',
@@ -603,8 +670,10 @@ class AIController {
     const chatState = String(payload.chatState || 'IA');
 
     const providers = this.getProviderOrder(overrides);
-    const userPrompt = this.buildUserPrompt(payload);
+    let workingPayload = { ...(payload || {}) };
+    let userPrompt = this.buildUserPrompt(workingPayload);
     const systemInstruction = this.buildSystemInstruction(overrides);
+    let knowledgeDocsFromTool = [];
 
     let toolExecution = null;
     try {
@@ -636,16 +705,41 @@ class AIController {
           }
         }).catch(() => {});
 
-        return {
-          success: true,
-          provider: 'tool',
-          model: `tool:${toolExecution.tool.slug}`,
-          reply: toolReply,
-          usage: null,
-          latencyMs: toolLatencyMs,
-          tool: toolExecution.tool,
-          toolResult: toolExecution.result
+        const isKnowledgeTool = this.isKnowledgeSearchTool(toolExecution.tool);
+        const toolOk = Boolean(toolExecution?.result?.success);
+        if (!isKnowledgeTool || !toolOk) {
+          return {
+            success: true,
+            provider: 'tool',
+            model: `tool:${toolExecution.tool.slug}`,
+            reply: toolReply,
+            usage: null,
+            latencyMs: toolLatencyMs,
+            tool: toolExecution.tool,
+            toolResult: toolExecution.result
+          };
+        }
+
+        knowledgeDocsFromTool = this.extractKnowledgeDocsFromToolResult(toolExecution.result);
+        if (!knowledgeDocsFromTool.length) {
+          return {
+            success: true,
+            provider: 'tool',
+            model: `tool:${toolExecution.tool.slug}`,
+            reply: toolReply,
+            usage: null,
+            latencyMs: toolLatencyMs,
+            tool: toolExecution.tool,
+            toolResult: toolExecution.result
+          };
+        }
+
+        const existingDocs = Array.isArray(payload?.contextDocs) ? payload.contextDocs : [];
+        workingPayload = {
+          ...workingPayload,
+          contextDocs: [...knowledgeDocsFromTool, ...existingDocs].slice(0, 5)
         };
+        userPrompt = this.buildUserPrompt(workingPayload);
       }
     } catch (toolError) {
       this.logAiMetric('tool_auto_execution_error', {
@@ -670,7 +764,7 @@ class AIController {
       success: true,
       provider: result.provider,
       model: result.model,
-      reply: result.reply,
+      reply: this.appendSourcesToReply(result.reply, knowledgeDocsFromTool),
       usage: result.usage || null,
       latencyMs: Date.now() - startedAt
     };
