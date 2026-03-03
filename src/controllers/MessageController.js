@@ -177,6 +177,49 @@ class MessageController {
     ).trim();
   }
 
+  getTranscriptionAuthMode() {
+    return String(
+      process.env.AI_TRANSCRIPTION_AUTH_MODE
+      || process.env.WHISPER_AUTH_MODE
+      || 'auto'
+    ).trim().toLowerCase();
+  }
+
+  buildTranscriptionAuthHeaders(token) {
+    const safeToken = String(token || '').trim();
+    if (!safeToken) return {};
+    const mode = this.getTranscriptionAuthMode();
+    const headers = {};
+
+    if (mode === 'x-api-key') {
+      headers['x-api-key'] = safeToken.replace(/^x-api-key\s+/i, '').trim();
+      return headers;
+    }
+
+    if (mode === 'bearer') {
+      const bearerToken = safeToken.replace(/^bearer\s+/i, '').trim();
+      headers.Authorization = `Bearer ${bearerToken}`;
+      return headers;
+    }
+
+    // modo auto: tenta ser compativel com provedores que aceitam Bearer ou x-api-key
+    const rawLower = safeToken.toLowerCase();
+    if (rawLower.startsWith('bearer ')) {
+      headers.Authorization = safeToken;
+      headers['x-api-key'] = safeToken.slice(7).trim();
+      return headers;
+    }
+    if (rawLower.startsWith('x-api-key ')) {
+      const key = safeToken.slice(10).trim();
+      headers['x-api-key'] = key;
+      headers.Authorization = `Bearer ${key}`;
+      return headers;
+    }
+    headers.Authorization = `Bearer ${safeToken}`;
+    headers['x-api-key'] = safeToken;
+    return headers;
+  }
+
   getTranscriptionLanguage() {
     const settings = settingsService.load();
     return String(settings.aiTranscriptionLanguage || process.env.AI_TRANSCRIPTION_LANGUAGE || 'pt').trim() || 'pt';
@@ -242,8 +285,7 @@ class MessageController {
     if (!endpoint) throw new Error('Endpoint de transcricao nao configurado');
 
     const token = this.getTranscriptionApiToken();
-    const authHeaders = {};
-    if (token) authHeaders.Authorization = `Bearer ${token}`;
+    const authHeaders = this.buildTranscriptionAuthHeaders(token);
 
     const fileBuffer = await fs.promises.readFile(filePath);
     const safeType = String(fileType || '').trim() || 'application/octet-stream';
@@ -272,7 +314,9 @@ class MessageController {
 
       if (!response.ok) {
         const detail = String(data?.error || data?.message || '').trim();
-        throw new Error(`${endpoint} -> HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
+        const error = new Error(`${endpoint} -> HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
+        error.status = Number(response.status) || 502;
+        throw error;
       }
 
       const transcript = this.extractTranscriptionText(data);
@@ -2108,7 +2152,8 @@ class MessageController {
         cached: false
       });
     } catch (error) {
-      return res.status(502).json({ error: error.message || 'Falha ao transcrever audio' });
+      const status = Number(error?.status) || 502;
+      return res.status(status).json({ error: error.message || 'Falha ao transcrever audio' });
     }
   }
 

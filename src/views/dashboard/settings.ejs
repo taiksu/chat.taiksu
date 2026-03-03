@@ -252,7 +252,7 @@
                   </label>
                   <label class="text-sm sm:col-span-2">
                     <span class="mb-1 block font-semibold text-gray-600">Token da API de transcricao</span>
-                    <input id="aiTranscriptionApiToken" type="password" placeholder="<%= settings.hasAiTranscriptionApiToken ? 'Token configurado (digite para substituir)' : 'Cole o token Bearer aqui' %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                    <input id="aiTranscriptionApiToken" type="password" value="<%= settings.hasAiTranscriptionApiToken ? '********' : '' %>" placeholder="<%= settings.hasAiTranscriptionApiToken ? 'Token configurado (digite para substituir)' : 'Cole o token Bearer aqui' %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
                   </label>
                   <label class="text-sm">
                     <span class="mb-1 block font-semibold text-gray-600">Formato da resposta</span>
@@ -269,7 +269,7 @@
                 <label class="text-sm">
                   <span class="mb-1 block font-semibold text-gray-600">Token da API Ollama</span>
                   <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto] lg:grid-cols-[1fr_auto_auto_auto_auto]">
-                    <input id="ollamaApiToken" type="password" placeholder="<%= settings.hasOllamaApiToken ? 'Token configurado (digite para substituir)' : 'Cole o token Bearer ou x-api-key' %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
+                    <input id="ollamaApiToken" type="password" value="<%= settings.hasOllamaApiToken ? '********' : '' %>" placeholder="<%= settings.hasOllamaApiToken ? 'Token configurado (digite para substituir)' : 'Cole o token Bearer ou x-api-key' %>" class="w-full rounded-xl border border-green-200 px-3 py-2 text-sm text-green-800 outline-none focus:border-green-400">
                     <button id="copyOllamaTokenBtn" type="button" class="rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-50">Copiar</button>
                     <button id="rotateOllamaTokenBtn" type="button" class="rounded-lg border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50">Rotacionar</button>
                     <button id="generateOllamaTokenBtn" type="button" class="rounded-lg border border-green-200 px-3 py-2 text-xs font-semibold text-green-700 hover:bg-green-50">Gerar token</button>
@@ -400,6 +400,9 @@
     const ollamaApiTokenEl = document.getElementById('ollamaApiToken');
     const ollamaTokenStatusEl = document.getElementById('ollamaTokenStatus');
     const ollamaTokenAuditEl = document.getElementById('ollamaTokenAudit');
+    const TOKEN_MASK = '********';
+    let hasOllamaTokenConfigured = <%= settings.hasOllamaApiToken ? 'true' : 'false' %>;
+    let hasTranscriptionTokenConfigured = <%= settings.hasAiTranscriptionApiToken ? 'true' : 'false' %>;
     let ollamaTokenDirty = false;
     let transcriptionTokenDirty = false;
     let providerModels = { ollama: [] };
@@ -445,6 +448,15 @@
       };
       ollamaTokenStatusEl.textContent = text;
       ollamaTokenStatusEl.className = `text-xs font-semibold ${colors[type] || colors.info}`;
+    }
+
+    function applyTokenMasks() {
+      if (!ollamaTokenDirty) {
+        ollamaApiTokenEl.value = hasOllamaTokenConfigured ? TOKEN_MASK : '';
+      }
+      if (!transcriptionTokenDirty) {
+        transcriptionApiTokenEl.value = hasTranscriptionTokenConfigured ? TOKEN_MASK : '';
+      }
     }
 
     function renderOllamaTokenAudit(items) {
@@ -637,11 +649,13 @@
         });
         const data = await parseApiJson(response);
         if (!response.ok) throw new Error(data.error || `Erro HTTP ${response.status}`);
+        const nextSettings = data?.settings || {};
+        hasOllamaTokenConfigured = Boolean(nextSettings.hasOllamaApiToken);
+        hasTranscriptionTokenConfigured = Boolean(nextSettings.hasAiTranscriptionApiToken);
         document.getElementById('alertEmailToken').value = '';
-        ollamaApiTokenEl.value = '';
         ollamaTokenDirty = false;
-        transcriptionApiTokenEl.value = '';
         transcriptionTokenDirty = false;
+        applyTokenMasks();
         loadOllamaTokenAudit();
         setStatus('Configuracoes salvas com sucesso', 'success');
       } catch (error) {
@@ -713,8 +727,8 @@
       event.preventDefault();
       event.stopPropagation();
       const token = String(ollamaApiTokenEl.value || '').trim();
-      if (!token) {
-        setOllamaTokenStatus('Nao ha token no campo para copiar.', 'error');
+      if (!token || token === TOKEN_MASK) {
+        setOllamaTokenStatus('Token mascarado. Gere/rotacione ou digite um token para copiar.', 'error');
         return;
       }
       try {
@@ -786,6 +800,7 @@
       setModelsStatus(`Modelo ${line} adicionado no cadastro local. Salve para persistir.`, 'success');
     });
     loadOllamaTokenAudit();
+    applyTokenMasks();
     refreshModelCatalog();
   </script>
 </body>
