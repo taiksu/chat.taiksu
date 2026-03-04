@@ -60,6 +60,7 @@
   let historyHasMore = true;
   let historyLoading = false;
   let oldestMessageCursor = "";
+  let historyReadyForTopLoad = false;
   let toggleUnreadCount = 0;
   let reactionsByMessage = new Map();
   let transcriptionByMessage = new Map();
@@ -996,6 +997,7 @@
     if (messagesArea) {
       messagesArea.addEventListener("scroll", () => {
         closeReactionMenu();
+        if (!historyReadyForTopLoad) return;
         if (messagesArea.scrollTop > 36) return;
         loadOlderMessages().catch(() => {});
       });
@@ -1257,6 +1259,7 @@
     historyHasMore = true;
     historyLoading = false;
     oldestMessageCursor = "";
+    historyReadyForTopLoad = false;
   }
 
   function updateToggleUnreadBadge() {
@@ -1950,6 +1953,7 @@
   }
 
   function loadMessages() {
+    historyReadyForTopLoad = false;
     historyLoading = true;
     historyHasMore = true;
     loadMessageReactions();
@@ -1959,6 +1963,7 @@
         upsertHistoryMessages(messages || []);
         historyHasMore = Array.isArray(messages) && messages.length >= HISTORY_PAGE_SIZE;
         renderHistoryMessages({ preserveScroll: false });
+        historyReadyForTopLoad = true;
         markRoomAsRead();
       })
       .catch((err) => console.error("TaiksuChat: erro ao carregar mensagens:", err))
@@ -2740,9 +2745,18 @@
   function scrollToBottom() {
     const container = shadow.getElementById("tw-messages");
     if (container) {
-      container.scrollTop = container.scrollHeight;
-      // Scroll extra for safety
-      setTimeout(() => { container.scrollTop = container.scrollHeight; }, 50);
+      const apply = () => {
+        container.scrollTop = container.scrollHeight;
+      };
+      apply();
+      if (typeof requestAnimationFrame === "function") {
+        requestAnimationFrame(apply);
+        requestAnimationFrame(() => requestAnimationFrame(apply));
+      }
+      // Scroll extra for safety after animations/media layout changes
+      setTimeout(apply, 60);
+      setTimeout(apply, 180);
+      setTimeout(apply, 360);
     }
   }
 
